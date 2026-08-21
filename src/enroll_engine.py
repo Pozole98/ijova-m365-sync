@@ -199,7 +199,24 @@ def execute_interactive_enrollment(
     except Exception:
         pass
 
-    # 10. Imprimir Ficha de Bienvenida
+    # 10. Generar Ficha Individual en PDF lista para imprimir
+    try:
+        from src.pdf_generator import generate_pdf_cards_from_list
+        pdf_out = os.path.join(secrets_dir, f"ficha_acceso_{mat_input}_{timestamp_str}.pdf")
+        student_dict = {
+            "matricula": mat_input,
+            "upn": upn,
+            "nombre_completo": display_name,
+            "password_temporal": temp_password,
+            "nivel": nivel,
+            "grado_semestre": grado
+        }
+        generate_pdf_cards_from_list([student_dict], pdf_out, layout_mode="cards")
+        print(f"📄 Ficha de Acceso en PDF generada: \033[1;32m{pdf_out}\033[0m")
+    except Exception as e:
+        print(f"⚠️ No se pudo generar el PDF individual: {e}")
+
+    # 11. Imprimir Ficha de Bienvenida en consola
     print_welcome_card(
         matricula=mat_input,
         upn=upn,

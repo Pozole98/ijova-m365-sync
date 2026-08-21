@@ -4,6 +4,7 @@ CLI Principal de Aprovisionamiento y Sincronización Segura hacia Microsoft 365 
 
 Fase 1: Validación Local, Auditoría de Tenant y Simulación DRY-RUN (Cero Escritura).
 """
+import os
 import sys
 import argparse
 from src.config import load_config
@@ -330,6 +331,76 @@ def cmd_delete(args):
     )
 
 
+def cmd_export_pdf(args):
+    """
+    Comando 'export-pdf': Genera documentos PDF imprimibles con fichas de acceso y códigos QR.
+    """
+    config = load_config(args.config)
+    from src.pdf_generator import generate_pdf_from_credentials_csv
+
+    csv_file = args.file
+    if not csv_file:
+        # Buscar el archivo de credenciales más reciente en secrets/
+        if os.path.exists(config.secrets_dir):
+            cred_files = sorted([
+                os.path.join(config.secrets_dir, f)
+                for f in os.listdir(config.secrets_dir)
+                if f.startswith("credenciales_alumnos_") and f.endswith(".csv")
+            ])
+            if cred_files:
+                csv_file = cred_files[-1]
+
+    if not csv_file or not os.path.exists(csv_file):
+        print(f"❌ No se encontró ningún archivo de credenciales para generar el PDF.")
+        print(f"   Especifica la ruta con --file ruta/al/archivo.csv")
+        sys.exit(1)
+
+    output_pdf = args.output
+    if not output_pdf:
+        timestamp_str = os.path.splitext(os.path.basename(csv_file))[0]
+        output_pdf = os.path.join("reports", f"fichas_acceso_{timestamp_str}_{args.mode}.pdf")
+
+    print(f"📄 Leyendo credenciales desde: \033[1m{csv_file}\033[0m")
+    print(f"⚙️ Modo de maquetación:        \033[1m{'4 Tarjetas por hoja (Recortables)' if args.mode == 'cards' else '1 Ficha por hoja (Expediente)'}\033[0m")
+    
+    generated_path = generate_pdf_from_credentials_csv(
+        csv_file_path=csv_file,
+        output_pdf_path=output_pdf,
+        layout_mode=args.mode
+    )
+
+    print(f"\n🎉 ¡PDF generado exitosamente!")
+    print(f"📍 Archivo listo para imprimir: \033[1;32m{generated_path}\033[0m")
+
+
+def cmd_reset(args):
+    """
+    Comando 'reset': Restablece rápidamente la contraseña de un alumno por su matrícula.
+    """
+    config = load_config(args.config)
+    if not config.tenant_id or not config.client_id:
+        print("❌ Se requiere 'tenant_id' y 'client_id' en config.json para restablecer contraseñas.")
+        sys.exit(1)
+
+    matricula = args.matricula.strip()
+    if not matricula:
+        print("❌ Debes especificar la matrícula del alumno.")
+        sys.exit(1)
+
+    from src.reset_engine import execute_password_reset
+    write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
+    graph = GraphClient(config.tenant_id, config.client_id, write_scopes)
+    graph.authenticate_device_code()
+
+    execute_password_reset(
+        identifier=matricula,
+        graph=graph,
+        domain=config.domain,
+        secrets_dir=config.secrets_dir,
+        reports_dir=config.reports_dir
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Sistema de Aprovisionamiento, Gestión y Sincronización Segura de Alumnos hacia Microsoft 365 / Entra ID"
@@ -379,6 +450,30 @@ def main():
         help="Confirma automáticamente las eliminaciones sin solicitar confirmación interactiva"
     )
 
+    # export-pdf command
+    p_pdf = subparsers.add_parser("export-pdf", help="Genera documento PDF imprimible con tarjetas de acceso y códigos QR")
+    p_pdf.add_argument(
+        "-f", "--file",
+        help="Ruta al archivo CSV de credenciales (por defecto: el más reciente en secrets/)"
+    )
+    p_pdf.add_argument(
+        "-o", "--output",
+        help="Ruta de salida para el archivo PDF generado"
+    )
+    p_pdf.add_argument(
+        "-m", "--mode",
+        choices=["cards", "full"],
+        default="cards",
+        help="Modo de maquetación: 'cards' (4 tarjetas recortables por hoja) o 'full' (1 ficha por hoja)"
+    )
+
+    # reset command
+    p_reset = subparsers.add_parser("reset", help="Restablece rápidamente la contraseña de un alumno por su matrícula")
+    p_reset.add_argument(
+        "matricula",
+        help="Matrícula del alumno cuya contraseña se restablecerá (ej. 250081)"
+    )
+
     args = parser.parse_args()
 
     if not args.command:
@@ -397,6 +492,10 @@ def main():
         cmd_enroll(args)
     elif args.command == "delete":
         cmd_delete(args)
+    elif args.command == "export-pdf":
+        cmd_export_pdf(args)
+    elif args.command == "reset":
+        cmd_reset(args)
 
 
 if __name__ == "__main__":

@@ -402,3 +402,47 @@ class GraphClient:
                 time.sleep(attempt * 2)
 
         return False
+
+    def reset_password(self, user_id: str, new_password: str, max_retries: int = 3) -> bool:
+        """
+        Restablece la contraseña de un usuario en Microsoft Entra ID vía PATCH /v1.0/users/{user_id}.
+        Forza el cambio de contraseña en el próximo inicio de sesión.
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        url = f"https://graph.microsoft.com/v1.0/users/{user_id}"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "passwordProfile": {
+                "forceChangePasswordNextSignIn": True,
+                "password": new_password
+            }
+        }
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.patch(url, headers=headers, json=payload, timeout=25)
+
+                if resp.status_code in [200, 204]:
+                    return True
+
+                if resp.status_code == 429:
+                    time.sleep(int(resp.headers.get("Retry-After", 2)))
+                    continue
+
+                if 500 <= resp.status_code < 600:
+                    time.sleep(attempt * 2)
+                    continue
+
+                resp.raise_for_status()
+
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    raise GraphClientError(f"Fallo al restablecer contraseña de {user_id}: {e}")
+                time.sleep(attempt * 2)
+
+        return False

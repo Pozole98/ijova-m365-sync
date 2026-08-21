@@ -156,6 +156,42 @@ class TestGraphClient(unittest.TestCase):
             self.assertTrue(valid, f"Se esperaba aceptación para {sc}")
             self.assertTrue(upn.endswith("@ijova.com"))
 
+    @patch("requests.patch")
+    def test_reset_password_success(self, mock_patch):
+        """Verifica el restablecimiento de contraseña vía PATCH /v1.0/users/{id}."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 204
+        mock_patch.return_value = mock_resp
+
+        res = self.client.reset_password("test-user-id", "NewPassword123!")
+        self.assertTrue(res)
+
+    def test_pdf_generation_smoke_test(self):
+        """Verifica la generación de PDF con tarjetas de acceso y código QR."""
+        import tempfile
+        import os
+        from src.pdf_generator import generate_pdf_cards_from_list
+
+        test_students = [{
+            "matricula": "250001",
+            "upn": "250001@ijova.com",
+            "nombre_completo": "ALUMNO DEMO UNO",
+            "password_temporal": "TempPass123!",
+            "nivel": "Secundaria",
+            "grado_semestre": "1ro"
+        }]
+
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            out_path = generate_pdf_cards_from_list(test_students, tmp_path, layout_mode="cards")
+            self.assertTrue(os.path.exists(out_path))
+            self.assertGreater(os.path.getsize(out_path), 1000)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
 
 if __name__ == "__main__":
     unittest.main()

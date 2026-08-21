@@ -134,6 +134,25 @@ python3 main.py enroll
 - Añade el registro al archivo Excel para mantener el histórico sincronizado.
 - Genera e imprime en pantalla la **Ficha de Acceso de Bienvenida** lista para entregar al alumno o tutor.
 
+### 🔹 Comando `export-pdf` (Generador de Fichas Imprimibles con QR)
+Genera documentos PDF de alta resolución con diseño institucional, datos del alumno, código QR directo a `portal.office.com` e instrucciones claras de primer inicio de sesión:
+```bash
+# Modo 1: Tarjetas recortables (4 por hoja A4 / Carta, ideal para grupos)
+python3 main.py export-pdf -m cards
+
+# Modo 2: Ficha individual completa (1 por hoja, ideal para expedientes)
+python3 main.py export-pdf -m full
+
+# Especificar archivo CSV de origen y nombre de salida
+python3 main.py export-pdf -f secrets/credenciales_alumnos_XXXX.csv -o reports/fichas.pdf
+```
+
+### 🔹 Comando `reset` (Reseteo Rápido de Contraseñas por Matrícula)
+Restablece la contraseña de un alumno en **2 segundos**, fuerza el cambio en el siguiente inicio y genera la ficha de entrega en PDF y consola:
+```bash
+python3 main.py reset 250081
+```
+
 ### 🔹 Comando `delete` (Baja y Eliminación Segura por Matrícula)
 Elimina uno o varios alumnos de Microsoft 365 a partir de su matrícula, liberando su licencia A1 y enviando la cuenta a la papelera (soft-delete):
 ```bash
@@ -165,7 +184,7 @@ ijovausers/
 ├── .gitignore                      # Excluye credenciales, tokens, Excel con PII y reportes
 ├── LICENSE                         # Licencia MIT
 ├── README.md                       # Manual operativo completo
-├── requirements.txt                # Dependencias tipadas (msal, requests, openpyxl, pydantic, tabulate)
+├── requirements.txt                # Dependencias tipadas (msal, requests, openpyxl, reportlab, qrcode)
 ├── config.example.json             # Plantilla de configuración limpia
 ├── main.py                         # CLI principal con subcomandos
 ├── src/
@@ -175,17 +194,19 @@ ijovausers/
 │   ├── validator.py                # Validador de reglas de integridad escolar
 │   ├── normalizer.py               # Estandarizador de atributos de identidad
 │   ├── password_generator.py       # Generador de contraseñas criptográficas seguras
+│   ├── pdf_generator.py            # Generador de fichas y tarjetas PDF con código QR
 │   ├── graph_client.py             # Cliente Microsoft Graph (Device Code, paginación, retries)
 │   ├── sync_engine.py              # Motor de cruce estricto por UPN
 │   ├── provisioner.py              # Motor de creación y licenciamiento A1
 │   ├── enroll_engine.py            # Motor de alta interactiva extemporánea
 │   ├── delete_engine.py            # Motor de baja con salvaguardas anti-admin
+│   ├── reset_engine.py             # Motor de reseteo rápido de contraseñas
 │   ├── auditor.py                  # Generador de snapshots atómicos
 │   └── report_generator.py         # Exportador de reportes CSV y resúmenes Markdown
 ├── tests/
 │   └── test_graph_client.py        # Suite de pruebas unitarias automatizadas
 ├── backups/                        # Snapshots con timestamp (0700) [Excluido de Git]
-├── reports/                        # Reportes CSV y bitácoras [Excluido de Git]
+├── reports/                        # Reportes CSV, PDFs y bitácoras [Excluido de Git]
 └── secrets/                        # Archivos de contraseñas de entrega (0600) [Excluido de Git]
 ```
 
