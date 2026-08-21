@@ -1,0 +1,17 @@
+{
+  "tenant_id": "TU_TENANT_ID_AQUI_O_GUID",
+  "client_id": "TU_CLIENT_ID_DE_APP_REGISTRATION",
+  "domain": "ijova.com",
+  "excel_path": "Listado de Alumnos Inscritos.xlsx",
+  "sheet_name": "Listado Global Matriculado",
+  "auth_method": "device_code",
+  "graph_scopes": [
+    "User.Read.All",
+    "Domain.Read.All",
+    "LicenseAssignment.Read.All"
+  ],
+  "reports_dir": "reports",
+  "backups_dir": "backups",
+  "data_dir": "data",
+  "secrets_dir": "secrets"
+}

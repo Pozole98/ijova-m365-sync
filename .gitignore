@@ -1,0 +1,29 @@
+# Virtual Environments
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Credentials, Secrets & Tokens
+secrets/
+config.json
+token_cache.bin
+*.pem
+*.key
+*.pfx
+
+# Backups, Excel Sheets & Data Snapshots (Contains Student PII)
+backups/
+reports/
+data/
+*.xlsx
+*.xls
+*.csv
+
+# Temporary / OS
+.DS_Store
+.vscode/
+.idea/
+*.log
