@@ -158,10 +158,20 @@ python3 main.py export-pdf -m full
 python3 main.py export-pdf -f secrets/credenciales_alumnos_XXXX.csv -o reports/fichas.pdf
 ```
 
-### 🔹 Comando `reset` (Reseteo Rápido de Contraseñas por Matrícula)
-Restablece la contraseña de un alumno en **2 segundos**, fuerza el cambio en el siguiente inicio y genera la ficha de entrega en PDF y consola:
+### 🔹 Comando `reset` (Reseteo Individual o Masivo de Contraseñas)
+Restablece la contraseña de uno, varios o **todos los alumnos activos** para inicio de semestre, generando automáticamente nuevas contraseñas temporales y las fichas PDF con código QR listas para imprimir:
 ```bash
+# Caso 1: Restablecer a UN alumno individual (en 2 segundos)
 python3 main.py reset 250081
+
+# Caso 2: Restablecer a TODOS los alumnos activos en Microsoft 365 (Inicio de Semestre)
+python3 main.py reset --all
+
+# Caso 3: Restablecer a un grupo desde un archivo Excel de matrículas
+python3 main.py reset --excel "Alumnos_Secundaria.xlsx"
+
+# Modo desatendido (sin confirmación interactiva)
+python3 main.py reset --all -y
 ```
 
 ### 🔹 Comando `delete` (Baja y Eliminación Segura por Matrícula o Excel)

@@ -175,31 +175,114 @@ def menu_enroll(config: AppConfig):
 def menu_reset(config: AppConfig):
     clear_screen()
     print("=" * 80)
-    print("🔑 [5] RESTABLECER CONTRASEÑA OLVIDADA (POR MATRÍCULA)")
+    print("🔑 [5] RESTABLECER CONTRASEÑAS DE ALUMNOS (INDIVIDUAL O MASIVO)")
     print("=" * 80)
     print("📌 ¿Qué hace esta función?")
-    print("   • Genera una nueva contraseña temporal segura en 2 segundos.")
-    print("   • Fuerza al alumno a crear una nueva contraseña personal en su próximo acceso.")
-    print("   • Genera una Ficha en PDF lista para imprimir y entregar al alumno o tutor.")
-    print("   • Registra el cambio en la bitácora de auditoría.")
+    print("   • Permite cambiar la contraseña de un alumno o de TODOS los alumnos para inicio de semestre.")
+    print("   • Genera contraseñas temporales seguras de 12 caracteres y exige cambio en el primer inicio.")
+    print("   • Exporta automáticamente el archivo protegido de credenciales en 'secrets/' (0600).")
+    print("   • Genera de inmediato los PDFs con código QR listos para imprimir y entregar.")
     print("-" * 80)
 
-    matricula = input("👉 Ingresa la Matrícula del alumno (ej. 250081): ").strip()
-    if matricula:
-        from src.reset_engine import execute_password_reset
-        write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
-        graph = GraphClient(config.tenant_id, config.client_id, write_scopes)
-        graph.authenticate_device_code()
+    print("👉 Selecciona la modalidad de reseteo:")
+    print("   \033[1;36m[1]\033[0m Restablecer a UN solo alumno (por matrícula individual)")
+    print("   \033[1;32m[2]\033[0m Restablecer a TODOS los alumnos activos en Microsoft 365 (\033[1mInicio de Semestre\033[0m)")
+    print("   \033[1;33m[3]\033[0m Restablecer a alumnos desde un archivo Excel o archivo de texto")
+    opt = input("\n👉 Opción (1-3): ").strip()
 
-        execute_password_reset(
-            identifier=matricula,
-            graph=graph,
-            domain=config.domain,
-            secrets_dir=config.secrets_dir,
-            reports_dir=config.reports_dir
-        )
+    from src.reset_engine import execute_password_reset, execute_bulk_password_reset
+    from src.excel_parser import parse_excel_students, extract_matriculas_from_excel
+
+    write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
+    graph = GraphClient(config.tenant_id, config.client_id, write_scopes)
+    graph.authenticate_device_code()
+
+    if opt == "1":
+        matricula = input("\n👉 Ingresa la Matrícula del alumno (ej. 250081): ").strip()
+        if matricula:
+            execute_password_reset(
+                identifier=matricula,
+                graph=graph,
+                domain=config.domain,
+                secrets_dir=config.secrets_dir,
+                reports_dir=config.reports_dir
+            )
+        else:
+            print("⛔ No se ingresó ninguna matrícula.")
+    elif opt == "2":
+        print("\n🔍 Consultando alumnos activos en Microsoft 365...")
+        all_users = graph.get_all_users()
+        students_data = []
+
+        excel_map = {}
+        try:
+            ex_students = parse_excel_students(config.excel_path, config.sheet_name)
+            for es in ex_students:
+                excel_map[es.matricula] = es
+        except Exception:
+            pass
+
+        for u in all_users:
+            prefix = u.user_principal_name.split("@")[0]
+            if prefix.isdigit():
+                es_info = excel_map.get(prefix)
+                students_data.append({
+                    "matricula": prefix,
+                    "upn": u.user_principal_name,
+                    "display_name": u.display_name,
+                    "id": u.id,
+                    "nivel": es_info.nivel if es_info else "Estudiante",
+                    "grado_semestre": es_info.grado_semestre if es_info else "Activo"
+                })
+
+        if not students_data:
+            print("ℹ️ No se encontraron alumnos activos en Microsoft 365.")
+        else:
+            execute_bulk_password_reset(
+                students_data=students_data,
+                graph=graph,
+                domain=config.domain,
+                secrets_dir=config.secrets_dir,
+                reports_dir=config.reports_dir,
+                auto_confirm=False
+            )
+    elif opt == "3":
+        file_path = input("\n👉 Ruta al archivo Excel o .txt con las matrículas: ").strip()
+        if file_path and os.path.exists(file_path):
+            if file_path.endswith(".xlsx"):
+                mats = extract_matriculas_from_excel(file_path)
+            else:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    mats = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+
+            print(f"📑 {len(mats)} matrículas encontradas en el archivo.")
+            students_data = []
+            for m in mats:
+                u = graph.get_user_by_upn(f"{m}@{config.domain}")
+                if u:
+                    students_data.append({
+                        "matricula": m,
+                        "upn": f"{m}@{config.domain}",
+                        "display_name": u.get("displayName", "Alumno"),
+                        "id": u.get("id"),
+                        "nivel": "Estudiante",
+                        "grado_semestre": "Activo"
+                    })
+            if students_data:
+                execute_bulk_password_reset(
+                    students_data=students_data,
+                    graph=graph,
+                    domain=config.domain,
+                    secrets_dir=config.secrets_dir,
+                    reports_dir=config.reports_dir,
+                    auto_confirm=False
+                )
+            else:
+                print("ℹ️ No se encontraron cuentas activas en Entra ID para esas matrículas.")
+        else:
+            print("❌ Archivo no encontrado.")
     else:
-        print("⛔ No se ingresó ninguna matrícula.")
+        print("⛔ Opción no válida.")
     pause()
 
 

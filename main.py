@@ -430,30 +430,137 @@ def cmd_export_pdf(args):
 
 def cmd_reset(args):
     """
-    Comando 'reset': Restablece rápidamente la contraseña de un alumno por su matrícula.
+    Comando 'reset': Restablece contraseñas de alumnos (individual, masivo --all, o lote desde Excel).
     """
     config = load_config(args.config)
     if not config.tenant_id or not config.client_id:
         print("❌ Se requiere 'tenant_id' y 'client_id' en config.json para restablecer contraseñas.")
         sys.exit(1)
 
-    matricula = args.matricula.strip()
-    if not matricula:
-        print("❌ Debes especificar la matrícula del alumno.")
-        sys.exit(1)
+    from src.reset_engine import execute_password_reset, execute_bulk_password_reset
+    from src.excel_parser import parse_excel_students, extract_matriculas_from_excel
 
-    from src.reset_engine import execute_password_reset
     write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
     graph = GraphClient(config.tenant_id, config.client_id, write_scopes)
     graph.authenticate_device_code()
 
-    execute_password_reset(
-        identifier=matricula,
-        graph=graph,
-        domain=config.domain,
-        secrets_dir=config.secrets_dir,
-        reports_dir=config.reports_dir
-    )
+    # 1. Modo --all: Restablecer a todos los alumnos activos en Microsoft 365
+    if getattr(args, "all", False):
+        print("\n🔍 Recuperando todos los alumnos activos en Microsoft 365...")
+        all_users = graph.get_all_users()
+        students_data = []
+
+        # Intentar cargar metadata de nivel/grado desde Excel para enriquecer fichas
+        excel_map = {}
+        try:
+            ex_students = parse_excel_students(config.excel_path, config.sheet_name)
+            for es in ex_students:
+                excel_map[es.matricula] = es
+        except Exception:
+            pass
+
+        for u in all_users:
+            prefix = u.user_principal_name.split("@")[0]
+            if prefix.isdigit():
+                es_info = excel_map.get(prefix)
+                students_data.append({
+                    "matricula": prefix,
+                    "upn": u.user_principal_name,
+                    "display_name": u.display_name,
+                    "id": u.id,
+                    "nivel": es_info.nivel if es_info else "Estudiante",
+                    "grado_semestre": es_info.grado_semestre if es_info else "Activo"
+                })
+
+        if not students_data:
+            print("ℹ️ No se encontraron alumnos activos en Microsoft 365.")
+            sys.exit(0)
+
+        execute_bulk_password_reset(
+            students_data=students_data,
+            graph=graph,
+            domain=config.domain,
+            secrets_dir=config.secrets_dir,
+            reports_dir=config.reports_dir,
+            auto_confirm=args.yes
+        )
+        return
+
+    # 2. Modo --excel: Restablecer alumnos leídos desde un Excel
+    if getattr(args, "excel", None):
+        if not os.path.exists(args.excel):
+            print(f"❌ El archivo Excel '{args.excel}' no existe.")
+            sys.exit(1)
+        mats = extract_matriculas_from_excel(args.excel, args.sheet)
+        print(f"📑 {len(mats)} matrículas extraídas desde '{args.excel}'.")
+        students_data = []
+        for m in mats:
+            u = graph.get_user_by_upn(f"{m}@{config.domain}")
+            if u:
+                students_data.append({
+                    "matricula": m,
+                    "upn": f"{m}@{config.domain}",
+                    "display_name": u.get("displayName", "Alumno"),
+                    "id": u.get("id"),
+                    "nivel": "Estudiante",
+                    "grado_semestre": "Activo"
+                })
+        execute_bulk_password_reset(
+            students_data=students_data,
+            graph=graph,
+            domain=config.domain,
+            secrets_dir=config.secrets_dir,
+            reports_dir=config.reports_dir,
+            auto_confirm=args.yes
+        )
+        return
+
+    # 3. Matrículas pasadas como argumentos
+    mats = getattr(args, "matriculas", [])
+    if mats:
+        if len(mats) == 1:
+            execute_password_reset(
+                identifier=mats[0],
+                graph=graph,
+                domain=config.domain,
+                secrets_dir=config.secrets_dir,
+                reports_dir=config.reports_dir
+            )
+        else:
+            students_data = []
+            for m in mats:
+                u = graph.get_user_by_upn(f"{m}@{config.domain}")
+                if u:
+                    students_data.append({
+                        "matricula": m,
+                        "upn": f"{m}@{config.domain}",
+                        "display_name": u.get("displayName", "Alumno"),
+                        "id": u.get("id"),
+                        "nivel": "Estudiante",
+                        "grado_semestre": "Activo"
+                    })
+            execute_bulk_password_reset(
+                students_data=students_data,
+                graph=graph,
+                domain=config.domain,
+                secrets_dir=config.secrets_dir,
+                reports_dir=config.reports_dir,
+                auto_confirm=args.yes
+            )
+        return
+
+    # 4. Solicitud interactiva individual si no se pasó ningún parámetro
+    mat_in = input("👉 Ingresa la Matrícula del alumno a restablecer (ej. 250081): ").strip()
+    if mat_in:
+        execute_password_reset(
+            identifier=mat_in,
+            graph=graph,
+            domain=config.domain,
+            secrets_dir=config.secrets_dir,
+            reports_dir=config.reports_dir
+        )
+    else:
+        print("⛔ No se ingresó ninguna matrícula.")
 
 
 def main():
@@ -542,10 +649,29 @@ def main():
     )
 
     # reset command
-    p_reset = subparsers.add_parser("reset", help="Restablece rápidamente la contraseña de un alumno por su matrícula")
+    p_reset = subparsers.add_parser("reset", help="Restablece contraseñas de alumnos (individual, masivo --all, o lote desde Excel)")
     p_reset.add_argument(
-        "matricula",
-        help="Matrícula del alumno cuya contraseña se restablecerá (ej. 250081)"
+        "matriculas",
+        nargs="*",
+        help="Una o más matrículas de alumnos a restablecer (ej. 250081 250082)"
+    )
+    p_reset.add_argument(
+        "--all",
+        action="store_true",
+        help="Restablece la contraseña de TODOS los alumnos activos en Microsoft 365 (Inicio de Semestre)"
+    )
+    p_reset.add_argument(
+        "--excel",
+        help="Ruta a un archivo Excel con listado o columna de alumnos a restablecer"
+    )
+    p_reset.add_argument(
+        "--sheet",
+        help="Nombre de la hoja de Excel (opcional)"
+    )
+    p_reset.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="Confirma automáticamente el reseteo sin solicitar confirmación interactiva"
     )
 
     # menu command

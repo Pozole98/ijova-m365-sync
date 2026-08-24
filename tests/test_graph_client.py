@@ -246,6 +246,55 @@ class TestGraphClient(unittest.TestCase):
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
+    @patch.object(GraphClient, "reset_password")
+    def test_bulk_password_reset(self, mock_reset):
+        """Verifica la ejecución del reseteo masivo de contraseñas y generación de archivos."""
+        import tempfile
+        import shutil
+        from src.reset_engine import execute_bulk_password_reset
+
+        mock_reset.return_value = True
+
+        test_students = [
+            {
+                "matricula": "250001",
+                "upn": "250001@ijova.com",
+                "display_name": "ALUMNO DEMO UNO",
+                "id": "user-id-1",
+                "nivel": "Secundaria",
+                "grado_semestre": "1ro"
+            },
+            {
+                "matricula": "250002",
+                "upn": "250002@ijova.com",
+                "display_name": "ALUMNO DEMO DOS",
+                "id": "user-id-2",
+                "nivel": "Secundaria",
+                "grado_semestre": "1ro"
+            }
+        ]
+
+        tmp_secrets = tempfile.mkdtemp()
+        tmp_reports = tempfile.mkdtemp()
+
+        try:
+            res = execute_bulk_password_reset(
+                students_data=test_students,
+                graph=self.client,
+                domain="ijova.com",
+                secrets_dir=tmp_secrets,
+                reports_dir=tmp_reports,
+                auto_confirm=True
+            )
+            self.assertEqual(res["reset_count"], 2)
+            self.assertEqual(res["failed_count"], 0)
+            self.assertTrue(os.path.exists(res["csv_path"]))
+            self.assertTrue(os.path.exists(res["pdf_cards"]))
+            self.assertTrue(os.path.exists(res["pdf_full"]))
+        finally:
+            shutil.rmtree(tmp_secrets, ignore_errors=True)
+            shutil.rmtree(tmp_reports, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()
