@@ -548,10 +548,15 @@ def main():
         help="Matrícula del alumno cuya contraseña se restablecerá (ej. 250081)"
     )
 
+    # menu command
+    p_menu = subparsers.add_parser("menu", help="Inicia el Menú Interactivo en Terminal con todas las funciones explicadas")
+
     args = parser.parse_args()
 
-    if not args.command:
-        parser.print_help()
+    # Si no se pasó ningún comando o se solicitó 'menu', abrir el menú interactivo guiado
+    if not args.command or args.command == "menu":
+        from src.menu import run_interactive_menu
+        run_interactive_menu(args.config)
         sys.exit(0)
 
     if args.command == "validate":

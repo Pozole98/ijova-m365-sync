@@ -102,7 +102,18 @@ Edita `config.json` con tus identificadores de Entra ID:
 
 ---
 
-## 💻 4. Guía de Comandos Disponibles
+## 💻 4. Uso del Sistema
+
+### 🌟 Modo 1: Menú Interactivo en Terminal (Recomendado)
+Para acceder a todas las funciones mediante un menú guiado paso a paso con explicaciones detalladas en pantalla, simplemente ejecuta:
+```bash
+python3 main.py
+```
+*(También puedes iniciarlo con `python3 main.py menu`)*.
+
+---
+
+### ⚡ Modo 2: Comandos Directos por Terminal (Para Scripts y Automatización)
 
 ### 🔹 Comando `validate` (Validación Local Offline)
 Verifica la integridad de la hoja de cálculo, valida reglas de formato y exporta una copia normalizada sin conectar a internet:
