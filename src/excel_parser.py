@@ -2,8 +2,9 @@
 Lector de solo lectura para la hoja Excel 'Listado Global Matriculado'.
 Garantiza acceso no destructivo y extracción íntegra de celdas y fórmulas.
 """
+import os
 import openpyxl
-from typing import List
+from typing import List, Optional
 from pathlib import Path
 from src.models import StudentRecord
 
@@ -174,3 +175,55 @@ def update_student_status_in_excel(
         wb.save(excel_path)
     wb.close()
     return updated
+
+
+def extract_matriculas_from_excel(
+    file_path: str,
+    sheet_name: Optional[str] = None
+) -> List[str]:
+    """
+    Extrae una lista de matrículas numéricas desde un archivo Excel.
+    Soporta archivos simples con solo una columna de matrículas o archivos con encabezados.
+    Descarta celdas vacías y encabezados no numéricos.
+    """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"No se encontró el archivo Excel: {file_path}")
+
+    wb = openpyxl.load_workbook(file_path, data_only=True)
+    if sheet_name:
+        if sheet_name not in wb.sheetnames:
+            raise ValueError(f"La hoja '{sheet_name}' no existe en el archivo Excel.")
+        sheet = wb[sheet_name]
+    else:
+        sheet = wb.active
+
+    matriculas = []
+    seen = set()
+
+    for row in sheet.iter_rows(values_only=True):
+        if not row:
+            continue
+        # Buscar en las celdas de la fila la primera que parezca una matrícula numérica
+        for cell in row:
+            if cell is None:
+                continue
+            val_str = str(cell).strip()
+            if not val_str:
+                continue
+            # Sanitizar floats como 250001.0
+            try:
+                f = float(val_str)
+                if f.is_integer():
+                    val_str = str(int(f))
+            except ValueError:
+                pass
+
+            # Si es numérica y tiene longitud de matrícula (4 a 10 dígitos)
+            if val_str.isdigit() and len(val_str) >= 4:
+                if val_str not in seen:
+                    matriculas.append(val_str)
+                    seen.add(val_str)
+                break  # Solo tomar la primera columna válida de esa fila
+
+    wb.close()
+    return matriculas

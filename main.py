@@ -296,7 +296,7 @@ def cmd_delete(args):
     if args.matriculas:
         identifiers.extend(args.matriculas)
 
-    # 2. Matrículas leídas desde archivo
+    # 2. Matrículas leídas desde archivo de texto
     if args.file:
         if not os.path.exists(args.file):
             print(f"❌ El archivo '{args.file}' no existe.")
@@ -307,7 +307,17 @@ def cmd_delete(args):
                 if line_str and not line_str.startswith("#"):
                     identifiers.append(line_str)
 
-    # 3. Si no se especificó nada, solicitar interactivamente
+    # 3. Matrículas leídas desde archivo Excel
+    if args.excel:
+        if not os.path.exists(args.excel):
+            print(f"❌ El archivo Excel '{args.excel}' no existe.")
+            sys.exit(1)
+        from src.excel_parser import extract_matriculas_from_excel
+        excel_mats = extract_matriculas_from_excel(args.excel, args.sheet)
+        print(f"📑 {len(excel_mats)} matrículas extraídas desde '{args.excel}'.")
+        identifiers.extend(excel_mats)
+
+    # 4. Si no se especificó nada, solicitar interactivamente
     if not identifiers:
         mat_in = input("👉 Ingresa la Matrícula del alumno a dar de baja (ej. 250010): ").strip()
         if mat_in:
@@ -327,7 +337,52 @@ def cmd_delete(args):
         excel_path=config.excel_path,
         sheet_name=config.sheet_name,
         reports_dir=config.reports_dir,
+        backups_dir=config.backups_dir,
         auto_confirm=args.yes
+    )
+
+
+def cmd_restore(args):
+    """
+    Comando 'restore': Restaura un alumno desde la papelera de reciclaje de Microsoft Entra ID.
+    """
+    config = load_config(args.config)
+    if not config.tenant_id or not config.client_id:
+        print("❌ Se requiere 'tenant_id' y 'client_id' en config.json para restaurar alumnos.")
+        sys.exit(1)
+
+    from src.restore_engine import execute_student_restoration
+    write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
+    graph = GraphClient(config.tenant_id, config.client_id, write_scopes)
+    graph.authenticate_device_code()
+
+    execute_student_restoration(
+        identifier=args.matricula,
+        graph=graph,
+        domain=config.domain,
+        excel_path=config.excel_path,
+        sheet_name=config.sheet_name
+    )
+
+
+def cmd_status(args):
+    """
+    Comando 'status': Muestra el tablero ejecutivo de salud del tenant, licencias y usuarios.
+    """
+    config = load_config(args.config)
+    if not config.tenant_id or not config.client_id:
+        print("❌ Se requiere 'tenant_id' y 'client_id' en config.json para consultar el estado.")
+        sys.exit(1)
+
+    from src.status_engine import execute_tenant_status_check
+    read_scopes = ["User.Read.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
+    graph = GraphClient(config.tenant_id, config.client_id, read_scopes)
+    graph.authenticate_device_code()
+
+    execute_tenant_status_check(
+        graph=graph,
+        domain=config.domain,
+        backups_dir=config.backups_dir
     )
 
 
@@ -434,7 +489,7 @@ def main():
     p_enroll = subparsers.add_parser("enroll", help="Asistente interactivo de alta rápida para alumnos nuevos extemporáneos")
 
     # delete command
-    p_delete = subparsers.add_parser("delete", help="Elimina alumnos de Microsoft 365 a partir de su matrícula (individual o lote)")
+    p_delete = subparsers.add_parser("delete", help="Elimina alumnos de Microsoft 365 a partir de su matrícula (individual, archivo o Excel)")
     p_delete.add_argument(
         "matriculas",
         nargs="*",
@@ -445,10 +500,29 @@ def main():
         help="Ruta a un archivo de texto con lista de matrículas a dar de baja (una por línea)"
     )
     p_delete.add_argument(
+        "--excel",
+        help="Ruta a un archivo Excel con listado o columna de matrículas a dar de baja"
+    )
+    p_delete.add_argument(
+        "--sheet",
+        help="Nombre de la hoja de Excel (opcional)"
+    )
+    p_delete.add_argument(
         "-y", "--yes",
         action="store_true",
         help="Confirma automáticamente las eliminaciones sin solicitar confirmación interactiva"
     )
+
+    # restore command
+    p_restore = subparsers.add_parser("restore", help="Restaura un alumno desde la papelera de reciclaje de Entra ID (< 30 días)")
+    p_restore.add_argument(
+        "matricula",
+        help="Matrícula del alumno a restaurar (ej. 250010)"
+    )
+
+    # status command
+    p_status = subparsers.add_parser("status", help="Muestra el tablero ejecutivo de salud del tenant, licencias A1 y usuarios")
+    p_health = subparsers.add_parser("health", help="Alias de 'status'")
 
     # export-pdf command
     p_pdf = subparsers.add_parser("export-pdf", help="Genera documento PDF imprimible con tarjetas de acceso y códigos QR")
@@ -492,6 +566,10 @@ def main():
         cmd_enroll(args)
     elif args.command == "delete":
         cmd_delete(args)
+    elif args.command == "restore":
+        cmd_restore(args)
+    elif args.command in ["status", "health"]:
+        cmd_status(args)
     elif args.command == "export-pdf":
         cmd_export_pdf(args)
     elif args.command == "reset":

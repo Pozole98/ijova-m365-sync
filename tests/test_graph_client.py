@@ -2,6 +2,7 @@
 Pruebas unitarias para verificar el manejo de paginación (@odata.nextLink),
 rate limiting (HTTP 429 con Retry-After) y abortos de seguridad en GraphClient.
 """
+import os
 import unittest
 from unittest.mock import patch, MagicMock
 from src.graph_client import GraphClient, GraphClientError
@@ -188,6 +189,59 @@ class TestGraphClient(unittest.TestCase):
             out_path = generate_pdf_cards_from_list(test_students, tmp_path, layout_mode="cards")
             self.assertTrue(os.path.exists(out_path))
             self.assertGreater(os.path.getsize(out_path), 1000)
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    @patch("requests.get")
+    def test_get_deleted_users(self, mock_get):
+        """Verifica la consulta de usuarios en la papelera de reciclaje."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "value": [
+                {"id": "del-1", "userPrincipalName": "250010@ijova.com", "displayName": "Alumno Eliminado"}
+            ]
+        }
+        mock_get.return_value = mock_resp
+
+        deleted = self.client.get_deleted_users()
+        self.assertEqual(len(deleted), 1)
+        self.assertEqual(deleted[0]["userPrincipalName"], "250010@ijova.com")
+
+    @patch("requests.post")
+    def test_restore_deleted_user_success(self, mock_post):
+        """Verifica la restauración de usuario vía POST /deletedItems/{id}/restore."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"id": "restored-user-id", "userPrincipalName": "250010@ijova.com"}
+        mock_post.return_value = mock_resp
+
+        res = self.client.restore_deleted_user("restored-user-id")
+        self.assertEqual(res["id"], "restored-user-id")
+
+    def test_extract_matriculas_from_excel(self):
+        """Verifica la extracción de matrículas desde un Excel simple."""
+        import tempfile
+        import openpyxl
+        from src.excel_parser import extract_matriculas_from_excel
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            tmp_path = tmp.name
+
+        try:
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.append(["Matricula"])
+            ws.append([250001])
+            ws.append(["250002.0"])
+            ws.append([""])
+            ws.append(["260010"])
+            wb.save(tmp_path)
+            wb.close()
+
+            mats = extract_matriculas_from_excel(tmp_path)
+            self.assertEqual(mats, ["250001", "250002", "260010"])
         finally:
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)

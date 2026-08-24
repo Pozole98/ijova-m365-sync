@@ -446,3 +446,58 @@ class GraphClient:
                 time.sleep(attempt * 2)
 
         return False
+
+    def get_deleted_users(self) -> List[Dict[str, Any]]:
+        """
+        Consulta los usuarios en la papelera de reciclaje de Microsoft Entra ID (/v1.0/directory/deletedItems/microsoft.graph.user).
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        url = "https://graph.microsoft.com/v1.0/directory/deletedItems/microsoft.graph.user?$select=id,userPrincipalName,displayName,deletedDateTime,mailNickname"
+        deleted_users = []
+
+        while url:
+            data = self._request_with_retry(url)
+            users_chunk = data.get("value", [])
+            deleted_users.extend(users_chunk)
+            url = data.get("@odata.nextLink")
+
+        return deleted_users
+
+    def restore_deleted_user(self, user_id: str, max_retries: int = 3) -> Dict[str, Any]:
+        """
+        Restaura un usuario desde la papelera de reciclaje vía POST /v1.0/directory/deletedItems/{user_id}/restore.
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        url = f"https://graph.microsoft.com/v1.0/directory/deletedItems/{user_id}/restore"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.post(url, headers=headers, json={}, timeout=25)
+
+                if resp.status_code in [200, 201]:
+                    return resp.json()
+
+                if resp.status_code == 429:
+                    time.sleep(int(resp.headers.get("Retry-After", 2)))
+                    continue
+
+                if 500 <= resp.status_code < 600:
+                    time.sleep(attempt * 2)
+                    continue
+
+                resp.raise_for_status()
+
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    raise GraphClientError(f"Fallo al restaurar usuario {user_id}: {e}")
+                time.sleep(attempt * 2)
+
+        raise GraphClientError(f"Fallo al restaurar usuario tras {max_retries} intentos: {user_id}")

@@ -153,8 +153,8 @@ Restablece la contraseña de un alumno en **2 segundos**, fuerza el cambio en el
 python3 main.py reset 250081
 ```
 
-### 🔹 Comando `delete` (Baja y Eliminación Segura por Matrícula)
-Elimina uno o varios alumnos de Microsoft 365 a partir de su matrícula, liberando su licencia A1 y enviando la cuenta a la papelera (soft-delete):
+### 🔹 Comando `delete` (Baja y Eliminación Segura por Matrícula o Excel)
+Elimina uno o varios alumnos de Microsoft 365 a partir de su matrícula o desde un archivo Excel simple (solo matrículas), liberando su licencia A1 y enviando la cuenta a la papelera (soft-delete):
 ```bash
 # Eliminar un alumno individual
 python3 main.py delete 250010
@@ -162,11 +162,26 @@ python3 main.py delete 250010
 # Eliminar varios alumnos en una sola línea
 python3 main.py delete 250010 250062 250079
 
+# Eliminar masivamente leyendo un archivo Excel con columna de matrículas
+python3 main.py delete --excel "Bajas_Graduados_2026.xlsx"
+
 # Eliminar alumnos leyendo una lista desde un archivo de texto
 python3 main.py delete --file bajas.txt
 
 # Modo desatendido (sin confirmación interactiva)
-python3 main.py delete 250010 -y
+python3 main.py delete --excel "Bajas.xlsx" -y
+```
+
+### 🔹 Comando `restore` (Restauración Rápida desde la Papelera de Entra ID)
+Restaura una cuenta de alumno dada de baja en los últimos 30 días, recuperando su buzón de correo, archivos de OneDrive y tareas de Teams intactos:
+```bash
+python3 main.py restore 250010
+```
+
+### 🔹 Comando `status` / `health` (Monitor Ejecutivo de Salud del Tenant)
+Muestra un tablero en consola con el conteo de alumnos activos vs personal, disponibilidad de licencias Office 365 A1, estado del dominio y cuentas en papelera:
+```bash
+python3 main.py status
 ```
 
 ### 🔹 Comando `backup` (Snapshot de Auditoría)
@@ -201,6 +216,8 @@ ijovausers/
 │   ├── enroll_engine.py            # Motor de alta interactiva extemporánea
 │   ├── delete_engine.py            # Motor de baja con salvaguardas anti-admin
 │   ├── reset_engine.py             # Motor de reseteo rápido de contraseñas
+│   ├── restore_engine.py           # Motor de restauración desde papelera de Entra ID
+│   ├── status_engine.py            # Monitor ejecutivo de salud y licencias
 │   ├── auditor.py                  # Generador de snapshots atómicos
 │   └── report_generator.py         # Exportador de reportes CSV y resúmenes Markdown
 ├── tests/
