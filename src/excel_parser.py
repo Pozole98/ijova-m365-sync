@@ -9,14 +9,92 @@ from pathlib import Path
 from src.models import StudentRecord
 
 
+def _parse_ods_students(file_path: Path, sheet_name: str = "Listado Global Matriculado") -> List[StudentRecord]:
+    """Lee hojas de cálculo en formato ODS (.ods) vía odfpy."""
+    from odf import opendocument, teletype
+    from odf.table import Table, TableRow, TableCell
+
+    doc = opendocument.load(str(file_path))
+    tables = {t.getAttribute('name'): t for t in doc.spreadsheet.getElementsByType(Table)}
+    if sheet_name not in tables:
+        raise ValueError(f"La hoja '{sheet_name}' no existe en el archivo ODS. Hojas disponibles: {list(tables.keys())}")
+
+    sheet = tables[sheet_name]
+    students: List[StudentRecord] = []
+    rows = sheet.getElementsByType(TableRow)
+
+    for r_idx, r in enumerate(rows, start=1):
+        if r_idx == 1:
+            continue  # Skip header
+        cells = r.getElementsByType(TableCell)
+        row_vals = []
+        for c in cells:
+            rep = c.getAttribute('numbercolumnsrepeated')
+            rep_count = int(rep) if rep else 1
+            txt = teletype.extractText(c).strip()
+            if rep_count > 1 and not txt:
+                continue
+            for _ in range(rep_count if rep_count < 20 else 1):
+                row_vals.append(txt)
+
+        if not any(row_vals):
+            continue
+
+        while len(row_vals) < 13:
+            row_vals.append("")
+
+        raw_mat = row_vals[0]
+        raw_pat = row_vals[1]
+        raw_mat_ap = row_vals[2]
+        raw_nom = row_vals[3]
+        raw_nivel = row_vals[4]
+        raw_grado = row_vals[5]
+        raw_estatus = row_vals[6]
+        raw_upn = row_vals[7]
+        raw_nom1 = row_vals[8]
+        raw_nom_limp = row_vals[9]
+        raw_ape_limp = row_vals[10]
+        raw_alias = row_vals[11]
+        raw_disp = row_vals[12]
+
+        if not raw_mat and not raw_nom and not raw_pat:
+            continue
+
+        if raw_mat.endswith(".0"):
+            raw_mat = raw_mat[:-2]
+
+        record = StudentRecord(
+            row_index=r_idx,
+            matricula=raw_mat,
+            apellido_paterno=raw_pat,
+            apellido_materno=raw_mat_ap,
+            nombres=raw_nom,
+            nivel=raw_nivel,
+            grado_semestre=raw_grado,
+            estatus=raw_estatus,
+            upn_raw=raw_upn,
+            nombre1_raw=raw_nom1,
+            nombre_limpio_raw=raw_nom_limp,
+            apellido_limpio_raw=raw_ape_limp,
+            alias_raw=raw_alias,
+            display_name_raw=raw_disp
+        )
+        students.append(record)
+
+    return students
+
+
 def parse_excel_students(excel_path: str, sheet_name: str = "Listado Global Matriculado") -> List[StudentRecord]:
     """
-    Lee el archivo Excel de forma no destructiva (read_only=True)
+    Lee el archivo Excel o ODS de forma no destructiva (read_only=True)
     y devuelve la lista de objetos StudentRecord con los datos originales.
     """
     file_path = Path(excel_path)
     if not file_path.exists():
         raise FileNotFoundError(f"No se encontró el archivo Excel en: {excel_path}")
+
+    if str(file_path).lower().endswith(".ods"):
+        return _parse_ods_students(file_path, sheet_name)
 
     # Open with openpyxl in read-only and data_only=True to get evaluated values
     wb = openpyxl.load_workbook(str(file_path), data_only=True, read_only=True)
@@ -177,17 +255,57 @@ def update_student_status_in_excel(
     return updated
 
 
+def _extract_matriculas_from_ods(file_path: str, sheet_name: Optional[str] = None) -> List[str]:
+    """Extrae matrículas desde un archivo ODS."""
+    from odf import opendocument, teletype
+    from odf.table import Table, TableRow, TableCell
+
+    doc = opendocument.load(file_path)
+    tables = {t.getAttribute('name'): t for t in doc.spreadsheet.getElementsByType(Table)}
+    if sheet_name:
+        if sheet_name not in tables:
+            raise ValueError(f"La hoja '{sheet_name}' no existe en el archivo ODS.")
+        sheet = tables[sheet_name]
+    else:
+        sheet = doc.spreadsheet.getElementsByType(Table)[0]
+
+    matriculas = []
+    seen = set()
+
+    for r in sheet.getElementsByType(TableRow):
+        cells = r.getElementsByType(TableCell)
+        for c in cells:
+            rep = c.getAttribute('numbercolumnsrepeated')
+            rep_count = int(rep) if rep else 1
+            txt = teletype.extractText(c).strip()
+            if not txt:
+                continue
+            val_str = txt
+            if val_str.endswith(".0"):
+                val_str = val_str[:-2]
+            if val_str.isdigit() and len(val_str) >= 4:
+                if val_str not in seen:
+                    matriculas.append(val_str)
+                    seen.add(val_str)
+                break
+
+    return matriculas
+
+
 def extract_matriculas_from_excel(
     file_path: str,
     sheet_name: Optional[str] = None
 ) -> List[str]:
     """
-    Extrae una lista de matrículas numéricas desde un archivo Excel.
+    Extrae una lista de matrículas numéricas desde un archivo Excel o ODS.
     Soporta archivos simples con solo una columna de matrículas o archivos con encabezados.
     Descarta celdas vacías y encabezados no numéricos.
     """
     if not os.path.exists(file_path):
-        raise FileNotFoundError(f"No se encontró el archivo Excel: {file_path}")
+        raise FileNotFoundError(f"No se encontró el archivo: {file_path}")
+
+    if file_path.lower().endswith(".ods"):
+        return _extract_matriculas_from_ods(file_path, sheet_name)
 
     wb = openpyxl.load_workbook(file_path, data_only=True)
     if sheet_name:
