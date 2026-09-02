@@ -20,7 +20,9 @@ reports/
 data/
 *.xlsx
 *.xls
+*.ods
 *.csv
+.~lock.*
 
 # Temporary / OS
 .DS_Store
