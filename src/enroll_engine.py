@@ -85,9 +85,20 @@ def execute_interactive_enrollment(
         paterno = input("👉 Apellido Paterno: ").strip().upper()
         if paterno:
             break
-        print("❌ El apellido paterno no puede estar vacío.")
-
     materno = input("👉 Apellido Materno (opcional, presiona Enter si no tiene): ").strip().upper()
+    full_name = f"{nombres} {paterno} {materno}".strip()
+
+    # --- Validación de Matrícula Intransferible (Histórico de Bajas) ---
+    from src.historical_registry import check_matricula_transfer_conflict
+    is_conflict, conflict_msg = check_matricula_transfer_conflict(mat_input, full_name)
+    if is_conflict:
+        print("\n" + "=" * 70)
+        print("⛔ BLOQUEO DE SEGURIDAD (MATRÍCULA INTRANSFERIBLE)")
+        print("=" * 70)
+        print(conflict_msg)
+        print("=" * 70)
+        print("⛔ Registro cancelado por conflicto de identidad histórica.")
+        return None
 
     # 3. Nivel Escolar
     print("\n👉 Selecciona el Nivel Escolar:")

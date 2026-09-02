@@ -65,6 +65,23 @@ def validate_students(students: List[StudentRecord], expected_domain: str = "ijo
             ))
             s.classification = ClassificationEnum.CONFLICTO
 
+        else:
+            # --- Validación Anti-Reasignación de Matrícula Histórica ---
+            from src.historical_registry import check_matricula_transfer_conflict
+            student_full_name = f"{s.nombres} {s.apellido_paterno} {s.apellido_materno}".strip()
+            is_conflict, conflict_msg = check_matricula_transfer_conflict(s.matricula, student_full_name)
+            if is_conflict:
+                s.issues.append(ValidationIssue(
+                    row_index=s.row_index,
+                    matricula=s.matricula,
+                    code="MATRICULA_INTRANSFERIBLE_REASIGNADA",
+                    severity=IssueSeverity.CRITICAL,
+                    message=conflict_msg or "Matrícula histórica ya asignada a otra persona.",
+                    field="matricula",
+                    original_value=s.matricula
+                ))
+                s.classification = ClassificationEnum.CONFLICTO
+
         # --- B. Detección de Conflicto de Doble Matrícula (Misma Persona) ---
         full_n = normalize_str(f"{s.nombres} {s.apellido_paterno} {s.apellido_materno}")
         if full_n in dup_persons and len(dup_persons[full_n]) > 1:

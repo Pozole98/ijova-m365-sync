@@ -236,6 +236,7 @@ ijovausers/
 │   ├── provisioner.py              # Motor de creación y licenciamiento A1
 │   ├── enroll_engine.py            # Motor de alta interactiva extemporánea
 │   ├── delete_engine.py            # Motor de baja con salvaguardas anti-admin
+│   ├── historical_registry.py      # Gestor de bajas históricas y regla anti-reasignación
 │   ├── reset_engine.py             # Motor de reseteo rápido de contraseñas
 │   ├── restore_engine.py           # Motor de restauración desde papelera de Entra ID
 │   ├── status_engine.py            # Monitor ejecutivo de salud y licencias
@@ -243,6 +244,9 @@ ijovausers/
 │   └── report_generator.py         # Exportador de reportes CSV y resúmenes Markdown
 ├── tests/
 │   └── test_graph_client.py        # Suite de pruebas unitarias automatizadas
+├── data/                           # Base de datos histórica y normalizada
+│   ├── historico_bajas_alumnos.json # Expediente permanente de bajas archivadas
+│   └── historico_bajas_alumnos.csv  # Versión tabular de bajas históricas
 ├── backups/                        # Snapshots con timestamp (0700) [Excluido de Git]
 ├── reports/                        # Reportes CSV, PDFs y bitácoras [Excluido de Git]
 └── secrets/                        # Archivos de contraseñas de entrega (0600) [Excluido de Git]

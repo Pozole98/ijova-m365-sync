@@ -295,6 +295,45 @@ class TestGraphClient(unittest.TestCase):
             shutil.rmtree(tmp_secrets, ignore_errors=True)
             shutil.rmtree(tmp_reports, ignore_errors=True)
 
+    def test_historical_registry_and_anti_reassignment_rule(self):
+        """Verifica que el registro histórico bloquee la reasignación de matrículas a personas diferentes."""
+        import tempfile
+        import os
+        from src.historical_registry import record_student_baja, check_matricula_transfer_conflict, mark_student_reactivated
+
+        with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as tmp:
+            tmp_json = tmp.name
+
+        try:
+            # 1. Registrar una baja histórica
+            record_student_baja(
+                matricula="250118",
+                upn="250118@ijova.com",
+                nombre_completo="ALUMNO PRUEBA HISTORICA",
+                apellido_paterno="GUTIERREZ",
+                nombres="ALUMNO PRUEBA",
+                motivo_baja="No reinscrito",
+                history_path=tmp_json
+            )
+
+            # 2. Intentar registrar a OTRA persona con la misma matrícula -> DEBE BLOQUEAR
+            is_conflict, msg = check_matricula_transfer_conflict("250118", "ROBERTO PEREZ GOMEZ", history_path=tmp_json)
+            self.assertTrue(is_conflict)
+            self.assertIn("ya perteneció históricamente a 'ALUMNO PRUEBA HISTORICA'", msg)
+            self.assertIn("intransferibles de por vida", msg)
+
+            # 3. Intentar reinscribir a la MISMA persona con pequeñas variaciones -> DEBE PERMITIR
+            is_conflict_same, _ = check_matricula_transfer_conflict("250118", "ALUMNO PRUEBA", history_path=tmp_json)
+            self.assertFalse(is_conflict_same)
+
+            # 4. Verificar reactivación
+            reactivated = mark_student_reactivated("250118", history_path=tmp_json)
+            self.assertTrue(reactivated)
+
+        finally:
+            if os.path.exists(tmp_json):
+                os.remove(tmp_json)
+
 
 if __name__ == "__main__":
     unittest.main()

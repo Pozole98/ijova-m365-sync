@@ -157,12 +157,24 @@ def execute_student_deletion(
     deleted_list: List[Dict[str, Any]] = []
     failed_list: List[Dict[str, Any]] = []
 
+    from src.historical_registry import record_student_baja
+
     for idx, c in enumerate(valid_candidates, 1):
         try:
             success = graph.delete_user(c["id"])
             if success:
                 # Actualizar estatus en Excel
                 update_student_status_in_excel(excel_path, sheet_name, c["matricula"], "Baja")
+                
+                # Archivar en Registro Histórico Permanente
+                record_student_baja(
+                    matricula=c["matricula"],
+                    upn=c["upn"],
+                    nombre_completo=c["display_name"],
+                    entra_id=c["id"],
+                    baja_por=graph.admin_upn or "admin"
+                )
+
                 deleted_list.append({
                     "matricula": c["matricula"],
                     "upn": c["upn"],
@@ -171,7 +183,7 @@ def execute_student_deletion(
                     "deleted_by": graph.admin_upn or "admin",
                     "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
                 })
-                print(f"   [{idx}/{len(valid_candidates)}] ✅ {c['display_name']} ({c['upn']}) eliminado.")
+                print(f"   [{idx}/{len(valid_candidates)}] ✅ {c['display_name']} ({c['upn']}) eliminado y archivado en Histórico.")
             else:
                 failed_list.append({"matricula": c["matricula"], "error": "DELETE_FAILED"})
         except Exception as e:

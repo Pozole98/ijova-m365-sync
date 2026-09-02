@@ -220,6 +220,51 @@ def append_student_to_excel(
     return target_row
 
 
+def _update_student_status_in_ods(
+    file_path: str,
+    sheet_name: str,
+    matricula: str,
+    new_status: str = "Baja"
+) -> bool:
+    """Actualiza el estatus de un alumno en un archivo ODS."""
+    try:
+        from odf import opendocument, teletype
+        from odf.table import Table, TableRow, TableCell
+        from odf.text import P
+
+        doc = opendocument.load(file_path)
+        tables = {t.getAttribute('name'): t for t in doc.spreadsheet.getElementsByType(Table)}
+        if sheet_name not in tables:
+            return False
+        sheet = tables[sheet_name]
+        mat_clean = matricula.strip().lower()
+        updated = False
+
+        for r in sheet.getElementsByType(TableRow):
+            cells = r.getElementsByType(TableCell)
+            if not cells:
+                continue
+            c0 = cells[0]
+            c0_txt = teletype.extractText(c0).strip()
+            if c0_txt.endswith(".0"):
+                c0_txt = c0_txt[:-2]
+            if c0_txt.lower() == mat_clean:
+                if len(cells) > 6:
+                    c_estatus = cells[6]
+                    for child in list(c_estatus.childNodes):
+                        c_estatus.removeChild(child)
+                    p = P(text=new_status)
+                    c_estatus.addElement(p)
+                    updated = True
+                    break
+
+        if updated:
+            doc.save(file_path)
+        return updated
+    except Exception:
+        return False
+
+
 def update_student_status_in_excel(
     excel_path: str,
     sheet_name: str,
@@ -227,32 +272,41 @@ def update_student_status_in_excel(
     new_status: str = "Baja"
 ) -> bool:
     """
-    Actualiza el estatus de un alumno en la columna G del Excel a partir de su matrícula.
+    Actualiza el estatus de un alumno en la columna G del Excel o ODS a partir de su matrícula.
     Retorna True si encontró y actualizó al alumno.
     """
-    wb = openpyxl.load_workbook(excel_path, data_only=False)
-    if sheet_name not in wb.sheetnames:
+    if not os.path.exists(excel_path):
         return False
 
-    sheet = wb[sheet_name]
-    mat_clean = matricula.strip().lower()
-    updated = False
+    if excel_path.lower().endswith(".ods"):
+        return _update_student_status_in_ods(excel_path, sheet_name, matricula, new_status)
 
-    for r in range(2, sheet.max_row + 1):
-        cell_val = sheet.cell(row=r, column=1).value
-        if cell_val is not None:
-            c_str = str(cell_val).strip()
-            if c_str.endswith(".0"):
-                c_str = c_str[:-2]
-            if c_str.lower() == mat_clean:
-                sheet.cell(row=r, column=7, value=new_status)
-                updated = True
-                break
+    try:
+        wb = openpyxl.load_workbook(excel_path, data_only=False)
+        if sheet_name not in wb.sheetnames:
+            return False
 
-    if updated:
-        wb.save(excel_path)
-    wb.close()
-    return updated
+        sheet = wb[sheet_name]
+        mat_clean = matricula.strip().lower()
+        updated = False
+
+        for r in range(2, sheet.max_row + 1):
+            cell_val = sheet.cell(row=r, column=1).value
+            if cell_val is not None:
+                c_str = str(cell_val).strip()
+                if c_str.endswith(".0"):
+                    c_str = c_str[:-2]
+                if c_str.lower() == mat_clean:
+                    sheet.cell(row=r, column=7, value=new_status)
+                    updated = True
+                    break
+
+        if updated:
+            wb.save(excel_path)
+        wb.close()
+        return updated
+    except Exception:
+        return False
 
 
 def _extract_matriculas_from_ods(file_path: str, sheet_name: Optional[str] = None) -> List[str]:

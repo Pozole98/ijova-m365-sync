@@ -87,6 +87,10 @@ def execute_student_restoration(
     if excel_updated:
         print("📑 Estatus del alumno actualizado a 'Activo' en el Excel.")
 
+    # 5. Marcar en registro histórico como Reactivado
+    from src.historical_registry import mark_student_reactivated
+    mark_student_reactivated(matricula)
+
     print("\n" + "╔" + "═" * 68 + "╗")
     print(f"║ {'CUENTA RESTAURADA EXITOSAMENTE':^68} ║")
     print("╠" + "═" * 68 + "╣")
