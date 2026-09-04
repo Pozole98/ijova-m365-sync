@@ -24,23 +24,24 @@ def print_welcome_card(
     """
     Imprime una Ficha de Bienvenida con formato limpio y profesional para entregar al alumno/tutor.
     """
-    print("\n" + "╔" + "═" * 68 + "╗")
-    print(f"║ {'INSTITUTO JOSÉ VASCONCELOS - FICHA DE ACCESO A MICROSOFT 365':^66} ║")
-    print("╠" + "═" * 68 + "╣")
-    print(f"║ Alumno:        {display_name:<51} ║")
-    print(f"║ Matrícula:     {matricula:<51} ║")
-    print(f"║ Nivel Escolar: {nivel} ({grado}){' ' * (48 - len(nivel) - len(grado))} ║")
-    print("╟" + "─" * 68 + "╢")
-    print(f"║ 📧 Correo / Usuario:   \033[1;34m{upn:<44}\033[0m ║")
-    print(f"║ 🔑 Contraseña Temporal:\033[1;32m{temp_password:<44}\033[0m ║")
-    print("╟" + "─" * 68 + "╢")
-    print("║ 🌐 Portal de Acceso:   https://portal.office.com                   ║")
-    print("║ ℹ️  Instrucciones:                                                 ║")
-    print("║   1. Ingresa a portal.office.com con tu correo y contraseña.       ║")
-    print("║   2. El sistema te solicitará cambiar tu contraseña en el primer   ║")
-    print("║      inicio de sesión por una personal y segura.                   ║")
-    print("║   3. Incluye acceso a Teams, Word, Excel, PowerPoint y OneDrive.   ║")
-    print("╚" + "═" * 68 + "╝\n")
+    print("\n" + "╔" + "═" * 72 + "╗")
+    print(f"║ {'INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS (IJOVA)':^70} ║")
+    print(f"║ {'FICHA DE ACCESO A MICROSOFT 365':^70} ║")
+    print("╠" + "═" * 72 + "╣")
+    print(f"║ Alumno:        {display_name:<55} ║")
+    print(f"║ Matrícula:     {matricula:<55} ║")
+    print(f"║ Nivel Escolar: {nivel} ({grado}){' ' * (52 - len(nivel) - len(grado))} ║")
+    print("╟" + "─" * 72 + "╢")
+    print(f"║ 📧 Correo / Usuario:   \033[1;34m{upn:<48}\033[0m ║")
+    print(f"║ 🔑 Contraseña Temporal:\033[1;32m{temp_password:<48}\033[0m ║")
+    print("╟" + "─" * 72 + "╢")
+    print("║ 🌐 Portal de Acceso:   https://portal.office.com                             ║")
+    print("║ ℹ️  Instrucciones:                                                           ║")
+    print("║   1. Ingresa a portal.office.com con tu correo y contraseña.                 ║")
+    print("║   2. El sistema te solicitará cambiar tu contraseña en el primer             ║")
+    print("║      inicio de sesión por una personal y segura.                             ║")
+    print("║   3. Incluye acceso a Teams, Word, Excel, PowerPoint y OneDrive.             ║")
+    print("╚" + "═" * 72 + "╝\n")
 
 
 def execute_interactive_enrollment(
@@ -71,7 +72,42 @@ def execute_interactive_enrollment(
         if existing:
             print(f"❌ La matrícula {mat_input} YA EXISTE en Microsoft 365 ({existing.get('displayName')}).")
             continue
-        
+
+        # Verificar si la matrícula existe en la Papelera de Reciclaje (< 30 días de baja)
+        try:
+            deleted_users = graph.get_deleted_users()
+        except Exception:
+            deleted_users = []
+
+        del_user = None
+        for du in deleted_users:
+            d_upn = (du.get("userPrincipalName") or "").strip().lower()
+            d_nick = (du.get("mailNickname") or "").strip().lower()
+            if d_upn == upn.lower() or d_nick == mat_input.lower():
+                del_user = du
+                break
+
+        if del_user:
+            del_name = del_user.get("displayName", "Alumno")
+            del_date = del_user.get("deletedDateTime", "Recientemente")
+            print(f"\n⚠️ ATENCIÓN: La matrícula {mat_input} se encuentra en la Papelera de Reciclaje de Microsoft Entra ID.")
+            print(f"   👤 Alumno registrado: \033[1m{del_name}\033[0m (Eliminado el {del_date})")
+            print("   💡 Esta cuenta puede ser RESTAURADA conservando intacto su buzón, OneDrive y tareas.")
+            resp = input("   👉 ¿Deseas restaurar esta cuenta en lugar de registrar una nueva? (s/n): ").strip().lower()
+            if resp in ["s", "si", "y", "yes"]:
+                from src.restore_engine import execute_student_restoration
+                from src.audit_logger import log_audit_event
+                log_audit_event(
+                    action="ENROLL_RESTORE_REDIRECT",
+                    target=mat_input,
+                    admin=graph.admin_upn or "Admin",
+                    status="SUCCESS",
+                    details=f"Redirigido a restauración de cuenta en papelera: {del_name}"
+                )
+                return execute_student_restoration(mat_input, graph, domain, excel_path, sheet_name)
+            else:
+                print("   ℹ️ Continuando con el proceso de alta...")
+
         print(f"   ✅ Matrícula {mat_input} disponible.")
         break
 
@@ -99,6 +135,14 @@ def execute_interactive_enrollment(
         print(conflict_msg)
         print("=" * 70)
         print("⛔ Registro cancelado por conflicto de identidad histórica.")
+        from src.audit_logger import log_audit_event
+        log_audit_event(
+            action="ENROLL",
+            target=mat_input,
+            admin=graph.admin_upn or "Admin",
+            status="BLOCKED",
+            details=f"Conflicto de matrícula intransferible con {full_name}: {conflict_msg}"
+        )
         return None
 
     # 3. Nivel Escolar
@@ -237,6 +281,15 @@ def execute_interactive_enrollment(
         grado=grado,
         temp_password=temp_password,
         domain=domain
+    )
+
+    from src.audit_logger import log_audit_event
+    log_audit_event(
+        action="ENROLL",
+        target=mat_input,
+        admin=graph.admin_upn or "Admin",
+        status="SUCCESS",
+        details=f"Alta exitosa: {display_name} ({upn}) | Nivel: {nivel} ({grado}) | Entra ID: {user_id}"
     )
 
     return {

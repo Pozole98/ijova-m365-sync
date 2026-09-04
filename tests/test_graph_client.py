@@ -424,6 +424,131 @@ class TestGraphClient(unittest.TestCase):
         self.assertFalse(valid_prefix)
         self.assertIn("NO cumple con el formato de matrícula escolar", msg_prefix)
 
+    @patch("src.graph_client.PublicClientApplication")
+    def test_token_cache_persistence_and_clear(self, mock_pca):
+        """Verifica la persistencia y limpieza del token cache de MSAL en disco."""
+        import tempfile
+        import os
+        from src.graph_client import GraphClient
+
+        with tempfile.NamedTemporaryFile(suffix=".bin", delete=False) as tmp:
+            tmp_cache = tmp.name
+
+        try:
+            # 1. Crear cliente con ruta de caché
+            client1 = GraphClient("test-tenant", "test-client", ["User.Read.All"], cache_path=tmp_cache)
+            self.assertIsNotNone(client1.cache)
+
+            # Simular cambio en caché y guardado
+            client1.cache.has_state_changed = True
+            client1._save_cache()
+            self.assertTrue(os.path.exists(tmp_cache))
+
+            # 2. Cargar un nuevo cliente apuntando al mismo archivo
+            client2 = GraphClient("test-tenant", "test-client", ["User.Read.All"], cache_path=tmp_cache)
+            self.assertIsNotNone(client2.cache)
+
+            # 3. Limpiar sesión
+            client2.clear_session_cache()
+            self.assertFalse(os.path.exists(tmp_cache))
+            self.assertIsNone(client2.access_token)
+        finally:
+            if os.path.exists(tmp_cache):
+                os.remove(tmp_cache)
+
+    @patch("requests.post")
+    def test_graph_batch_reset_passwords(self, mock_post):
+        """Verifica la ejecución por lotes $batch para reseteo masivo de contraseñas."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {
+            "responses": [
+                {"id": "1", "status": 204, "body": {}},
+                {"id": "2", "status": 400, "body": {"error": {"message": "Invalid password"}}}
+            ]
+        }
+        mock_post.return_value = mock_resp
+
+        students_reset = [
+            {"id": "uid-1", "matricula": "250001", "upn": "250001@ijova.com", "display_name": "Alumno 1", "new_password": "Pass1!"},
+            {"id": "uid-2", "matricula": "250002", "upn": "250002@ijova.com", "display_name": "Alumno 2", "new_password": "Pass2!"}
+        ]
+
+        result = self.client.batch_reset_passwords(students_reset)
+        self.assertEqual(result["total"], 2)
+        self.assertEqual(result["success_count"], 1)
+        self.assertEqual(result["failed_count"], 1)
+        self.assertEqual(result["successes"][0]["student"]["matricula"], "250001")
+        self.assertEqual(result["failures"][0]["student"]["matricula"], "250002")
+
+    def test_styled_excel_report_generation(self):
+        """Verifica la generación del libro Excel institucional con estilos y semáforos."""
+        import tempfile
+        import os
+        import openpyxl
+        from src.report_generator import export_styled_excel_report
+        from src.models import StudentRecord, ClassificationEnum
+
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as tmp:
+            tmp_xlsx = tmp.name
+
+        try:
+            sample_student = StudentRecord(
+                row_index=2,
+                matricula="250001",
+                nombres="ALUMNO DEMO",
+                apellido_paterno="DEMO",
+                apellido_materno="",
+                nivel="Secundaria",
+                grado_semestre="1ro",
+                estatus="Inscrito",
+                upn_raw="25001@ijova.com",
+                nombre1_raw="ALUMNO",
+                nombre_limpio_raw="ALUMNO",
+                apellido_limpio_raw="DEMO",
+                alias_raw="alumno.demo",
+                display_name_raw="ALUMNO DEMO UNO",
+                upn_normalized="250001@ijova.com",
+                display_name="ALUMNO DEMO UNO",
+                classification=ClassificationEnum.EXISTENTE
+            )
+            export_styled_excel_report(
+                students=[sample_student],
+                discrepancies=[{"matricula": "250001", "upn": "250001@ijova.com", "campo": "displayName", "valor_entra": "A", "valor_excel": "B"}],
+                output_path=tmp_xlsx,
+                timestamp_utc="2026-09-04 16:00:00 UTC",
+                admin_upn="admin@ijova.com"
+            )
+
+            self.assertTrue(os.path.exists(tmp_xlsx))
+            wb = openpyxl.load_workbook(tmp_xlsx)
+            self.assertIn("Resumen Ejecutivo", wb.sheetnames)
+            self.assertIn("Existentes Sincronizados", wb.sheetnames)
+            self.assertIn("Discrepancias", wb.sheetnames)
+        finally:
+            if os.path.exists(tmp_xlsx):
+                os.remove(tmp_xlsx)
+
+    def test_audit_logger(self):
+        """Verifica que el logger centralizado registre eventos correctamente en logs/ijova_audit.log."""
+        import os
+        from src.audit_logger import log_audit_event, AUDIT_LOG_FILE
+
+        log_audit_event(
+            action="TEST_ACTION",
+            target="259999",
+            admin="test_admin@ijova.com",
+            status="SUCCESS",
+            details="Prueba unitaria de auditoría"
+        )
+
+        self.assertTrue(os.path.exists(AUDIT_LOG_FILE))
+        with open(AUDIT_LOG_FILE, "r", encoding="utf-8") as f:
+            content = f.read()
+            self.assertIn("ACTION: TEST_ACTION", content)
+            self.assertIn("TARGET: 259999", content)
+            self.assertIn("test_admin@ijova.com", content)
+
 
 if __name__ == "__main__":
     unittest.main()

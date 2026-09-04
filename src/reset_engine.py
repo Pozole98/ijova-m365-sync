@@ -112,12 +112,21 @@ def execute_password_reset(
         domain=domain
     )
 
+    from src.audit_logger import log_audit_event
+    log_audit_event(
+        action="RESET_PASSWORD",
+        target=matricula,
+        admin=graph.admin_upn or "Admin",
+        status="SUCCESS",
+        details=f"Contraseña restablecida para {display_name} ({upn})"
+    )
+
     return {
         "matricula": matricula,
         "upn": upn,
         "display_name": display_name,
         "password": new_password,
-        "pdf_path": pdf_out
+        "user_id": user_id
     }
 
 
@@ -170,33 +179,59 @@ def execute_bulk_password_reset(
     credentials_list: List[Dict[str, Any]] = []
     failed_list: List[Dict[str, Any]] = []
 
-    for idx, s in enumerate(students_data, 1):
-        mat = s["matricula"]
-        upn = s["upn"]
-        user_id = s["id"]
-        dname = s["display_name"]
-        nivel = s.get("nivel", "Estudiante")
-        grado = s.get("grado_semestre", "Activo")
-
+    # Preparar datos con contraseñas seguras generadas
+    prepared_students = []
+    for s in students_data:
         new_pass = generate_secure_password(length=12)
+        prepared_students.append({
+            "id": s["id"],
+            "matricula": s["matricula"],
+            "upn": s["upn"],
+            "display_name": s["display_name"],
+            "nivel": s.get("nivel", "Estudiante"),
+            "grado_semestre": s.get("grado_semestre", "Activo"),
+            "new_password": new_pass
+        })
 
-        try:
-            success = graph.reset_password(user_id, new_pass)
-            if success:
-                credentials_list.append({
-                    "matricula": mat,
-                    "upn": upn,
-                    "nombre_completo": dname,
-                    "password_temporal": new_pass,
-                    "nivel": nivel,
-                    "grado_semestre": grado
-                })
-                print(f"   [{idx}/{len(students_data)}] ✅ {dname} ({upn}) — Contraseña restablecida.")
-            else:
-                failed_list.append({"matricula": mat, "upn": upn, "error": "FAILED"})
-        except Exception as e:
-            failed_list.append({"matricula": mat, "upn": upn, "error": str(e)})
-            print(f"   [{idx}/{len(students_data)}] ❌ Error en {upn}: {e}")
+    # Usar Microsoft Graph $batch si hay más de 3 alumnos para acelerar drásticamente
+    if hasattr(graph, "batch_reset_passwords") and len(prepared_students) > 3:
+        print(f"⚡ Ejecutando reseteo acelerado vía Microsoft Graph $batch (bloques de 20 concurrentes)...")
+        batch_res = graph.batch_reset_passwords(prepared_students)
+        for item in batch_res.get("successes", []):
+            st = item["student"]
+            credentials_list.append({
+                "matricula": st["matricula"],
+                "upn": st["upn"],
+                "nombre_completo": st["display_name"],
+                "password_temporal": st["new_password"],
+                "nivel": st["nivel"],
+                "grado_semestre": st["grado_semestre"]
+            })
+            print(f"   ✅ {st['display_name']} ({st['upn']}) — Contraseña restablecida.")
+
+        for item in batch_res.get("failures", []):
+            st = item["student"]
+            failed_list.append({"matricula": st["matricula"], "upn": st["upn"], "error": str(item.get("error"))})
+            print(f"   ❌ Error en {st['upn']}: {item.get('error')}")
+    else:
+        for idx, s in enumerate(prepared_students, 1):
+            try:
+                success = graph.reset_password(s["id"], s["new_password"])
+                if success:
+                    credentials_list.append({
+                        "matricula": s["matricula"],
+                        "upn": s["upn"],
+                        "nombre_completo": s["display_name"],
+                        "password_temporal": s["new_password"],
+                        "nivel": s["nivel"],
+                        "grado_semestre": s["grado_semestre"]
+                    })
+                    print(f"   [{idx}/{len(prepared_students)}] ✅ {s['display_name']} ({s['upn']}) — Contraseña restablecida.")
+                else:
+                    failed_list.append({"matricula": s["matricula"], "upn": s["upn"], "error": "FAILED"})
+            except Exception as e:
+                failed_list.append({"matricula": s["matricula"], "upn": s["upn"], "error": str(e)})
+                print(f"   [{idx}/{len(prepared_students)}] ❌ Error en {s['upn']}: {e}")
 
     # 2. Guardar archivo CSV de credenciales con permisos Unix 0600
     csv_file = os.path.join(secrets_dir, f"credenciales_alumnos_reset_{timestamp_str}.csv")
@@ -230,7 +265,14 @@ def execute_bulk_password_reset(
     print("=" * 80)
     print(f"✅ Contraseñas restablecidas con éxito: {len(credentials_list)}")
     print(f"❌ Fallos en reseteo:                   {len(failed_list)}")
-    print("ℹ️ Todos los alumnos deberán definir su contraseña personal en su primer acceso.")
+    from src.audit_logger import log_audit_event
+    log_audit_event(
+        action="BULK_PASSWORD_RESET",
+        target=f"{len(credentials_list)} alumnos",
+        admin=graph.admin_upn or "Admin",
+        status="SUCCESS" if not failed_list else "WARNING",
+        details=f"Éxitos: {len(credentials_list)} | Fallos: {len(failed_list)} | CSV: {csv_file}"
+    )
 
     return {
         "reset_count": len(credentials_list),

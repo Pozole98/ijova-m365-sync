@@ -2,6 +2,7 @@
 Cliente de Microsoft Graph API para Linux utilizando MSAL Python y el principio de mínimo privilegio.
 Implementa Device Code Flow, paginación completa exhaustiva (@odata.nextLink) y reintentos con backoff.
 """
+import os
 import time
 import requests
 from typing import List, Dict, Any, Optional
@@ -15,17 +16,60 @@ class GraphClientError(Exception):
 
 
 class GraphClient:
-    def __init__(self, tenant_id: str, client_id: str, scopes: List[str]):
+    def __init__(
+        self,
+        tenant_id: str,
+        client_id: str,
+        scopes: List[str],
+        cache_path: Optional[str] = "secrets/token_cache.bin"
+    ):
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.scopes = scopes
         self.authority = f"https://login.microsoftonline.com/{tenant_id}"
+        self.cache_path = cache_path
+        self.cache: Optional[SerializableTokenCache] = None
+
+        if self.cache_path:
+            self.cache = SerializableTokenCache()
+            if os.path.exists(self.cache_path):
+                try:
+                    with open(self.cache_path, "r", encoding="utf-8") as f:
+                        self.cache.deserialize(f.read())
+                except Exception:
+                    pass
+
         self.app = PublicClientApplication(
             client_id=self.client_id,
-            authority=self.authority
+            authority=self.authority,
+            token_cache=self.cache
         )
         self.access_token: Optional[str] = None
         self.admin_upn: Optional[str] = None
+
+    def _save_cache(self):
+        """Guarda el estado del token cache en disco con permisos seguros 0600."""
+        if self.cache and self.cache.has_state_changed and self.cache_path:
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(self.cache_path)), exist_ok=True)
+                with open(self.cache_path, "w", encoding="utf-8") as f:
+                    f.write(self.cache.serialize())
+                try:
+                    os.chmod(self.cache_path, 0o600)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+    def clear_session_cache(self):
+        """Elimina el caché de tokens para forzar un nuevo inicio de sesión interactivo."""
+        if self.cache_path and os.path.exists(self.cache_path):
+            try:
+                os.remove(self.cache_path)
+            except Exception:
+                pass
+        self.access_token = None
+        self.admin_upn = None
 
     def authenticate_device_code(self) -> str:
         """
@@ -39,6 +83,8 @@ class GraphClient:
             if result and "access_token" in result:
                 self.access_token = result["access_token"]
                 self.admin_upn = accounts[0].get("username")
+                self._save_cache()
+                print(f"⚡ Sesión restaurada desde caché seguro. Administrador: \033[1;32m{self.admin_upn or 'Identificado'}\033[0m")
                 return self.access_token
 
         # Initiate Device Code Flow
@@ -69,6 +115,7 @@ class GraphClient:
                 accounts = self.app.get_accounts()
                 if accounts:
                     self.admin_upn = accounts[0].get("username")
+            self._save_cache()
             print(f"✅ Autenticación exitosa. Administrador identificado: \033[1;32m{self.admin_upn or 'Desconocido'}\033[0m")
             return self.access_token
         else:
@@ -501,3 +548,117 @@ class GraphClient:
                 time.sleep(attempt * 2)
 
         raise GraphClientError(f"Fallo al restaurar usuario tras {max_retries} intentos: {user_id}")
+
+    def execute_batch(self, subrequests: List[Dict[str, Any]], max_retries: int = 4) -> List[Dict[str, Any]]:
+        """
+        Ejecuta múltiples operaciones en lotes utilizando el endpoint POST /v1.0/$batch de Microsoft Graph.
+        Fragmenta automáticamente las peticiones en bloques de hasta 20 operaciones concurrentes.
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        batch_url = "https://graph.microsoft.com/v1.0/$batch"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
+        all_responses: List[Dict[str, Any]] = []
+
+        # Fragmentar en bloques de máximo 20 peticiones permitidas por Graph
+        chunk_size = 20
+        for i in range(0, len(subrequests), chunk_size):
+            chunk = subrequests[i:i + chunk_size]
+            payload = {"requests": chunk}
+
+            for attempt in range(1, max_retries + 1):
+                try:
+                    resp = requests.post(batch_url, headers=headers, json=payload, timeout=45)
+
+                    if resp.status_code == 401:
+                        accounts = self.app.get_accounts()
+                        if accounts:
+                            r = self.app.acquire_token_silent(self.scopes, account=accounts[0])
+                            if r and "access_token" in r:
+                                self.access_token = r["access_token"]
+                                headers["Authorization"] = f"Bearer {self.access_token}"
+                                self._save_cache()
+                                resp = requests.post(batch_url, headers=headers, json=payload, timeout=45)
+
+                    if resp.status_code == 429:
+                        wait_sec = int(resp.headers.get("Retry-After", attempt * 3))
+                        time.sleep(wait_sec)
+                        continue
+
+                    if 500 <= resp.status_code < 600:
+                        time.sleep(attempt * 2)
+                        continue
+
+                    resp.raise_for_status()
+                    data = resp.json()
+                    chunk_responses = data.get("responses", [])
+                    all_responses.extend(chunk_responses)
+                    break
+
+                except requests.exceptions.RequestException as e:
+                    if attempt == max_retries:
+                        raise GraphClientError(f"Error en ejecución de lote $batch de Graph: {e}")
+                    time.sleep(attempt * 2)
+
+        return all_responses
+
+    def batch_reset_passwords(self, students_reset_list: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Restablece contraseñas de múltiples alumnos en lote acelerado vía $batch.
+        :param students_reset_list: Lista de dicts con claves: id, matricula, upn, new_password
+        :return: Dict con métricas: total, success_count, failed_count, successes, failures
+        """
+        subrequests = []
+        id_to_student = {}
+        for idx, s in enumerate(students_reset_list, start=1):
+            req_id = str(idx)
+            id_to_student[req_id] = s
+            subrequests.append({
+                "id": req_id,
+                "method": "PATCH",
+                "url": f"/users/{s['id']}",
+                "headers": {
+                    "Content-Type": "application/json"
+                },
+                "body": {
+                    "passwordProfile": {
+                        "forceChangePasswordNextSignIn": True,
+                        "password": s["new_password"]
+                    }
+                }
+            })
+
+        batch_responses = self.execute_batch(subrequests)
+        resp_map = {str(r.get("id")): r for r in batch_responses}
+
+        successes = []
+        failures = []
+
+        for req_id, student in id_to_student.items():
+            r = resp_map.get(req_id)
+            status_code = r.get("status", 500) if r else 500
+            if status_code in [200, 204]:
+                successes.append({
+                    "student": student,
+                    "status_code": status_code
+                })
+            else:
+                error_body = r.get("body", {}) if r else {"error": "Sin respuesta en batch"}
+                failures.append({
+                    "student": student,
+                    "status_code": status_code,
+                    "error": error_body
+                })
+
+        return {
+            "total": len(students_reset_list),
+            "success_count": len(successes),
+            "failed_count": len(failures),
+            "successes": successes,
+            "failures": failures
+        }

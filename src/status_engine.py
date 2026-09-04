@@ -28,10 +28,11 @@ def execute_tenant_status_check(
     staff_count = 0
     disabled_count = 0
 
+    from src.validator import is_valid_matricula_format
     for u in all_users:
         upn = u.user_principal_name
         prefix = upn.split("@")[0]
-        if prefix.isdigit():
+        if is_valid_matricula_format(prefix):
             students_count += 1
         else:
             staff_count += 1
@@ -70,12 +71,13 @@ def execute_tenant_status_check(
             last_backup_str = bks[-1].replace("entra_users_snapshot_", "").replace(".json", "")
 
     # RENDERIZAR DASHBOARD EJECUTIVO
-    print("\n" + "╔" + "═" * 78 + "╗")
-    print(f"║ {'INSTITUTO JOSÉ VASCONCELOS - MONITOR EJECUTIVO MICROSOFT 365':^76} ║")
-    print("╠" + "═" * 78 + "╣")
-    print(f"║ 🌐 Dominio Institucional:  \033[1;34m{domain:<30}\033[0m Estado: \033[1;32m{'VERIFICADO / MANAGED':<22}\033[0m ║")
-    print(f"║ 👤 Administrador en sesión:\033[1m{(graph.admin_upn or 'admin@ijova.com'):<30}\033[0m Último Backup: \033[1;33m{last_backup_str:<16}\033[0m ║")
-    print("╚" + "═" * 78 + "╝")
+    print("\n" + "╔" + "═" * 84 + "╗")
+    print(f"║ {'INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS (IJOVA)':^82} ║")
+    print(f"║ {'MONITOR EJECUTIVO DE SALUD DEL TENANT MICROSOFT 365':^82} ║")
+    print("╠" + "═" * 84 + "╣")
+    print(f"║ 🌐 Dominio Institucional:  \033[1;34m{domain:<32}\033[0m Estado: \033[1;32m{'VERIFICADO / MANAGED':<24}\033[0m ║")
+    print(f"║ 👤 Administrador en sesión:\033[1m{(graph.admin_upn or 'admin@ijova.com'):<32}\033[0m Último Backup: \033[1;33m{last_backup_str:<18}\033[0m ║")
+    print("╚" + "═" * 84 + "╝")
 
     # Tabla 1: Métricas de Usuarios
     user_metrics = [

@@ -123,7 +123,22 @@ def generate_reports(
                 f.write(f"| {c.row_index} | {c.matricula} | {c.display_name} | {c.upn_normalized} | {issues_msg} |\n")
     generated_files["dry_run_audit_summary.md"] = md_summary_path
 
-    # 4. Print Console Summary Table
+    # 4. Export Styled Excel (.xlsx) Report with Color Coding
+    xlsx_path = os.path.join(output_dir, "reporte_sincronizacion_ijova.xlsx")
+    try:
+        export_styled_excel_report(
+            students=students,
+            discrepancies=discrepancies,
+            output_path=xlsx_path,
+            timestamp_utc=timestamp_utc,
+            admin_upn=admin_upn,
+            is_dry_run=is_dry_run
+        )
+        generated_files["reporte_sincronizacion_ijova.xlsx"] = xlsx_path
+    except Exception as e:
+        print(f"⚠️ Aviso: No se pudo generar el reporte Excel con estilos: {e}")
+
+    # 5. Print Console Summary Table
     print("\n" + "=" * 80)
     mode_title = "SIMULACIÓN DRY RUN - MICROSOFT ENTRA ID" if is_dry_run else "VALIDACIÓN LOCAL DE EXCEL"
     print(f"📊 REPORTE DE RESULTADOS: {mode_title}")
@@ -166,4 +181,201 @@ def generate_reports(
     for name, path in generated_files.items():
         print(f"   • {name}: {path}")
 
+    # 6. Registrar en auditoría
+    try:
+        from src.audit_logger import log_audit_event
+        log_audit_event(
+            action="REPORT_GENERATE",
+            target=f"{total_registros} alumnos",
+            admin=admin_upn or "Local",
+            status="SUCCESS",
+            details=f"Existentes: {len(existentes)} | Nuevos: {len(nuevos)} | Conflictos: {len(conflictos)} | Inválidos: {len(invalidos)}"
+        )
+    except Exception:
+        pass
+
     return generated_files
+
+
+def export_styled_excel_report(
+    students: List[StudentRecord],
+    discrepancies: List[Dict[str, str]],
+    output_path: str,
+    timestamp_utc: str,
+    admin_upn: Optional[str] = None,
+    is_dry_run: bool = True
+) -> str:
+    """
+    Genera un libro Excel (.xlsx) estructurado y con diseño institucional profesional:
+    - Pestaña 'Resumen Ejecutivo' con métricas globales y branding del IJOVA.
+    - Pestañas coloreadas por estatus (Existentes: Verde, Nuevos: Azul, Conflictos: Naranja, Inválidos: Rojo).
+    - Auto-ajuste de anchos de columna para legibilidad inmediata.
+    """
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+
+    thin_border = Border(
+        left=Side(style='thin', color='D3D3D3'),
+        right=Side(style='thin', color='D3D3D3'),
+        top=Side(style='thin', color='D3D3D3'),
+        bottom=Side(style='thin', color='D3D3D3')
+    )
+
+    # 1. Sheet Resumen Ejecutivo
+    ws_resumen = wb.create_sheet(title="Resumen Ejecutivo")
+    ws_resumen.views.sheetView[0].showGridLines = True
+
+    # Title
+    ws_resumen.merge_cells("A1:D1")
+    ws_resumen["A1"] = "INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS (IJOVA)"
+    ws_resumen["A1"].font = Font(name="Arial", size=13, bold=True, color="FFFFFF")
+    ws_resumen["A1"].fill = PatternFill(start_color="203A63", end_color="203A63", fill_type="solid")
+    ws_resumen["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws_resumen.row_dimensions[1].height = 28
+
+    ws_resumen.merge_cells("A2:D2")
+    ws_resumen["A2"] = "INFORME EJECUTIVO DE SINCRONIZACIÓN Y AUDITORÍA - MICROSOFT 365"
+    ws_resumen["A2"].font = Font(name="Arial", size=10.5, bold=True, color="FFFFFF")
+    ws_resumen["A2"].fill = PatternFill(start_color="2E5288", end_color="2E5288", fill_type="solid")
+    ws_resumen["A2"].alignment = Alignment(horizontal="center", vertical="center")
+    ws_resumen.row_dimensions[2].height = 22
+
+    # Metadata
+    meta_rows = [
+        ("Fecha y Hora UTC:", timestamp_utc),
+        ("Administrador en Turno:", admin_upn or "Validación Local"),
+        ("Modo de Operación:", "DRY-RUN (Simulación)" if is_dry_run else "PRODUCCIÓN (Aplicado)"),
+        ("Total Registros Procesados:", len(students))
+    ]
+    for r_idx, (label, val) in enumerate(meta_rows, start=4):
+        ws_resumen[f"A{r_idx}"] = label
+        ws_resumen[f"A{r_idx}"].font = Font(name="Arial", size=10, bold=True, color="333333")
+        ws_resumen[f"B{r_idx}"] = val
+        ws_resumen[f"B{r_idx}"].font = Font(name="Arial", size=10)
+
+    # Summary metrics table
+    existentes = [s for s in students if s.classification == ClassificationEnum.EXISTENTE]
+    nuevos = [s for s in students if s.classification == ClassificationEnum.NUEVO]
+    conflictos = [s for s in students if s.classification == ClassificationEnum.CONFLICTO]
+    invalidos = [s for s in students if s.classification == ClassificationEnum.INVALIDO]
+
+    ws_resumen["A9"] = "Métrica de Clasificación"
+    ws_resumen["B9"] = "Cantidad"
+    ws_resumen["C9"] = "% del Total"
+    ws_resumen["D9"] = "Estatus Operativo"
+
+    for col in ["A9", "B9", "C9", "D9"]:
+        ws_resumen[col].font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        ws_resumen[col].fill = PatternFill(start_color="203A63", end_color="203A63", fill_type="solid")
+        ws_resumen[col].alignment = Alignment(horizontal="center", vertical="center")
+
+    total_count = len(students) or 1
+    metric_rows = [
+        ("Alumnos Existentes (Sincronizados)", len(existentes), f"{(len(existentes)/total_count*100):.1f}%", "Activos en M365", "E8F5E9", "2E7D32"),
+        ("Alumnos Nuevos (Por Aprovisionar)", len(nuevos), f"{(len(nuevos)/total_count*100):.1f}%", "Pendientes de Alta", "E3F2FD", "1565C0"),
+        ("Conflictos (Bloqueados por Reglas)", len(conflictos), f"{(len(conflictos)/total_count*100):.1f}%", "Requiere Decisión", "FFF3E0", "E65100"),
+        ("Registros Inválidos (Formato Erróneo)", len(invalidos), f"{(len(invalidos)/total_count*100):.1f}%", "Bloqueado", "FFEBEE", "C62828"),
+        ("Discrepancias Detectadas", len(discrepancies), "-", "Aviso Informativo", "F3E5F5", "6A1B9A")
+    ]
+
+    for r_idx, (m_name, count, pct, st_desc, bg_color, text_color) in enumerate(metric_rows, start=10):
+        ws_resumen[f"A{r_idx}"] = m_name
+        ws_resumen[f"B{r_idx}"] = count
+        ws_resumen[f"C{r_idx}"] = pct
+        ws_resumen[f"D{r_idx}"] = st_desc
+
+        ws_resumen[f"A{r_idx}"].font = Font(name="Arial", size=9.5, bold=True, color=text_color)
+        ws_resumen[f"A{r_idx}"].fill = PatternFill(start_color=bg_color, end_color=bg_color, fill_type="solid")
+        ws_resumen[f"B{r_idx}"].alignment = Alignment(horizontal="center")
+        ws_resumen[f"C{r_idx}"].alignment = Alignment(horizontal="center")
+        ws_resumen[f"D{r_idx}"].alignment = Alignment(horizontal="center")
+
+        for col_letter in ["A", "B", "C", "D"]:
+            ws_resumen[f"{col_letter}{r_idx}"].border = thin_border
+
+    def create_student_sheet(title, recs, header_color, row_bg_color, include_issues=False):
+        ws = wb.create_sheet(title=title)
+        ws.views.sheetView[0].showGridLines = True
+
+        headers = ["Fila", "Matrícula", "Nombre Completo", "Nivel", "Grado / Semestre", "Correo Institucional (UPN)", "Alias", "Estatus Escolar"]
+        if include_issues:
+            headers.append("Motivo de Bloqueo / Observaciones")
+
+        ws.append(headers)
+        ws.row_dimensions[1].height = 24
+        for col_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=1, column=col_idx)
+            cell.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color=header_color, end_color=header_color, fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for r_idx, s in enumerate(recs, start=2):
+            row_data = [
+                s.row_index,
+                s.matricula,
+                s.display_name or f"{s.nombres} {s.apellido_paterno} {s.apellido_materno}".strip(),
+                s.nivel,
+                s.grado_semestre,
+                s.upn_normalized or s.upn_raw,
+                s.alias_normalized or s.alias_raw,
+                s.estatus
+            ]
+            if include_issues:
+                issues_text = " | ".join([f"[{i.code}] {i.message}" for i in s.issues])
+                row_data.append(issues_text)
+
+            ws.append(row_data)
+            row_fill = PatternFill(start_color=row_bg_color, end_color=row_bg_color, fill_type="solid") if r_idx % 2 == 0 else None
+            for col_idx in range(1, len(row_data) + 1):
+                c = ws.cell(row=r_idx, column=col_idx)
+                c.font = Font(name="Arial", size=9.5)
+                c.border = thin_border
+                if row_fill:
+                    c.fill = row_fill
+                if col_idx in [1, 2, 8]:
+                    c.alignment = Alignment(horizontal="center")
+
+        # Auto fit column widths
+        for col in ws.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            col_letter = get_column_letter(col[0].column)
+            ws.column_dimensions[col_letter].width = min(max(max_len + 3, 10), 45)
+
+    create_student_sheet("Existentes Sincronizados", existentes, "2E7D32", "F1F8E9")
+    create_student_sheet("Nuevos a Crear", nuevos, "1565C0", "E3F2FD")
+    create_student_sheet("Conflictos Bloqueados", conflictos, "E65100", "FFF3E0", include_issues=True)
+    create_student_sheet("Registros Invalidos", invalidos, "C62828", "FFEBEE", include_issues=True)
+
+    if discrepancies:
+        ws_disc = wb.create_sheet(title="Discrepancias")
+        ws_disc.views.sheetView[0].showGridLines = True
+        d_headers = ["Matrícula", "Correo Institucional", "Campo Afectado", "Valor en Entra ID", "Valor en Archivo Escolar"]
+        ws_disc.append(d_headers)
+        ws_disc.row_dimensions[1].height = 24
+        for col_idx in range(1, len(d_headers) + 1):
+            cell = ws_disc.cell(row=1, column=col_idx)
+            cell.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+            cell.fill = PatternFill(start_color="6A1B9A", end_color="6A1B9A", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center", vertical="center")
+
+        for r_idx, d in enumerate(discrepancies, start=2):
+            ws_disc.append([d.get("matricula", ""), d.get("upn", ""), d.get("campo", ""), d.get("valor_entra", ""), d.get("valor_excel", "")])
+            for col_idx in range(1, 6):
+                c = ws_disc.cell(row=r_idx, column=col_idx)
+                c.font = Font(name="Arial", size=9.5)
+                c.border = thin_border
+
+        for col in ws_disc.columns:
+            max_len = max(len(str(cell.value or "")) for cell in col)
+            ws_disc.column_dimensions[get_column_letter(col[0].column)].width = min(max(max_len + 3, 12), 40)
+
+    for col in ws_resumen.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        ws_resumen.column_dimensions[get_column_letter(col[0].column)].width = min(max(max_len + 3, 14), 50)
+
+    wb.save(output_path)
+    return output_path

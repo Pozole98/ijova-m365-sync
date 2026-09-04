@@ -20,12 +20,13 @@ def pause():
 
 
 def print_banner(config: AppConfig):
-    """Muestra el encabezado institucional."""
-    print("\033[1;34m" + "╔" + "═" * 78 + "╗")
-    print(f"║ {'INSTITUTO JOSÉ VASCONCELOS - SISTEMA DE GESTIÓN MICROSOFT 365':^78} ║")
-    print("╠" + "═" * 78 + "╣")
-    print(f"║ Dominio: \033[1;32m{config.domain:<20}\033[1;34m Archivo Excel: \033[1m{config.excel_path:<36}\033[1;34m ║")
-    print("╚" + "═" * 78 + "╝\033[0m\n")
+    """Muestra el encabezado institucional oficial."""
+    print("\033[1;34m" + "╔" + "═" * 84 + "╗")
+    print(f"║ {'INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS (IJOVA)':^84} ║")
+    print(f"║ {'SISTEMA DE GESTIÓN Y SINCRONIZACIÓN MICROSOFT 365':^84} ║")
+    print("╠" + "═" * 84 + "╣")
+    print(f"║ Dominio: \033[1;32m{config.domain:<22}\033[1;34m Archivo Base: \033[1m{config.excel_path:<40}\033[1;34m ║")
+    print("╚" + "═" * 84 + "╝\033[0m\n")
 
 
 def menu_validate(config: AppConfig):
@@ -476,6 +477,41 @@ def menu_backup(config: AppConfig):
     pause()
 
 
+def menu_logout(config: AppConfig):
+    clear_screen()
+    print("=" * 80)
+    print("🔒 [11] CERRAR SESIÓN DE ADMINISTRADOR")
+    print("=" * 80)
+    print("📌 Esta acción eliminará el archivo de sesión guardado en 'secrets/token_cache.bin'.")
+    print("   La próxima vez que realices una operación en la nube, el sistema solicitará")
+    print("   nuevamente la autenticación en el navegador.")
+    print("-" * 80)
+    confirm = input("¿Deseas cerrar la sesión administrativa? (s/n): ").strip().lower()
+    if confirm in ["s", "si", "y", "yes"]:
+        cache_file = os.path.join(config.secrets_dir, "token_cache.bin")
+        if os.path.exists(cache_file):
+            try:
+                os.remove(cache_file)
+                print("✅ Sesión cerrada y archivo de caché eliminado correctamente.")
+            except Exception as e:
+                print(f"❌ Error al eliminar caché de sesión: {e}")
+        else:
+            print("ℹ️ No hay ninguna sesión activa guardada en caché.")
+
+        try:
+            from src.audit_logger import log_audit_event
+            log_audit_event(
+                action="LOGOUT",
+                target="Session",
+                admin="Admin",
+                status="SUCCESS",
+                details="Caché de tokens eliminado"
+            )
+        except Exception:
+            pass
+    pause()
+
+
 def run_interactive_menu(config_path: str = "config.json"):
     """Bucle principal del menú interactivo por terminal."""
     config = load_config(config_path)
@@ -499,12 +535,13 @@ def run_interactive_menu(config_path: str = "config.json"):
 
         print("📊 AUDITORÍA Y ESTADO DEL TENANT:")
         print("  \033[1;35m[9]\033[0m 📈 Monitor Ejecutivo de Salud del Tenant y Licencias A1")
-        print("  \033[1;35m[10]\033[0m 📸 Descargar Snapshot de Auditoría (Respaldo en backups/)\n")
+        print("  \033[1;35m[10]\033[0m 📸 Descargar Snapshot de Auditoría (Respaldo en backups/)")
+        print("  \033[1;33m[11]\033[0m 🔒 Cerrar Sesión Administrativa (Borrar credenciales guardadas)\n")
 
         print("  \033[1m[0]\033[0m 🚪 Salir del Sistema\n")
         print("=" * 80)
 
-        choice = input("👉 Selecciona una opción (0-10): ").strip()
+        choice = input("👉 Selecciona una opción (0-11): ").strip()
 
         if choice == "1":
             menu_validate(config)
@@ -526,10 +563,12 @@ def run_interactive_menu(config_path: str = "config.json"):
             menu_status(config)
         elif choice == "10":
             menu_backup(config)
+        elif choice == "11":
+            menu_logout(config)
         elif choice in ["0", "q", "exit", "salir"]:
             clear_screen()
             print("\n👋 ¡Hasta luego! Sistema cerrado de forma segura.\n")
             break
         else:
-            print("\n❌ Opción no válida. Por favor introduce un número del 0 al 10.")
+            print("\n❌ Opción no válida. Por favor introduce un número del 0 al 11.")
             pause()
