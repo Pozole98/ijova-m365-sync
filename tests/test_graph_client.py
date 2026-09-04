@@ -310,14 +310,14 @@ class TestGraphClient(unittest.TestCase):
                 matricula="250118",
                 upn="250118@ijova.com",
                 nombre_completo="ALUMNO PRUEBA HISTORICA",
-                apellido_paterno="GUTIERREZ",
+                apellido_paterno="HISTORICA",
                 nombres="ALUMNO PRUEBA",
                 motivo_baja="No reinscrito",
                 history_path=tmp_json
             )
 
             # 2. Intentar registrar a OTRA persona con la misma matrícula -> DEBE BLOQUEAR
-            is_conflict, msg = check_matricula_transfer_conflict("250118", "ROBERTO PEREZ GOMEZ", history_path=tmp_json)
+            is_conflict, msg = check_matricula_transfer_conflict("250118", "OTRO ALUMNO DISTINTO", history_path=tmp_json)
             self.assertTrue(is_conflict)
             self.assertIn("ya perteneció históricamente a 'ALUMNO PRUEBA HISTORICA'", msg)
             self.assertIn("intransferibles de por vida", msg)
@@ -496,9 +496,9 @@ class TestGraphClient(unittest.TestCase):
             sample_student = StudentRecord(
                 row_index=2,
                 matricula="250001",
-                nombres="ALUMNO DEMO",
+                nombres="ALUMNO",
                 apellido_paterno="DEMO",
-                apellido_materno="",
+                apellido_materno="UNO",
                 nivel="Secundaria",
                 grado_semestre="1ro",
                 estatus="Inscrito",
