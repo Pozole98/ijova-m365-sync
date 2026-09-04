@@ -25,9 +25,14 @@ def is_student_matricula(identifier: str) -> Tuple[bool, str]:
     else:
         prefix = clean_id
 
-    # Debe ser numérico
+    # 1. Debe ser numérico (bloqueo anti-admin / docentes / cuentas de personal)
     if not prefix.isdigit():
         return False, f"El identificador '{identifier}' NO es una matrícula estudiantil numérica. Por seguridad se bloquea la eliminación de cuentas de personal/administradores."
+
+    # 2. Debe cumplir con el formato institucional de 6 dígitos (ej. 25xxxx, 26xxxx)
+    from src.validator import is_valid_matricula_format
+    if not is_valid_matricula_format(prefix):
+        return False, f"El identificador '{identifier}' NO cumple con el formato de matrícula escolar (debe constar exactamente de 6 dígitos numéricos, ej. 25xxxx o 26xxxx). Por seguridad se bloquea la operación."
 
     upn = f"{prefix}@ijova.com"
     return True, upn

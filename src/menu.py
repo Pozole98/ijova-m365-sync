@@ -222,9 +222,10 @@ def menu_reset(config: AppConfig):
         except Exception:
             pass
 
+        from src.validator import is_valid_matricula_format
         for u in all_users:
             prefix = u.user_principal_name.split("@")[0]
-            if prefix.isdigit():
+            if is_valid_matricula_format(prefix):
                 es_info = excel_map.get(prefix)
                 students_data.append({
                     "matricula": prefix,

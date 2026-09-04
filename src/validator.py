@@ -8,6 +8,19 @@ from collections import Counter
 from src.models import StudentRecord, ValidationIssue, IssueSeverity, ClassificationEnum
 
 
+MATRICULA_REGEX = re.compile(r"^2\d{5}$")
+
+
+def is_valid_matricula_format(matricula: str) -> bool:
+    """
+    Verifica que la matrícula cumpla con el estándar institucional del IJOVA:
+    Exactamente 6 dígitos numéricos iniciando con el prefijo generacional de la década actual (ej. 25xxxx, 26xxxx).
+    """
+    if not matricula or not isinstance(matricula, str):
+        return False
+    return bool(MATRICULA_REGEX.match(matricula.strip()))
+
+
 def validate_students(students: List[StudentRecord], expected_domain: str = "ijova.com") -> List[StudentRecord]:
     """
     Ejecuta una batería completa de validaciones sobre la lista de alumnos extraída.
@@ -50,6 +63,18 @@ def validate_students(students: List[StudentRecord], expected_domain: str = "ijo
                 message="El alumno no tiene matrícula asignada en la hoja.",
                 field="matricula",
                 original_value=""
+            ))
+            s.classification = ClassificationEnum.INVALIDO
+
+        elif not is_valid_matricula_format(s.matricula):
+            s.issues.append(ValidationIssue(
+                row_index=s.row_index,
+                matricula=s.matricula,
+                code="MATRICULA_FORMATO_INVALIDO",
+                severity=IssueSeverity.ERROR,
+                message=f"El formato de la matrícula '{s.matricula}' es inválido. Debe constar exactamente de 6 dígitos numéricos iniciando con el año (ej. 25xxxx o 26xxxx).",
+                field="matricula",
+                original_value=s.matricula
             ))
             s.classification = ClassificationEnum.INVALIDO
 

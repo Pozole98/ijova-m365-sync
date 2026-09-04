@@ -334,6 +334,96 @@ class TestGraphClient(unittest.TestCase):
             if os.path.exists(tmp_json):
                 os.remove(tmp_json)
 
+    def test_matricula_format_validation(self):
+        """Verifica la validación estricta del formato de matrículas del IJOVA (6 dígitos, ej. 25xxxx, 26xxxx)."""
+        from src.validator import is_valid_matricula_format, validate_students
+        from src.models import StudentRecord, ClassificationEnum
+        from src.delete_engine import is_student_matricula
+
+        # 1. Función directa is_valid_matricula_format
+        self.assertTrue(is_valid_matricula_format("250001"))
+        self.assertTrue(is_valid_matricula_format("260015"))
+        self.assertTrue(is_valid_matricula_format("250135"))
+        self.assertTrue(is_valid_matricula_format("260027"))
+
+        # Casos inválidos por longitud o prefijo
+        self.assertFalse(is_valid_matricula_format("25001"))     # 5 dígitos
+        self.assertFalse(is_valid_matricula_format("2600001"))   # 7 dígitos
+        self.assertFalse(is_valid_matricula_format("123456"))    # no empieza con 2
+        self.assertFalse(is_valid_matricula_format("990001"))    # no empieza con 2
+        self.assertFalse(is_valid_matricula_format("25ABCD"))    # alfanumérico
+        self.assertFalse(is_valid_matricula_format(""))          # vacío
+        self.assertFalse(is_valid_matricula_format("   "))       # espacios
+        self.assertFalse(is_valid_matricula_format(None))        # None
+
+        # 2. Integración en validate_students
+        bad_student = StudentRecord(
+            row_index=10,
+            matricula="25001",  # Inválida (5 dígitos)
+            apellido_paterno="LOPEZ",
+            apellido_materno="GARCIA",
+            nombres="JUAN",
+            nivel="Secundaria",
+            grado_semestre="1ro",
+            estatus="Inscrito",
+            upn_raw="25001@ijova.com",
+            nombre1_raw="JUAN",
+            nombre_limpio_raw="JUAN",
+            apellido_limpio_raw="LOPEZ",
+            alias_raw="juan.lopez",
+            display_name_raw="JUAN LOPEZ GARCIA"
+        )
+        good_student = StudentRecord(
+            row_index=11,
+            matricula="260055",  # Válida (6 dígitos)
+            apellido_paterno="PEREZ",
+            apellido_materno="DIAZ",
+            nombres="ANA",
+            nivel="Secundaria",
+            grado_semestre="1ro",
+            estatus="Inscrito",
+            upn_raw="260055@ijova.com",
+            nombre1_raw="ANA",
+            nombre_limpio_raw="ANA",
+            apellido_limpio_raw="PEREZ",
+            alias_raw="ana.perez",
+            display_name_raw="ANA PEREZ DIAZ"
+        )
+
+        validated = validate_students([bad_student, good_student])
+        bad_res = next(s for s in validated if s.row_index == 10)
+        good_res = next(s for s in validated if s.row_index == 11)
+
+        # bad_student debe tener MATRICULA_FORMATO_INVALIDO y clasificación INVALIDO
+        bad_issue_codes = [issue.code for issue in bad_res.issues]
+        self.assertIn("MATRICULA_FORMATO_INVALIDO", bad_issue_codes)
+        self.assertEqual(bad_res.classification, ClassificationEnum.INVALIDO)
+
+        # good_student NO debe tener MATRICULA_FORMATO_INVALIDO
+        good_issue_codes = [issue.code for issue in good_res.issues]
+        self.assertNotIn("MATRICULA_FORMATO_INVALIDO", good_issue_codes)
+
+        # 3. Integración en is_student_matricula (delete_engine / restore_engine / reset_engine)
+        valid_res, upn_res = is_student_matricula("250001")
+        self.assertTrue(valid_res)
+        self.assertEqual(upn_res, "250001@ijova.com")
+
+        valid_res_upn, _ = is_student_matricula("260015@ijova.com")
+        self.assertTrue(valid_res_upn)
+
+        # Rechazo de admin o matrículas que no cumplen formato
+        valid_admin, msg_admin = is_student_matricula("admin@ijova.com")
+        self.assertFalse(valid_admin)
+        self.assertIn("NO es una matrícula estudiantil numérica", msg_admin)
+
+        valid_short, msg_short = is_student_matricula("2501")
+        self.assertFalse(valid_short)
+        self.assertIn("NO cumple con el formato de matrícula escolar", msg_short)
+
+        valid_prefix, msg_prefix = is_student_matricula("990001")
+        self.assertFalse(valid_prefix)
+        self.assertIn("NO cumple con el formato de matrícula escolar", msg_prefix)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -60,8 +60,9 @@ def execute_interactive_enrollment(
     # 1. Solicitar Matrícula
     while True:
         mat_input = input("\n👉 Ingresa la Matrícula del alumno (ej. 260017): ").strip()
-        if not mat_input.isdigit():
-            print("❌ La matrícula debe ser un número entero. Intenta nuevamente.")
+        from src.validator import is_valid_matricula_format
+        if not is_valid_matricula_format(mat_input):
+            print("❌ Formato de matrícula inválido. Debe constar exactamente de 6 dígitos numéricos iniciando con el año (ej. 25xxxx o 26xxxx). Intenta nuevamente.")
             continue
 
         upn = f"{mat_input}@{domain.lower()}"
