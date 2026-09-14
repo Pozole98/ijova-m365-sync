@@ -549,6 +549,56 @@ class TestGraphClient(unittest.TestCase):
             self.assertIn("TARGET: 259999", content)
             self.assertIn("test_admin@ijova.com", content)
 
+    def test_validate_password_complexity(self):
+        """Verifica la validación de contraseñas de Microsoft Entra ID."""
+        from src.password_generator import validate_password_complexity
+
+        # Menos de 8 caracteres
+        valid, msg = validate_password_complexity("Ab1!")
+        self.assertFalse(valid)
+
+        # Solo minúsculas
+        valid, msg = validate_password_complexity("solominusculas")
+        self.assertFalse(valid)
+
+        # Solo minúsculas y mayúsculas (solo 2 categorías)
+        valid, msg = validate_password_complexity("Abcdefghij")
+        self.assertFalse(valid)
+
+        # Válida (mayúsculas, minúsculas, números y símbolos)
+        valid, msg = validate_password_complexity("Ijova2026*Alumnos")
+        self.assertTrue(valid)
+        self.assertEqual(msg, "")
+
+    @patch.object(GraphClient, "reset_password")
+    @patch.object(GraphClient, "get_user_by_upn")
+    def test_execute_password_reset_with_custom_password(self, mock_get_user, mock_reset):
+        """Verifica el restablecimiento de contraseña usando una contraseña específica."""
+        from src.reset_engine import execute_password_reset
+
+        mock_get_user.return_value = {
+            "id": "mock-user-id-250081",
+            "displayName": "ALUMNO PRUEBA ESPECIFICA",
+            "userPrincipalName": "250081@ijova.com"
+        }
+        mock_reset.return_value = True
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp_sec, tempfile.TemporaryDirectory() as tmp_rep:
+            res = execute_password_reset(
+                identifier="250081",
+                graph=self.client,
+                domain="ijova.com",
+                secrets_dir=tmp_sec,
+                reports_dir=tmp_rep,
+                custom_password="MiClaveSegura2026!",
+                force_change=False
+            )
+
+            self.assertIsNotNone(res)
+            self.assertEqual(res["password"], "MiClaveSegura2026!")
+            mock_reset.assert_called_once_with("mock-user-id-250081", "MiClaveSegura2026!", force_change=False)
+
 
 if __name__ == "__main__":
     unittest.main()

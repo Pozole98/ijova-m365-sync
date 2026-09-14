@@ -517,6 +517,9 @@ def cmd_reset(args):
 
     # 3. Matrículas pasadas como argumentos
     mats = getattr(args, "matriculas", [])
+    custom_pw = getattr(args, "password", None)
+    force_change = not getattr(args, "no_force_change", False)
+
     if mats:
         if len(mats) == 1:
             execute_password_reset(
@@ -524,7 +527,12 @@ def cmd_reset(args):
                 graph=graph,
                 domain=config.domain,
                 secrets_dir=config.secrets_dir,
-                reports_dir=config.reports_dir
+                reports_dir=config.reports_dir,
+                custom_password=custom_pw,
+                force_change=force_change,
+                auto_confirm=getattr(args, "yes", False),
+                excel_path=config.excel_path,
+                sheet_name=config.sheet_name
             )
         else:
             students_data = []
@@ -552,15 +560,53 @@ def cmd_reset(args):
     # 4. Solicitud interactiva individual si no se pasó ningún parámetro
     mat_in = input("👉 Ingresa la Matrícula del alumno a restablecer (ej. 250081): ").strip()
     if mat_in:
+        if not custom_pw:
+            in_pw = input("👉 Contraseña específica (o presiona ENTER para generar una aleatoria segura): ").strip()
+            if in_pw:
+                custom_pw = in_pw
         execute_password_reset(
             identifier=mat_in,
             graph=graph,
             domain=config.domain,
             secrets_dir=config.secrets_dir,
-            reports_dir=config.reports_dir
+            reports_dir=config.reports_dir,
+            custom_password=custom_pw,
+            force_change=force_change
         )
     else:
         print("⛔ No se ingresó ninguna matrícula.")
+
+
+def cmd_audit_photos(args):
+    """
+    Comando 'audit-photos': Descarga fotografías de perfil de los alumnos, identifica
+    cuentas sin foto y genera la galería web interactiva y reporte Excel/CSV.
+    """
+    config = load_config(args.config)
+    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes)
+    graph.authenticate_device_code()
+
+    from src.photo_auditor import audit_profile_photos
+    audit_profile_photos(
+        graph=graph,
+        config=config,
+        max_workers=getattr(args, "workers", 8),
+        output_dir=getattr(args, "output", None)
+    )
+
+
+def cmd_gui(args):
+    """
+    Comando 'gui': Inicia la Interfaz Gráfica Web Local (Dashboard) para verificación,
+    reseteo de contraseñas y emisión de credenciales de acceso con código QR.
+    """
+    from src.gui.app import start_gui
+    start_gui(
+        config_path=args.config,
+        host=getattr(args, "host", "127.0.0.1"),
+        port=getattr(args, "port", 5000),
+        open_browser=not getattr(args, "no_browser", False)
+    )
 
 
 def main():
@@ -669,13 +715,42 @@ def main():
         help="Nombre de la hoja de Excel (opcional)"
     )
     p_reset.add_argument(
+        "-p", "--password",
+        help="Contraseña específica para asignar al alumno (opcional, si se omite se genera una segura)"
+    )
+    p_reset.add_argument(
+        "--no-force-change",
+        action="store_true",
+        help="No exige cambio de contraseña en el próximo inicio de sesión (por defecto sí lo exige)"
+    )
+    p_reset.add_argument(
         "-y", "--yes",
         action="store_true",
         help="Confirma automáticamente el reseteo sin solicitar confirmación interactiva"
     )
 
+    # audit-photos command
+    p_photos = subparsers.add_parser("audit-photos", help="Audita y descarga las fotos de perfil de alumnos con galería interactiva")
+    p_photos.add_argument(
+        "-w", "--workers",
+        type=int,
+        default=8,
+        help="Número de hilos concurrentes para descarga (por defecto: 8)"
+    )
+    p_photos.add_argument(
+        "-o", "--output",
+        help="Directorio de salida para imágenes y reportes (por defecto: reports/)"
+    )
+    subparsers.add_parser("photos", help="Alias de 'audit-photos'")
+
     # menu command
     p_menu = subparsers.add_parser("menu", help="Inicia el Menú Interactivo en Terminal con todas las funciones explicadas")
+
+    # gui command
+    p_gui = subparsers.add_parser("gui", help="Inicia la Interfaz Gráfica Web Local (Dashboard)")
+    p_gui.add_argument("--host", default="127.0.0.1", help="Dirección host (por defecto: 127.0.0.1)")
+    p_gui.add_argument("--port", type=int, default=5000, help="Puerto del servidor (por defecto: 5000)")
+    p_gui.add_argument("--no-browser", action="store_true", help="No abrir el navegador automáticamente")
 
     args = parser.parse_args()
 
@@ -685,7 +760,9 @@ def main():
         run_interactive_menu(args.config)
         sys.exit(0)
 
-    if args.command == "validate":
+    if args.command == "gui":
+        cmd_gui(args)
+    elif args.command == "validate":
         cmd_validate(args)
     elif args.command == "dry-run":
         cmd_dry_run(args)
@@ -705,6 +782,8 @@ def main():
         cmd_export_pdf(args)
     elif args.command == "reset":
         cmd_reset(args)
+    elif args.command in ["audit-photos", "photos"]:
+        cmd_audit_photos(args)
 
 
 if __name__ == "__main__":

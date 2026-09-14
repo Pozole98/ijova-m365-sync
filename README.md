@@ -21,6 +21,8 @@ Herramienta profesional en Python 3 para Linux diseñada para la validación, au
    - Toda eliminación envía la cuenta a la papelera de reciclaje de Entra ID (30 días de retención recuperable).
 7. **Snapshot Preventivo Integrado**:
    - Respaldo previo con timestamp de los usuarios del tenant antes de cualquier escritura.
+8. **Verificación Previa y Confirmación Obligatoria de Alumno**:
+   - Antes de cambiar cualquier contraseña, el sistema consulta en tiempo real Microsoft Entra ID y cruza con el listado escolar oficial (Excel/ODS). Muestra la ficha de identidad completa (Nombre, Matrícula, UPN, Nivel, Grado y Foto) y solicita confirmación explícita (`¿Confirmas que es el alumno correcto? [s/N]`) para evitar cambios accidentales por error de captura.
 
 ---
 
@@ -158,20 +160,37 @@ python3 main.py export-pdf -m full
 python3 main.py export-pdf -f secrets/credenciales_alumnos_XXXX.csv -o reports/fichas.pdf
 ```
 
-### 🔹 Comando `reset` (Reseteo Individual o Masivo de Contraseñas)
-Restablece la contraseña de uno, varios o **todos los alumnos activos** para inicio de semestre, generando automáticamente nuevas contraseñas temporales y las fichas PDF con código QR listas para imprimir:
+### 🔹 Comando `gui` (Interfaz Gráfica Web Local / Dashboard Interactivo)
+Inicia un panel web moderno e intuitivo en tu navegador (`http://127.0.0.1:5000`):
+- **Buscador predictivo**: Busca alumnos en tiempo real por matrícula o por nombre completo.
+- **Ficha de Verificación con Fotografía**: Despliega fotografía institucional oficial, grupo, nivel escolar y estado de cuenta.
+- **Confirmación de Seguridad Obligatoria**: Exige verificar y marcar la casilla de confirmación antes de habilitar el reseteo.
+- **Emisión e Impresión Inmediata**: Muestra la nueva clave temporal generada y permite imprimir directamente la ficha de acceso con código QR o descargar el archivo PDF.
 ```bash
-# Caso 1: Restablecer a UN alumno individual (en 2 segundos)
+# Iniciar la interfaz gráfica web (abre el navegador automáticamente)
+python3 main.py gui
+
+# Iniciar en un puerto o host específico sin abrir navegador
+python3 main.py gui --port 8080 --no-browser
+```
+> **Nota:** También puedes iniciar la interfaz gráfica desde el **Menú Interactivo en Terminal** (`python3 main.py` o `python3 main.py menu`) seleccionando la opción **`[G]`**.
+
+### 🔹 Comando `reset` (Reseteo Individual o Masivo de Contraseñas)
+Restablece la contraseña de uno, varios o **todos los alumnos activos** para inicio de semestre, generando automáticamente nuevas contraseñas temporales y las fichas PDF con código QR listas para imprimir.
+
+**Salvaguarda de Verificación:** Al restablecer de forma individual, el sistema primero verifica en tiempo real que la cuenta exista en Microsoft 365, cruza los datos con el archivo escolar y solicita confirmación expresa (`¿Confirmas que deseas restablecer la contraseña a este alumno? [s/N]`) antes de realizar cualquier cambio:
+```bash
+# Caso 1: Restablecer a UN alumno individual (con verificación previa y confirmación interactiva)
 python3 main.py reset 250081
 
-# Caso 2: Restablecer a TODOS los alumnos activos en Microsoft 365 (Inicio de Semestre)
+# Caso 2: Restablecer individualmente sin solicitar confirmación (modo desatendido/scripts)
+python3 main.py reset 250081 -y
+
+# Caso 3: Restablecer a TODOS los alumnos activos en Microsoft 365 (Inicio de Semestre)
 python3 main.py reset --all
 
-# Caso 3: Restablecer a un grupo desde un archivo Excel de matrículas
+# Caso 4: Restablecer a un grupo desde un archivo Excel de matrículas
 python3 main.py reset --excel "Alumnos_Secundaria.xlsx"
-
-# Modo desatendido (sin confirmación interactiva)
-python3 main.py reset --all -y
 ```
 
 ### 🔹 Comando `delete` (Baja y Eliminación Segura por Matrícula o Excel)
@@ -220,7 +239,7 @@ ijovausers/
 ├── .gitignore                      # Excluye credenciales, tokens, Excel con PII y reportes
 ├── LICENSE                         # Licencia MIT
 ├── README.md                       # Manual operativo completo
-├── requirements.txt                # Dependencias tipadas (msal, requests, openpyxl, reportlab, qrcode)
+├── requirements.txt                # Dependencias tipadas (msal, requests, openpyxl, reportlab, qrcode, flask)
 ├── config.example.json             # Plantilla de configuración limpia
 ├── main.py                         # CLI principal con subcomandos
 ├── src/
@@ -237,16 +256,24 @@ ijovausers/
 │   ├── enroll_engine.py            # Motor de alta interactiva extemporánea
 │   ├── delete_engine.py            # Motor de baja con salvaguardas anti-admin
 │   ├── historical_registry.py      # Gestor de bajas históricas y regla anti-reasignación
-│   ├── reset_engine.py             # Motor de reseteo rápido de contraseñas
+│   ├── reset_engine.py             # Motor de verificación previa y reseteo de contraseñas
 │   ├── restore_engine.py           # Motor de restauración desde papelera de Entra ID
 │   ├── status_engine.py            # Monitor ejecutivo de salud y licencias
 │   ├── auditor.py                  # Generador de snapshots atómicos
-│   └── report_generator.py         # Exportador de reportes CSV y resúmenes Markdown
+│   ├── photo_auditor.py            # Auditoría y descarga concurrente de fotos de perfil
+│   ├── report_generator.py         # Exportador de reportes CSV y resúmenes Markdown
+│   └── gui/                        # Interfaz Gráfica Web Local (Dashboard)
+│       ├── app.py                  # Servidor web local Flask y API REST
+│       ├── templates/
+│       │   └── index.html          # Panel web interactivo con buscador y ficha
+│       └── static/
+│           ├── css/style.css       # Estilos institucionales IJOVA y modo oscuro/claro
+│           └── js/app.js           # Lógica cliente para verificación y confirmación
 ├── tests/
-│   └── test_graph_client.py        # Suite de pruebas unitarias automatizadas
+│   ├── test_graph_client.py        # Suite de pruebas de Graph, reseteo y paginación
+│   ├── test_photo_auditor.py       # Pruebas de auditoría de fotografías
+│   └── test_reset_verification_and_gui.py # Pruebas de verificación previa y GUI
 ├── data/                           # Base de datos histórica y normalizada
-│   ├── historico_bajas_alumnos.json # Expediente permanente de bajas archivadas
-│   └── historico_bajas_alumnos.csv  # Versión tabular de bajas históricas
 ├── backups/                        # Snapshots con timestamp (0700) [Excluido de Git]
 ├── reports/                        # Reportes CSV, PDFs y bitácoras [Excluido de Git]
 └── secrets/                        # Archivos de contraseñas de entrega (0600) [Excluido de Git]
@@ -258,7 +285,7 @@ ijovausers/
 
 ```bash
 source .venv/bin/activate
-python3 -m unittest tests/test_graph_client.py
+python3 -m unittest discover tests
 ```
 
 ---

@@ -191,7 +191,12 @@ def menu_reset(config: AppConfig):
     print("   \033[1;33m[3]\033[0m Restablecer a alumnos desde un archivo Excel o archivo de texto")
     opt = input("\n👉 Opción (1-3): ").strip()
 
-    from src.reset_engine import execute_password_reset, execute_bulk_password_reset
+    from src.reset_engine import (
+        execute_password_reset,
+        execute_bulk_password_reset,
+        verify_student_for_reset,
+        print_student_verification_card
+    )
     from src.excel_parser import parse_excel_students, extract_matriculas_from_excel
 
     write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
@@ -200,16 +205,44 @@ def menu_reset(config: AppConfig):
 
     if opt == "1":
         matricula = input("\n👉 Ingresa la Matrícula del alumno (ej. 250081): ").strip()
-        if matricula:
-            execute_password_reset(
+        if not matricula:
+            print("⛔ No se ingresó ninguna matrícula.")
+        else:
+            print(f"\n🔍 Verificando registro del alumno {matricula} en Microsoft 365...")
+            student_info = verify_student_for_reset(
                 identifier=matricula,
                 graph=graph,
                 domain=config.domain,
-                secrets_dir=config.secrets_dir,
-                reports_dir=config.reports_dir
+                excel_path=config.excel_path,
+                sheet_name=config.sheet_name
             )
-        else:
-            print("⛔ No se ingresó ninguna matrícula.")
+            if not student_info.get("registered"):
+                print(f"\n❌ ALUMNO NO REGISTRADO:")
+                print(f"   {student_info.get('error')}")
+                print("   ⚠️  Verifica que la matrícula sea correcta o si el alumno aún no ha sido dado de alta.")
+            else:
+                print_student_verification_card(student_info)
+                confirm = input("\n👉 ¿Confirmas que este es el alumno al que deseas cambiarle la contraseña? (s/n, ENTER=s): ").strip().lower()
+                if confirm not in ["s", "si", "y", "yes", ""]:
+                    print("⛔ Operación cancelada por el usuario. No se realizó ningún cambio.")
+                else:
+                    custom_pw = input("👉 Contraseña específica (o presiona ENTER para generar una aleatoria segura): ").strip()
+                    force_in = input("👉 ¿Exigir cambio de contraseña en el próximo inicio de sesión? (s/n, ENTER=s): ").strip().lower()
+                    force_change = force_in not in ["n", "no"]
+
+                    execute_password_reset(
+                        identifier=matricula,
+                        graph=graph,
+                        domain=config.domain,
+                        secrets_dir=config.secrets_dir,
+                        reports_dir=config.reports_dir,
+                        custom_password=custom_pw if custom_pw else None,
+                        force_change=force_change,
+                        auto_confirm=True,
+                        excel_path=config.excel_path,
+                        sheet_name=config.sheet_name,
+                        verified_student=student_info
+                    )
     elif opt == "2":
         print("\n🔍 Consultando alumnos activos en Microsoft 365...")
         all_users = graph.get_all_users()
@@ -512,6 +545,64 @@ def menu_logout(config: AppConfig):
     pause()
 
 
+def menu_photos(config: AppConfig):
+    clear_screen()
+    print("=" * 80)
+    print("🖼️ [12] AUDITORÍA DE FOTOS DE PERFIL (DESCARGA + GALERÍA WEB INTERACTIVA)")
+    print("=" * 80)
+    print("📌 ¿Qué hace esta función?")
+    print("   • Descarga las fotos de perfil de todos los alumnos de Microsoft 365.")
+    print("   • Guarda las imágenes en 'reports/fotos_perfil/' identificadas por matrícula.")
+    print("   • Genera una Galería Web Visual interactiva ('reports/galeria_fotos_alumnos.html')")
+    print("     para que puedas revisar de inmediato si las fotos son apropiadas o no.")
+    print("   • Te permite marcar fotos inapropiadas y exportar la lista a CSV.")
+    print("   • Genera un informe detallado en Excel ('reports/auditoria_fotos_perfil.xlsx').")
+    print("-" * 80)
+
+    confirm = input("¿Deseas iniciar la auditoría y descarga de fotos? (s/n): ").strip().lower()
+    if confirm in ["s", "si", "y", "yes", ""]:
+        graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes)
+        graph.authenticate_device_code()
+
+        from src.photo_auditor import audit_profile_photos
+        records, stats, gallery_path, excel_path = audit_profile_photos(
+            graph=graph,
+            config=config,
+            max_workers=8
+        )
+
+        print("\n" + "=" * 80)
+        print("🎉 AUDITORÍA DE FOTOS COMPLETADA CON ÉXITO")
+        print("=" * 80)
+        print(f"👉 Para revisar visualmente las fotos de los alumnos, abre en tu navegador:")
+        print(f"   \033[1;36m{gallery_path}\033[0m")
+        print(f"👉 Para consultar el reporte de auditoría en Excel:")
+        print(f"   \033[1;32m{excel_path}\033[0m\n")
+    pause()
+
+
+def menu_gui(config: AppConfig):
+    """Inicia la interfaz gráfica web local desde el menú."""
+    clear_screen()
+    print("=" * 80)
+    print("🖥️ [G] INTERFAZ GRÁFICA WEB LOCAL (DASHBOARD)")
+    print("=" * 80)
+    print("📌 ¿Qué hace esta función?")
+    print("   • Inicia el servidor web local en http://127.0.0.1:5000.")
+    print("   • Abre automáticamente tu navegador predeterminado.")
+    print("   • Te permite buscar alumnos interactivamente por nombre o matrícula.")
+    print("   • Despliega su fotografía, datos de Entra ID y grupo escolar.")
+    print("   • Incluye ventana de confirmación previa obligatoria antes de resetear.")
+    print("   • Genera y permite imprimir directamente las fichas con código QR.")
+    print("-" * 80)
+
+    confirm = input("¿Deseas iniciar la Interfaz Gráfica en tu navegador? (s/n, ENTER=s): ").strip().lower()
+    if confirm in ["s", "si", "y", "yes", ""]:
+        from src.gui.app import start_gui
+        start_gui(config_path="config.json", host="127.0.0.1", port=5000, open_browser=True)
+    pause()
+
+
 def run_interactive_menu(config_path: str = "config.json"):
     """Bucle principal del menú interactivo por terminal."""
     config = load_config(config_path)
@@ -526,7 +617,7 @@ def run_interactive_menu(config_path: str = "config.json"):
 
         print("👤 OPERACIÓN DIARIA Y ATENCIÓN A ALUMNOS:")
         print("  \033[1;32m[4]\033[0m 🎓 Alta Rápida de Alumno Extemporáneo (Ficha de Bienvenida + Excel)")
-        print("  \033[1;32m[5]\033[0m 🔑 Restablecer Contraseña Olvidada de Alumno (Por matrícula)")
+        print("  \033[1;32m[5]\033[0m 🔑 Restablecer Contraseña Olvidada de Alumno (Por matrícula con verificación)")
         print("  \033[1;32m[6]\033[0m 📄 Generar Fichas de Acceso en PDF con Código QR (Imprimibles)\n")
 
         print("🗑️ BAJAS, REINICIO DE CICLO Y RECUPERACIÓN:")
@@ -536,12 +627,16 @@ def run_interactive_menu(config_path: str = "config.json"):
         print("📊 AUDITORÍA Y ESTADO DEL TENANT:")
         print("  \033[1;35m[9]\033[0m 📈 Monitor Ejecutivo de Salud del Tenant y Licencias A1")
         print("  \033[1;35m[10]\033[0m 📸 Descargar Snapshot de Auditoría (Respaldo en backups/)")
-        print("  \033[1;33m[11]\033[0m 🔒 Cerrar Sesión Administrativa (Borrar credenciales guardadas)\n")
+        print("  \033[1;33m[11]\033[0m 🔒 Cerrar Sesión Administrativa (Borrar credenciales guardadas)")
+        print("  \033[1;32m[12]\033[0m 🖼️ Auditoría de Fotos de Perfil (Descarga + Galería Web Interactiva)\n")
+
+        print("🖥️ PANEL DE CONTROL VISUAL:")
+        print("  \033[1;36m[G]\033[0m 🌐 Iniciar Interfaz Gráfica Web (Buscador, Fotos y Fichas Imprimibles)\n")
 
         print("  \033[1m[0]\033[0m 🚪 Salir del Sistema\n")
         print("=" * 80)
 
-        choice = input("👉 Selecciona una opción (0-11): ").strip()
+        choice = input("👉 Selecciona una opción (0-12 o G): ").strip()
 
         if choice == "1":
             menu_validate(config)
@@ -565,10 +660,14 @@ def run_interactive_menu(config_path: str = "config.json"):
             menu_backup(config)
         elif choice == "11":
             menu_logout(config)
+        elif choice == "12":
+            menu_photos(config)
+        elif choice.upper() in ["G", "GUI", "13"]:
+            menu_gui(config)
         elif choice in ["0", "q", "exit", "salir"]:
             clear_screen()
             print("\n👋 ¡Hasta luego! Sistema cerrado de forma segura.\n")
             break
         else:
-            print("\n❌ Opción no válida. Por favor introduce un número del 0 al 11.")
+            print("\n❌ Opción no válida. Por favor introduce un número del 0 al 12 o 'G'.")
             pause()

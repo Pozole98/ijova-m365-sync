@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>IJOVA • Panel de Gestión y Reseteo Microsoft 365</title>
+  <meta name="description" content="Sistema de verificación de identidad, reseteo seguro de contraseñas y emisión de credenciales con código QR para alumnos del Instituto José Vasconcelos.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Header Institucional -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand-group">
+        <img src="/logo" alt="Logotipo IJOVA" class="school-logo" id="header-logo" onerror="this.style.display='none'">
+        <div class="brand-text">
+          <span class="institution-sub">INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS</span>
+          <h1 class="system-title">Gestión de Alumnos • Microsoft 365</h1>
+        </div>
+      </div>
+
+      <div class="header-status">
+        <div class="status-pill verified" id="domain-status-pill">
+          <span class="status-dot"></span>
+          <span class="status-label">{{ domain }}</span>
+        </div>
+        <button class="theme-toggle" id="btn-theme-toggle" title="Cambiar modo visual" aria-label="Cambiar tema">
+          <span id="theme-icon">🌙</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Navegación por pestañas -->
+    <nav class="nav-tabs" aria-label="Navegación principal">
+      <button class="tab-btn active" id="tab-btn-reset" data-tab="tab-reset">
+        <span class="tab-icon">🔑</span> Restablecer Contraseña
+      </button>
+      <button class="tab-btn" id="tab-btn-history" data-tab="tab-history">
+        <span class="tab-icon">📋</span> Historial de Fichas
+      </button>
+      <button class="tab-btn" id="tab-btn-tenant" data-tab="tab-tenant">
+        <span class="tab-icon">📈</span> Salud del Tenant
+      </button>
+    </nav>
+  </header>
+
+  <!-- Contenedor Principal -->
+  <main class="app-main">
+    <!-- PESTAÑA 1: RESTABLECER CONTRASEÑA -->
+    <section class="tab-content active" id="tab-reset">
+      <div class="hero-banner">
+        <h2>Restablecimiento Seguro de Contraseña de Alumnos</h2>
+        <p>Verifica en tiempo real el registro escolar del alumno en Microsoft 365 y confirma su identidad antes de emitir credenciales temporales con código QR.</p>
+      </div>
+
+      <!-- Buscador y Verificador -->
+      <div class="search-card">
+        <label for="search-matricula-input" class="search-label">
+          <span>🔍 Buscar y Verificar Alumno</span>
+          <span class="search-hint">Ingresa la matrícula (ej. 250081) o escribe el nombre del estudiante</span>
+        </label>
+        
+        <div class="search-input-wrapper">
+          <input 
+            type="text" 
+            id="search-matricula-input" 
+            class="search-input" 
+            placeholder="Ejemplo: 250081 o González..." 
+            autocomplete="off"
+            spellcheck="false"
+          >
+          <button type="button" id="btn-search-student" class="btn btn-primary">
+            <span class="btn-text">Verificar Alumno</span>
+            <span class="btn-spinner" style="display: none;">⏳</span>
+          </button>
+        </div>
+
+        <!-- Lista de sugerencias predictivas -->
+        <div id="search-autocomplete-list" class="autocomplete-dropdown" style="display: none;"></div>
+      </div>
+
+      <!-- Indicador de Carga -->
+      <div id="student-loading-indicator" class="loading-state" style="display: none;">
+        <div class="pulse-spinner"></div>
+        <p>Consultando Microsoft Entra ID y catálogo escolar...</p>
+      </div>
+
+      <!-- Alerta: Alumno NO Registrado -->
+      <div id="student-not-found-alert" class="alert-box alert-danger" style="display: none;">
+        <div class="alert-icon">⛔</div>
+        <div class="alert-body">
+          <h3 id="alert-error-title">Alumno No Registrado</h3>
+          <p id="alert-error-desc">La matrícula ingresada no existe en Microsoft Entra ID (@{{ domain }}).</p>
+          <div class="alert-actions">
+            <span>⚠️ Verifica que el número de matrícula esté bien escrito o revisa si el alumno aún no ha sido aprovisionado.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ficha de Verificación del Alumno (Aparece cuando SÍ está registrado) -->
+      <div id="student-verification-card" class="student-profile-card" style="display: none;">
+        <div class="card-header">
+          <div class="card-title-group">
+            <span class="badge badge-success">✓ REGISTRADO EN MICROSOFT 365</span>
+            <h3>Ficha de Verificación de Identidad</h3>
+          </div>
+          <span class="account-status-badge" id="account-status-badge">Cuenta Activa</span>
+        </div>
+
+        <div class="profile-layout">
+          <!-- Foto / Avatar -->
+          <div class="photo-column">
+            <div class="avatar-frame">
+              <img id="student-photo-img" src="" alt="Fotografía del alumno" class="student-avatar" style="display: none;">
+              <div id="student-avatar-placeholder" class="avatar-placeholder">
+                <span id="student-initials">AL</span>
+              </div>
+            </div>
+            <span class="photo-caption" id="student-photo-status">Sin foto registrada</span>
+          </div>
+
+          <!-- Datos Informativos -->
+          <div class="details-column">
+            <h2 class="student-official-name" id="student-display-name">JUAN PÉREZ LÓPEZ</h2>
+            
+            <div class="info-grid">
+              <div class="info-item">
+                <span class="info-label">🎓 Matrícula Oficial</span>
+                <span class="info-value highlight" id="student-matricula-val">250081</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">📧 Correo Institucional (UPN)</span>
+                <span class="info-value mail" id="student-upn-val">250081@ijova.com</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">🏫 Nivel y Grado Escolar</span>
+                <span class="info-value" id="student-level-val">Preparatoria — 2do Semestre</span>
+              </div>
+              <div class="info-item">
+                <span class="info-label">⚡ Identificador Microsoft Entra ID</span>
+                <span class="info-value mono" id="student-id-val">mock-id</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Barrera de Confirmación Obligatoria -->
+        <div class="security-barrier">
+          <div class="security-icon">⚠️</div>
+          <div class="security-content">
+            <h4>CONFIRMACIÓN DE SEGURIDAD OBLIGATORIA</h4>
+            <p>Para evitar cambiar la contraseña a un alumno equivocado, verifica cuidadosamente los datos arriba mostrados.</p>
+            <label class="confirm-checkbox-label">
+              <input type="checkbox" id="confirm-student-checkbox">
+              <span class="checkbox-custom"></span>
+              <span class="confirm-text"><strong>Confirmo expresamente que este es el alumno correcto</strong> y autorizo el restablecimiento de su contraseña.</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Opciones de Contraseña -->
+        <div class="password-options-panel">
+          <h4>Configuración de la Nueva Contraseña</h4>
+          
+          <div class="radio-options">
+            <label class="radio-card">
+              <input type="radio" name="pw_mode" id="pw_mode_auto" value="auto" checked>
+              <div class="radio-card-content">
+                <strong>⚡ Generar Contraseña Aleatoria Segura (Recomendado)</strong>
+                <span>12 caracteres que cumplen complejidad de Entra ID (mayúsculas, minúsculas, dígitos y símbolos).</span>
+              </div>
+            </label>
+
+            <label class="radio-card">
+              <input type="radio" name="pw_mode" id="pw_mode_custom" value="custom">
+              <div class="radio-card-content">
+                <strong>✏️ Asignar Contraseña Específica</strong>
+                <span>Define manualmente la contraseña que se le asignará al alumno.</span>
+              </div>
+            </label>
+          </div>
+
+          <div id="custom-password-field" class="custom-pw-box" style="display: none;">
+            <label for="input-custom-password">Contraseña personalizada:</label>
+            <div class="input-with-button">
+              <input type="password" id="input-custom-password" placeholder="Mínimo 8 caracteres, mayúsculas, números y símbolos">
+              <button type="button" id="btn-toggle-custom-pw" class="btn btn-secondary">👁️ Ver</button>
+            </div>
+            <small class="pw-rules">Debe contener al menos 8 caracteres y mezclar mayúsculas, minúsculas, números y símbolos.</small>
+          </div>
+
+          <div class="force-change-wrapper">
+            <label class="toggle-label">
+              <input type="checkbox" id="force-change-checkbox" checked>
+              <span class="toggle-switch"></span>
+              <span class="toggle-text">Exigir cambio de contraseña obligatorio en el próximo inicio de sesión (Recomendado por seguridad)</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="card-footer-actions">
+          <button type="button" id="btn-cancel-reset" class="btn btn-secondary">
+            ❌ Cancelar Operación
+          </button>
+          <button type="button" id="btn-execute-reset" class="btn btn-accent" disabled>
+            <span class="btn-text">🔒 Restablecer Contraseña Ahora</span>
+            <span class="btn-spinner" style="display: none;">⏳ Procesando...</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Pantalla de Éxito / Ficha Imprimible Generada -->
+      <div id="reset-success-card" class="success-card" style="display: none;">
+        <div class="success-banner">
+          <div class="success-icon-animated">✓</div>
+          <div>
+            <h3>¡Contraseña Restablecida con Éxito en Microsoft 365!</h3>
+            <p>La nueva clave temporal ya se encuentra activa en la nube y registrada en la bitácora protegida de <code>secrets/</code>.</p>
+          </div>
+        </div>
+
+        <div class="credential-box">
+          <div class="cred-row">
+            <span class="cred-label">👤 Alumno:</span>
+            <span class="cred-value" id="success-student-name">JUAN PÉREZ LÓPEZ</span>
+          </div>
+          <div class="cred-row">
+            <span class="cred-label">📧 Correo / Usuario:</span>
+            <span class="cred-value" id="success-student-upn">250081@ijova.com</span>
+          </div>
+          <div class="cred-row highlight">
+            <span class="cred-label">🔑 Nueva Contraseña Temporal:</span>
+            <div class="pw-display-group">
+              <span class="cred-value-pw mono" id="success-password-val">Abc123xyz!@#</span>
+              <button type="button" id="btn-copy-pw" class="btn btn-sm btn-secondary" title="Copiar contraseña">📋 Copiar</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Acciones de Impresión y Descarga -->
+        <div class="print-actions-toolbar">
+          <a id="btn-print-voucher" href="#" target="_blank" class="btn btn-primary btn-large">
+            🖨️ Imprimir Ficha de Acceso con QR
+          </a>
+          <a id="btn-download-voucher" href="#" download class="btn btn-secondary btn-large">
+            📥 Descargar PDF
+          </a>
+          <button type="button" id="btn-reset-another" class="btn btn-ghost">
+            🔄 Atender a otro alumno
+          </button>
+        </div>
+
+        <!-- Vista previa de la Ficha Recortable -->
+        <div class="voucher-preview-container">
+          <div class="voucher-preview-header">
+            <span>Vista Previa de la Ficha de Entrega</span>
+            <small>Listo para imprimir y entregar al estudiante</small>
+          </div>
+          <div class="voucher-ticket" id="voucher-ticket-print">
+            <div class="ticket-top">
+              <div class="ticket-brand">
+                <img src="/logo" alt="IJOVA Logo" class="ticket-logo" onerror="this.style.display='none'">
+                <div>
+                  <strong>INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS</strong>
+                  <div class="ticket-sub">FICHA INDIVIDUAL DE ACCESO A MICROSOFT 365</div>
+                </div>
+              </div>
+            </div>
+            <div class="ticket-body">
+              <div class="ticket-fields">
+                <p><strong>Alumno:</strong> <span id="ticket-name">ALUMNO</span></p>
+                <p><strong>Matrícula:</strong> <span id="ticket-matricula">000000</span></p>
+                <p><strong>Nivel Escolar:</strong> <span id="ticket-level">Secundaria</span></p>
+                <p><strong>Usuario / Correo:</strong> <span id="ticket-upn" class="mono">alumno@ijova.com</span></p>
+                <p><strong>Contraseña Temporal:</strong> <span id="ticket-password" class="mono highlight">********</span></p>
+                <p><strong>Portal de Acceso:</strong> <span class="mono">https://portal.office.com</span></p>
+              </div>
+              <div class="ticket-qr-box">
+                <div class="qr-placeholder" id="ticket-qr-placeholder">
+                  <span style="font-size: 2.2rem;">📱</span>
+                  <small>Escanear para acceder</small>
+                </div>
+              </div>
+            </div>
+            <div class="ticket-footer">
+              ℹ️ Deberás cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 2: HISTORIAL DE FICHAS -->
+    <section class="tab-content" id="tab-history" style="display: none;">
+      <div class="section-card">
+        <div class="section-card-header">
+          <div>
+            <h3>Bitácora de Contraseñas Restablecidas</h3>
+            <p>Registro histórico seguro de reseteos realizados por operadores administrativos.</p>
+          </div>
+          <button type="button" id="btn-refresh-history" class="btn btn-secondary btn-sm">🔄 Actualizar</button>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" id="history-table">
+            <thead>
+              <tr>
+                <th>Fecha y Hora (UTC)</th>
+                <th>Matrícula</th>
+                <th>Nombre del Alumno</th>
+                <th>Correo Institucional</th>
+                <th>Operador</th>
+                <th>Ficha PDF</th>
+              </tr>
+            </thead>
+            <tbody id="history-tbody">
+              <tr>
+                <td colspan="6" class="text-center">Cargando bitácora de reseteos...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- PESTAÑA 3: SALUD DEL TENANT -->
+    <section class="tab-content" id="tab-tenant" style="display: none;">
+      <div class="section-card">
+        <h3>Estado de Conexión con Microsoft 365 / Entra ID</h3>
+        <p>Parámetros de autenticación y verificación del dominio institucional.</p>
+
+        <div class="status-grid" id="tenant-status-grid">
+          <div class="status-tile">
+            <span class="tile-title">🌐 Dominio Institucional</span>
+            <span class="tile-val" id="tenant-domain-name">{{ domain }}</span>
+            <span class="tile-tag tag-success" id="tenant-domain-verified">Verificado</span>
+          </div>
+
+          <div class="status-tile">
+            <span class="tile-title">🔐 Tipo de Autenticación</span>
+            <span class="tile-val" id="tenant-auth-type">Managed</span>
+            <span class="tile-sub">Nube Pura (Sin ADFS)</span>
+          </div>
+
+          <div class="status-tile">
+            <span class="tile-title">👤 Administrador en Sesión</span>
+            <span class="tile-val mono" id="tenant-admin-upn">Cargando...</span>
+            <span class="tile-sub">Microsoft Graph Device Code</span>
+          </div>
+
+          <div class="status-tile">
+            <span class="tile-title">📑 Archivo Excel Base</span>
+            <span class="tile-val mono">{{ excel_path }}</span>
+            <span class="tile-sub">Listado Global Matriculado</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <span>Instituto de Desarrollo Integral Lic. José Vasconcelos • Sistema de Gestión de Alumnos Microsoft 365</span>
+      <span class="footer-version">v2.1.0 • Control Escolar & Soporte TI</span>
+    </div>
+  </footer>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>

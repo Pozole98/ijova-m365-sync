@@ -16,43 +16,169 @@ from src.delete_engine import is_student_matricula
 from src.pdf_generator import generate_pdf_cards_from_list, generate_pdf_from_credentials_csv
 
 
+def verify_student_for_reset(
+    identifier: str,
+    graph: GraphClient,
+    domain: str = "ijova.com",
+    excel_path: Optional[str] = None,
+    sheet_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Verifica de forma segura si un alumno existe en Microsoft 365 (Entra ID)
+    y cruza sus datos con el registro escolar oficial (Excel/ODS) si está disponible.
+    Retorna un diccionario con 'registered': True/False y todos los detalles del alumno.
+    """
+    is_valid, result = is_student_matricula(identifier)
+    if not is_valid:
+        return {
+            "registered": False,
+            "matricula": identifier,
+            "upn": f"{identifier}@{domain}",
+            "error": f"BLOQUEO DE SEGURIDAD: {result}"
+        }
+
+    upn = result
+    matricula = upn.split("@")[0]
+
+    # Consultar Microsoft Graph en tiempo real
+    user = graph.get_user_by_upn(upn)
+    if not user:
+        return {
+            "registered": False,
+            "matricula": matricula,
+            "upn": upn,
+            "error": f"El alumno con matrícula {matricula} ({upn}) no está registrado en Microsoft 365 / Entra ID."
+        }
+
+    user_id = user.get("id")
+    display_name = user.get("displayName", "Alumno")
+    account_enabled = user.get("accountEnabled", True)
+
+    # Cruzar con Excel escolar si existe para enriquecer datos de nivel/grado
+    excel_info: Dict[str, str] = {}
+    if excel_path and os.path.exists(excel_path):
+        try:
+            from src.excel_parser import parse_excel_students
+            students = parse_excel_students(excel_path, sheet_name)
+            for s in students:
+                if s.matricula.strip().lower() == matricula.lower():
+                    excel_info = {
+                        "nombre_excel": f"{s.apellido_paterno} {s.apellido_materno} {s.nombres}".strip(),
+                        "nivel": s.nivel or "Estudiante",
+                        "grado_semestre": s.grado_semestre or "Activo",
+                        "estatus": s.estatus or "Activo"
+                    }
+                    break
+        except Exception:
+            pass
+
+    # Comprobar si tiene fotografía de perfil
+    has_photo = False
+    try:
+        if hasattr(graph, "get_user_photo_metadata"):
+            meta = graph.get_user_photo_metadata(user_id or upn)
+            has_photo = meta is not None
+    except Exception:
+        pass
+
+    return {
+        "registered": True,
+        "matricula": matricula,
+        "upn": upn,
+        "user_id": user_id,
+        "display_name": display_name,
+        "nombre_oficial": excel_info.get("nombre_excel", display_name),
+        "nivel": excel_info.get("nivel", "Estudiante"),
+        "grado_semestre": excel_info.get("grado_semestre", "Activo"),
+        "account_enabled": account_enabled,
+        "has_photo": has_photo,
+        "error": None
+    }
+
+
+def print_student_verification_card(student_info: Dict[str, Any]):
+    """Despliega en consola la tarjeta de verificación visual del alumno."""
+    status_str = "\033[1;32mHabilitada (Activa)\033[0m" if student_info.get("account_enabled", True) else "\033[1;31mDeshabilitada\033[0m"
+    photo_str = "📸 Con fotografía" if student_info.get("has_photo") else "⚪ Sin fotografía"
+    
+    print("\n" + "\033[1;34m╔" + "═" * 76 + "╗")
+    print(f"║ {'FICHA DE VERIFICACIÓN DE ALUMNO EN MICROSOFT 365':^76} ║")
+    print("╠" + "═" * 76 + "╣\033[0m")
+    print(f"  👤 \033[1mNombre Oficial:\033[0m      {student_info.get('nombre_oficial', student_info.get('display_name'))}")
+    if student_info.get("nombre_oficial") != student_info.get("display_name"):
+        print(f"  🏷️  \033[1mEntra ID Name:\033[0m       {student_info.get('display_name')}")
+    print(f"  🎓 \033[1mMatrícula:\033[0m           \033[1;36m{student_info.get('matricula')}\033[0m")
+    print(f"  📧 \033[1mCorreo Institucional:\033[0m\033[1;33m{student_info.get('upn')}\033[0m")
+    print(f"  🏫 \033[1mNivel y Grado:\033[0m        {student_info.get('nivel')} — {student_info.get('grado_semestre')}")
+    print(f"  ⚡ \033[1mEstado de Cuenta:\033[0m     {status_str} | {photo_str}")
+    print("\033[1;34m╚" + "═" * 76 + "╝\033[0m")
+
+
 def execute_password_reset(
     identifier: str,
     graph: GraphClient,
     domain: str = "ijova.com",
     secrets_dir: str = "secrets",
-    reports_dir: str = "reports"
+    reports_dir: str = "reports",
+    custom_password: Optional[str] = None,
+    force_change: bool = True,
+    auto_confirm: bool = True,
+    excel_path: Optional[str] = None,
+    sheet_name: Optional[str] = None,
+    verified_student: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Restablece la contraseña de un alumno individual por su matrícula en Microsoft 365.
+    Verifica primero si el alumno está registrado.
+    Si auto_confirm=False, muestra la ficha del alumno y solicita confirmación interactiva al operador.
+    Si se proporciona custom_password, se valida y asigna dicha contraseña específica.
     """
-    # 1. Validar salvaguarda anti-admin (solo matrículas estudiantiles)
-    is_valid, result = is_student_matricula(identifier)
-    if not is_valid:
-        print(f"\n⛔ BLOQUEO DE SEGURIDAD: {result}")
+    # 1. Verificar registro del alumno en Microsoft 365 y datos escolares
+    if verified_student and verified_student.get("registered"):
+        student_info = verified_student
+    else:
+        student_info = verify_student_for_reset(
+            identifier=identifier,
+            graph=graph,
+            domain=domain,
+            excel_path=excel_path,
+            sheet_name=sheet_name
+        )
+
+    if not student_info.get("registered"):
+        print(f"\n❌ ALUMNO NO REGISTRADO: {student_info.get('error')}")
         return None
 
-    upn = result
-    matricula = upn.split("@")[0]
+    user_id = student_info["user_id"]
+    matricula = student_info["matricula"]
+    upn = student_info["upn"]
+    display_name = student_info["display_name"]
+    nivel = student_info.get("nivel", "Estudiante")
+    grado_semestre = student_info.get("grado_semestre", "Activo")
 
-    print(f"\n🔍 Buscando alumno con matrícula \033[1;34m{matricula}\033[0m ({upn})...")
-    user = graph.get_user_by_upn(upn)
-    if not user:
-        print(f"❌ El alumno {upn} no existe en Microsoft Entra ID.")
-        return None
+    # 2. Confirmación de seguridad si no está en modo auto_confirm
+    if not auto_confirm:
+        print_student_verification_card(student_info)
+        confirm = input(f"\n👉 ¿Confirmas que deseas restablecer la contraseña a {display_name} ({matricula})? (s/n, ENTER=s): ").strip().lower()
+        if confirm not in ["s", "si", "y", "yes", ""]:
+            print("⛔ Operación de reseteo cancelada por el usuario. No se modificó la contraseña.")
+            return None
 
-    user_id = user.get("id")
-    display_name = user.get("displayName", "Alumno")
-
-    print(f"   👤 Alumno: \033[1m{display_name}\033[0m (ID: {user_id})")
-
-    # 2. Generar nueva contraseña temporal segura
-    new_password = generate_secure_password(length=12)
+    # 3. Obtener o generar la contraseña
+    if custom_password:
+        from src.password_generator import validate_password_complexity
+        is_valid, msg = validate_password_complexity(custom_password)
+        if not is_valid:
+            print(f"\n⛔ CONTRASEÑA NO VÁLIDA: {msg}")
+            return None
+        new_password = custom_password
+    else:
+        new_password = generate_secure_password(length=12)
 
     # 3. Aplicar reseteo en Microsoft Entra ID vía Graph
     print(f"⚡ Restableciendo contraseña en Microsoft 365...")
     try:
-        success = graph.reset_password(user_id, new_password)
+        success = graph.reset_password(user_id, new_password, force_change=force_change)
         if not success:
             print(f"❌ No se pudo restablecer la contraseña en Graph.")
             return None
@@ -90,10 +216,10 @@ def execute_password_reset(
     student_dict = {
         "matricula": matricula,
         "upn": upn,
-        "nombre_completo": display_name,
+        "nombre_completo": student_info.get("nombre_oficial", display_name),
         "password_temporal": new_password,
-        "nivel": "Estudiante",
-        "grado_semestre": "Activo"
+        "nivel": nivel,
+        "grado_semestre": grado_semestre
     }
     try:
         generate_pdf_cards_from_list([student_dict], pdf_out, layout_mode="cards")
@@ -105,9 +231,9 @@ def execute_password_reset(
     print_welcome_card(
         matricula=matricula,
         upn=upn,
-        display_name=display_name,
-        nivel="Estudiante",
-        grado="Activo",
+        display_name=student_info.get("nombre_oficial", display_name),
+        nivel=nivel,
+        grado=grado_semestre,
         temp_password=new_password,
         domain=domain
     )
@@ -125,8 +251,12 @@ def execute_password_reset(
         "matricula": matricula,
         "upn": upn,
         "display_name": display_name,
+        "nombre_oficial": student_info.get("nombre_oficial", display_name),
         "password": new_password,
-        "user_id": user_id
+        "user_id": user_id,
+        "pdf_path": pdf_out if os.path.exists(pdf_out) else None,
+        "nivel": nivel,
+        "grado_semestre": grado_semestre
     }
 
 

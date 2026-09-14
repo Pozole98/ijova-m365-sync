@@ -321,6 +321,81 @@ class GraphClient:
 
         return None
 
+    def get_user_photo(self, user_id_or_upn: str, max_retries: int = 3) -> Optional[bytes]:
+        """
+        Descarga la fotografía de perfil de un usuario desde Microsoft Graph API
+        (/v1.0/users/{id|upn}/photo/$value).
+        Retorna los bytes binarios de la imagen si existe (200 OK) o None si el usuario no tiene foto (404 Not Found).
+        Maneja reintentos transparentes ante limitaciones de tasa (HTTP 429).
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        url = f"https://graph.microsoft.com/v1.0/users/{user_id_or_upn.strip().lower()}/photo/$value"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}"
+        }
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.get(url, headers=headers, timeout=20)
+                if resp.status_code == 200:
+                    return resp.content
+                if resp.status_code == 404:
+                    # El usuario no tiene fotografía configurada
+                    return None
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", attempt * 2))
+                    time.sleep(retry_after)
+                    continue
+                if 500 <= resp.status_code < 600:
+                    time.sleep(attempt * 1.5)
+                    continue
+                resp.raise_for_status()
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries:
+                    return None
+                time.sleep(attempt)
+
+        return None
+
+    def get_user_photo_metadata(self, user_id_or_upn: str, max_retries: int = 3) -> Optional[Dict[str, Any]]:
+        """
+        Consulta los metadatos de la foto de perfil (/v1.0/users/{id|upn}/photo).
+        Retorna diccionario con @odata.mediaContentType, width, height o None si no existe (404).
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        url = f"https://graph.microsoft.com/v1.0/users/{user_id_or_upn.strip().lower()}/photo"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.get(url, headers=headers, timeout=15)
+                if resp.status_code == 200:
+                    return resp.json()
+                if resp.status_code == 404:
+                    return None
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", attempt * 2))
+                    time.sleep(retry_after)
+                    continue
+                if 500 <= resp.status_code < 600:
+                    time.sleep(attempt * 1.5)
+                    continue
+                resp.raise_for_status()
+            except requests.exceptions.RequestException:
+                if attempt == max_retries:
+                    return None
+                time.sleep(attempt)
+
+        return None
+
+
     def create_user(self, payload: Dict[str, Any], max_retries: int = 4) -> Dict[str, Any]:
         """
         Crea un nuevo usuario en Microsoft Entra ID vía POST /v1.0/users con reintentos para 429/5xx.
@@ -450,10 +525,10 @@ class GraphClient:
 
         return False
 
-    def reset_password(self, user_id: str, new_password: str, max_retries: int = 3) -> bool:
+    def reset_password(self, user_id: str, new_password: str, force_change: bool = True, max_retries: int = 3) -> bool:
         """
         Restablece la contraseña de un usuario en Microsoft Entra ID vía PATCH /v1.0/users/{user_id}.
-        Forza el cambio de contraseña en el próximo inicio de sesión.
+        Por defecto exige cambio de contraseña en el próximo inicio de sesión (force_change=True).
         """
         if not self.access_token:
             raise GraphClientError("No hay token de acceso disponible.")
@@ -465,7 +540,7 @@ class GraphClient:
         }
         payload = {
             "passwordProfile": {
-                "forceChangePasswordNextSignIn": True,
+                "forceChangePasswordNextSignIn": force_change,
                 "password": new_password
             }
         }
