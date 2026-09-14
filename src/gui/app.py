@@ -10,6 +10,7 @@ import json
 import logging
 import threading
 import webbrowser
+import re
 from typing import Optional, Dict, Any, List
 from flask import Flask, render_template, request, jsonify, send_file, abort
 
@@ -17,6 +18,7 @@ from src.config import load_config, AppConfig
 from src.graph_client import GraphClient, GraphClientError
 from src.reset_engine import verify_student_for_reset, execute_password_reset
 from src.excel_parser import parse_excel_students
+from src.validator import is_valid_matricula_format
 from src.delete_engine import execute_student_deletion, is_student_matricula
 from src.restore_engine import execute_student_restoration
 
@@ -40,6 +42,53 @@ def create_app(config_path: str = "config.json") -> Flask:
     # Cargar configuración base
     config: AppConfig = load_config(config_path)
     app.config["APP_CONFIG"] = config
+
+    # =========================================================================
+    # ESCUDO DE SEGURIDAD (LOOPBACK ENFORCEMENT, ANTI-CSRF, ANTI-DNS-REBINDING)
+    # =========================================================================
+    @app.before_request
+    def security_shield():
+        # 1. Filtro estricto de IP: Solo la máquina local (loopback) puede conectar
+        client_ip = request.remote_addr
+        if client_ip and client_ip not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            app.logger.warning(f"🛡️ Intento de acceso bloqueado desde IP no local: {client_ip}")
+            abort(403)
+
+        # 2. Mitigación de DNS Rebinding: El Host debe ser 127.0.0.1 o localhost
+        host_hdr = (request.host or "").split(":")[0].lower()
+        if host_hdr and host_hdr not in ("127.0.0.1", "localhost", "testclient"):
+            app.logger.warning(f"🛡️ Host no autorizado bloqueado (Posible DNS Rebinding): {request.host}")
+            abort(400)
+
+        # 3. Mitigación de Cross-Site Request Forgery (CSRF) desde pestañas del navegador
+        sec_fetch_site = request.headers.get("Sec-Fetch-Site")
+        if sec_fetch_site in ("cross-site",):
+            app.logger.warning(f"🛡️ Petición cross-site bloqueada (Sec-Fetch-Site: {sec_fetch_site})")
+            abort(403)
+
+        # Verificación de Origin en peticiones de escritura o AJAX
+        origin = request.headers.get("Origin")
+        if origin:
+            parsed_origin = origin.split("://")[-1].split(":")[0].lower()
+            if parsed_origin not in ("127.0.0.1", "localhost", "testclient"):
+                app.logger.warning(f"🛡️ Petición cross-origin bloqueada con Origin no autorizado: {origin}")
+                abort(403)
+
+    @app.after_request
+    def set_security_headers(response):
+        """Inyecta cabeceras de seguridad HTTP en todas las respuestas."""
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self';"
+        )
+        return response
 
     # Cliente Graph singleton perezoso (lazy)
     _graph_lock = threading.Lock()
@@ -142,6 +191,8 @@ def create_app(config_path: str = "config.json") -> Flask:
     def api_student_photo(matricula: str):
         """Descarga y sirve la fotografía de perfil del alumno desde Microsoft Entra ID."""
         matricula = matricula.strip()
+        if not is_valid_matricula_format(matricula):
+            abort(404)
         try:
             graph = get_graph()
             upn = f"{matricula}@{config.domain}"
@@ -237,15 +288,23 @@ def create_app(config_path: str = "config.json") -> Flask:
     @app.route("/api/pdf/<filename>")
     def api_download_pdf(filename: str):
         """Sirve el documento PDF de la ficha de acceso para previsualización e impresión."""
-        # Sanitizar nombre de archivo para evitar path traversal
-        clean_filename = os.path.basename(filename)
-        secrets_file = os.path.join(config.secrets_dir, clean_filename)
-        reports_file = os.path.join(config.reports_dir, clean_filename)
+        clean_filename = os.path.basename(filename).strip()
+
+        # Validación estricta: Solo archivos .pdf con caracteres alfanuméricos seguros
+        if not clean_filename.lower().endswith(".pdf") or not re.match(r'^[a-zA-Z0-9_\-]+\.pdf$', clean_filename):
+            abort(404)
+
+        # Resolver rutas absolutas y verificar que el archivo resida en secrets_dir o reports_dir
+        secrets_dir_abs = os.path.abspath(config.secrets_dir)
+        reports_dir_abs = os.path.abspath(config.reports_dir)
+
+        secrets_file = os.path.abspath(os.path.join(secrets_dir_abs, clean_filename))
+        reports_file = os.path.abspath(os.path.join(reports_dir_abs, clean_filename))
 
         target_file = None
-        if os.path.exists(secrets_file):
+        if secrets_file.startswith(secrets_dir_abs) and os.path.exists(secrets_file):
             target_file = secrets_file
-        elif os.path.exists(reports_file):
+        elif reports_file.startswith(reports_dir_abs) and os.path.exists(reports_file):
             target_file = reports_file
 
         if not target_file:

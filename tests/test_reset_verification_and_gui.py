@@ -188,6 +188,77 @@ class TestResetVerificationAndGUI(unittest.TestCase):
         self.assertTrue(gallery_data["success"])
         self.assertIn("students", gallery_data)
 
+    def test_gui_security_ip_whitelist(self):
+        """Verifica que conexiones desde IPs externas no-loopback sean bloqueadas con 403 Forbidden."""
+        app = create_app()
+        client = app.test_client()
+
+        # Conexión externa simulada (LAN IP)
+        resp_ext = client.get("/", environ_base={"REMOTE_ADDR": "192.168.1.50"})
+        self.assertEqual(resp_ext.status_code, 403)
+
+        # Conexión local autorizada (127.0.0.1)
+        resp_local = client.get("/", environ_base={"REMOTE_ADDR": "127.0.0.1"})
+        self.assertEqual(resp_local.status_code, 200)
+
+    def test_gui_security_dns_rebinding_protection(self):
+        """Verifica que peticiones con encabezados Host no autorizados (DNS Rebinding) sean rechazadas con 400."""
+        app = create_app()
+        client = app.test_client()
+
+        # Host malicioso
+        resp_evil = client.get("/", headers={"Host": "attacker-dns-rebind.com:5000"})
+        self.assertEqual(resp_evil.status_code, 400)
+
+        # Host legítimo
+        resp_good = client.get("/", headers={"Host": "127.0.0.1:5000"})
+        self.assertEqual(resp_good.status_code, 200)
+
+    def test_gui_security_cross_origin_and_csrf_protection(self):
+        """Verifica que peticiones cross-site (Sec-Fetch-Site o Origin externo) sean bloqueadas con 403."""
+        app = create_app()
+        client = app.test_client()
+
+        # Petición cross-site de navegador
+        resp_cross_site = client.get("/", headers={"Sec-Fetch-Site": "cross-site"})
+        self.assertEqual(resp_cross_site.status_code, 403)
+
+        # Petición con Origin externo malicioso
+        resp_evil_origin = client.post(
+            "/api/reset-password",
+            headers={"Origin": "https://malicious-website.com"},
+            json={"matricula": "250081"}
+        )
+        self.assertEqual(resp_evil_origin.status_code, 403)
+
+    def test_gui_security_pdf_download_protection(self):
+        """Verifica que /api/pdf/<filename> bloquee estrictamente archivos no-PDF y path traversal."""
+        app = create_app()
+        client = app.test_client()
+
+        # Intento de leer token_cache.bin
+        resp_token = client.get("/api/pdf/token_cache.bin")
+        self.assertEqual(resp_token.status_code, 404)
+
+        # Intento de leer CSV de historial o contraseñas
+        resp_csv = client.get("/api/pdf/historial_reseteos_contrasenas.csv")
+        self.assertEqual(resp_csv.status_code, 404)
+
+        # Intento de path traversal hacia /etc/passwd
+        resp_traversal = client.get("/api/pdf/..%2F..%2Fetc%2Fpasswd")
+        self.assertEqual(resp_traversal.status_code, 404)
+
+    def test_gui_security_headers_present(self):
+        """Verifica que las cabeceras HTTP de seguridad (CSP, X-Frame-Options, nosniff) se inyecten."""
+        app = create_app()
+        client = app.test_client()
+
+        resp = client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.headers.get("X-Frame-Options"), "DENY")
+        self.assertEqual(resp.headers.get("X-Content-Type-Options"), "nosniff")
+        self.assertIn("default-src 'self'", resp.headers.get("Content-Security-Policy", ""))
+
     def test_gui_cli_catalog_rendered(self):
         """Verifica que la pestaña de Comandos CLI se renderice en el HTML con sus comandos clave."""
         app = create_app()

@@ -23,6 +23,9 @@ Herramienta profesional en Python 3 para Linux diseñada para la validación, au
    - Respaldo previo con timestamp de los usuarios del tenant antes de cualquier escritura.
 8. **Verificación Previa y Confirmación Obligatoria de Alumno**:
    - Antes de cambiar cualquier contraseña, el sistema consulta en tiempo real Microsoft Entra ID y cruza con el listado escolar oficial (Excel/ODS). Muestra la ficha de identidad completa (Nombre, Matrícula, UPN, Nivel, Grado y Foto) y solicita confirmación explícita (`¿Confirmas que es el alumno correcto? [s/N]`) para evitar cambios accidentales por error de captura.
+9. **Aislamiento Local Estricto y Escudo Web (Loopback, Anti-CSRF y Anti-Rebinding)**:
+   - El servidor de la interfaz gráfica (`gui`) se enlaza exclusivamente a la interfaz virtual loopback (`127.0.0.1`), haciendo que el puerto sea física y lógicamente inaccesible desde cualquier otra computadora de la red local o Wi-Fi.
+   - Cuenta con un escudo de seguridad HTTP en tiempo de ejecución: filtro estricto de IP local (`127.0.0.1`/`::1`), mitigación de DNS Rebinding (validación de cabecera `Host`), bloqueo de peticiones cross-site (`Sec-Fetch-Site` / `Origin`), cabeceras de blindaje (`Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`) y sanitización estricta contra path traversal en la descarga de PDFs.
 
 ---
 

@@ -64,7 +64,7 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
     os.makedirs(config.secrets_dir, exist_ok=True)
 
     # Secure directory permissions (0700 - solo lectura/escritura por el propietario para protección de datos de menores)
-    for protected_dir in [config.secrets_dir, config.backups_dir]:
+    for protected_dir in [config.secrets_dir, config.backups_dir, config.reports_dir]:
         try:
             os.chmod(protected_dir, 0o700)
         except Exception:
