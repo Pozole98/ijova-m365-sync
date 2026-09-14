@@ -160,12 +160,40 @@ python3 main.py export-pdf -m full
 python3 main.py export-pdf -f secrets/credenciales_alumnos_XXXX.csv -o reports/fichas.pdf
 ```
 
-### 🔹 Comando `gui` (Interfaz Gráfica Web Local / Dashboard Interactivo)
-Inicia un panel web moderno e intuitivo en tu navegador (`http://127.0.0.1:5000`):
-- **Buscador predictivo**: Busca alumnos en tiempo real por matrícula o por nombre completo.
-- **Ficha de Verificación con Fotografía**: Despliega fotografía institucional oficial, grupo, nivel escolar y estado de cuenta.
-- **Confirmación de Seguridad Obligatoria**: Exige verificar y marcar la casilla de confirmación antes de habilitar el reseteo.
-- **Emisión e Impresión Inmediata**: Muestra la nueva clave temporal generada y permite imprimir directamente la ficha de acceso con código QR o descargar el archivo PDF.
+### 🔹 Comando `gui` (Interfaz Gráfica Web Local / Dashboard Completo)
+Inicia un panel web moderno, responsivo e intuitivo en tu navegador (`http://127.0.0.1:5000`) con **7 módulos especializados**:
+
+1. **🔑 Restablecer Contraseña**:
+   - **Buscador predictivo**: Búsqueda en tiempo real por matrícula o por nombre completo.
+   - **Ficha de Verificación con Fotografía**: Despliega fotografía institucional oficial de Entra ID, grupo, nivel escolar y estado de cuenta.
+   - **Confirmación Obligatoria**: Exige verificar los datos del alumno y marcar la casilla de confirmación antes de habilitar el reseteo.
+   - **Emisión e Impresión Inmediata**: Muestra la nueva clave temporal generada y permite imprimir directamente la ficha de acceso con código QR o descargar el archivo PDF.
+
+2. **🗑️ Bajas de Alumnos (Con Confirmación Estricta por Matrícula)**:
+   - Localización visual del alumno y verificación de su estado.
+   - **Salvaguarda de seguridad crítica**: Para evitar bajas accidentales, el botón de eliminación permanece bloqueado hasta que el operador **escribe textualmente la matrícula del alumno** en un campo de validación.
+   - La baja es enviada a la papelera (*soft-delete*, 30 días de retención) y salvaguardada contra cuentas de personal/admin.
+
+3. **🔄 Papelera & Restauración**:
+   - Listado interactivo de alumnos eliminados en los últimos 30 días en Microsoft Entra ID.
+   - Restauración en un solo clic con recuperación intacta de buzón de correo, archivos de OneDrive y equipos de Teams.
+
+4. **🖼️ Auditoría de Fotos de Perfil**:
+   - **Métricas ejecutivas**: Indicadores de total auditado, porcentaje con foto y cuentas pendientes de subir fotografía institucional.
+   - **Mosaico visual interactivo**: Galería filtrable en tiempo real (*Todos*, *Con Foto*, *Sin Foto*) con avatares descargados y preview de credencial.
+   - **Escaneo concurrente**: Botón para disparar auditoría en segundo plano contra Microsoft Graph.
+
+5. **📋 Historial de Fichas**:
+   - Bitácora de las contraseñas restablecidas durante la sesión.
+   - Accesos directos para descargar o imprimir el comprobante PDF oficial generado para cada alumno.
+
+6. **📈 Salud del Tenant**:
+   - Diagnóstico en tiempo real del dominio institucional (`ijova.com`), Tenant ID, cuentas activas y enlaces a portales de administración.
+
+7. **💻 Terminal & Guía CLI**:
+   - Pestaña integrada que cataloga todas las operaciones masivas y avanzadas disponibles desde la línea de comandos (aprovisionamiento masivo, validación offline, simulación `dry-run`, reseteo grupal por Excel, reportes ejecutivos).
+   - Botones de copiado en 1 clic para cada comando.
+
 ```bash
 # Iniciar la interfaz gráfica web (abre el navegador automáticamente)
 python3 main.py gui

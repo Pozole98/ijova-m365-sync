@@ -142,6 +142,67 @@ class TestResetVerificationAndGUI(unittest.TestCase):
         self.assertFalse(data["success"])
         self.assertIn("Confirmación de seguridad requerida", data["error"])
 
+    def test_gui_student_delete_requires_exact_matricula(self):
+        """Verifica que /api/student/delete exija teclear exactamente la matrícula del alumno."""
+        app = create_app()
+        client = app.test_client()
+
+        # Confirmación que no coincide
+        payload_mismatch = {
+            "matricula": "250081",
+            "confirmation": "123456"
+        }
+        resp = client.post("/api/student/delete", json=payload_mismatch)
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("Debes ingresar exactamente la matrícula", data["error"])
+
+    def test_gui_recycle_bin_restore_validation(self):
+        """Verifica que /api/recycle-bin/restore valide los parámetros de entrada."""
+        app = create_app()
+        client = app.test_client()
+
+        # Sin matrícula
+        resp = client.post("/api/recycle-bin/restore", json={})
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("Falta la matrícula", data["error"])
+
+    def test_gui_photos_stats_and_gallery(self):
+        """Verifica que los endpoints de fotos entreguen estadísticas y estructura de galería."""
+        app = create_app()
+        client = app.test_client()
+
+        resp_stats = client.get("/api/photos/stats")
+        self.assertEqual(resp_stats.status_code, 200)
+        stats_data = resp_stats.get_json()
+        self.assertTrue(stats_data["success"])
+        self.assertIn("total_students", stats_data)
+        self.assertIn("compliance_pct", stats_data)
+
+        resp_gallery = client.get("/api/photos/gallery?filter=all")
+        self.assertEqual(resp_gallery.status_code, 200)
+        gallery_data = resp_gallery.get_json()
+        self.assertTrue(gallery_data["success"])
+        self.assertIn("students", gallery_data)
+
+    def test_gui_cli_catalog_rendered(self):
+        """Verifica que la pestaña de Comandos CLI se renderice en el HTML con sus comandos clave."""
+        app = create_app()
+        client = app.test_client()
+
+        resp = client.get("/")
+        self.assertEqual(resp.status_code, 200)
+        html = resp.get_data(as_text=True)
+        self.assertIn("Terminal & Guía CLI", html)
+        self.assertIn("python3 main.py apply", html)
+        self.assertIn("python3 main.py dry-run", html)
+        self.assertIn("python3 main.py reset --all", html)
+        self.assertIn("Bajas de Alumnos", html)
+        self.assertIn("Papelera & Restauración", html)
+
 
 if __name__ == "__main__":
     unittest.main()

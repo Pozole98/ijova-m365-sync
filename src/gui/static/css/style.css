@@ -1148,6 +1148,312 @@ body.light-mode .hero-banner h2 {
   align-items: center;
   flex-wrap: wrap;
   gap: 0.75rem;
+/* ==========================================
+   ESTILOS PARA BAJAS Y PAPELERA DE RECICLAJE
+   ========================================== */
+.border-danger-card {
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.badge-danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  display: inline-block;
+  margin-bottom: 0.25rem;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.bg-danger-gradient {
+  background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%) !important;
+}
+
+.delete-confirmation-box {
+  background: var(--color-danger-bg);
+  border: 1.5px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.delete-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.delete-text-block h4 {
+  color: #f87171;
+  font-size: 1.05rem;
+  margin-bottom: 0.35rem;
+}
+
+.delete-text-block p {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  margin-bottom: 0.85rem;
+}
+
+.type-confirmation-wrapper {
+  margin-top: 0.75rem;
+}
+
+.type-confirmation-wrapper label {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  color: var(--text-primary);
+}
+
+.confirm-type-input {
+  width: 100%;
+  max-width: 320px;
+  background: var(--bg-surface);
+  border: 2px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  padding: 0.65rem 0.85rem;
+  font-size: 1rem;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.confirm-type-input:focus {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+}
+
+.btn-danger-solid {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.btn-danger-solid:hover:not(:disabled) {
+  background: #b91c1c;
+  box-shadow: 0 4px 15px rgba(220, 38, 38, 0.4);
+}
+
+.alert-success-custom {
+  background: var(--color-success-bg);
+  border-color: var(--color-success);
+}
+
+.alert-success-custom h3 {
+  color: var(--color-success);
+  font-size: 1.05rem;
+  margin-bottom: 0.25rem;
+}
+
+/* ==========================================
+   ESTILOS PARA AUDITORÍA Y GALERÍA DE FOTOS
+   ========================================== */
+.highlight-green {
+  color: var(--color-success) !important;
+}
+
+.highlight-amber {
+  color: var(--color-warning) !important;
+}
+
+.photos-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--bg-card);
+  padding: 1rem 1.25rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: 1.5rem;
+}
+
+.filter-btn-group {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.btn-filter, .btn-filter-level {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-filter.active, .btn-filter-level.active {
+  background: var(--brand-primary);
+  color: #ffffff;
+  border-color: var(--brand-primary);
+}
+
+.photos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 1.25rem;
+}
+
+.photo-student-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.photo-student-card:hover {
+  transform: translateY(-3px);
+  border-color: var(--border-focus);
+}
+
+.photo-card-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--bg-surface);
+  border: 2px solid var(--border-subtle);
+  margin-bottom: 0.75rem;
+}
+
+.photo-card-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.photo-card-avatar .avatar-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-elevated);
+  font-size: 1.5rem;
+  color: var(--text-muted);
+}
+
+.photo-card-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.2;
+  margin-bottom: 0.3rem;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-card-matricula {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--brand-cyan);
+  margin-bottom: 0.35rem;
+}
+
+.photo-card-level {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* ==========================================
+   ESTILOS PARA GUÍA DE COMANDOS CLI
+   ========================================== */
+.cli-catalog-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+  gap: 1.25rem;
+}
+
+.cli-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: 1.35rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1rem;
+  transition: border-color 0.2s ease;
+}
+
+.cli-card:hover {
+  border-color: var(--border-focus);
+}
+
+.cli-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+}
+
+.cli-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.cli-card-header h4 {
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+  color: var(--text-primary);
+}
+
+.cli-card-header p {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+
+.cli-code-block {
+  background: #090d16;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cli-code-block code {
+  font-family: var(--font-mono);
+  color: #38bdf8;
+  font-size: 0.88rem;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.btn-copy-cli {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  padding: 0.3rem 0.6rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.btn-copy-cli:hover {
+  background: var(--brand-primary);
+  color: #ffffff;
+}
+
+.cli-guarantee {
+  font-size: 0.75rem;
+  color: var(--color-success);
+  display: block;
 }
 
 /* Reglas de Impresión (@media print) */

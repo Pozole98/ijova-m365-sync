@@ -17,6 +17,8 @@ from src.config import load_config, AppConfig
 from src.graph_client import GraphClient, GraphClientError
 from src.reset_engine import verify_student_for_reset, execute_password_reset
 from src.excel_parser import parse_excel_students
+from src.delete_engine import execute_student_deletion, is_student_matricula
+from src.restore_engine import execute_student_restoration
 
 # Desactivar logs ruidosos de werkzeug en consola para mantener la salida limpia
 logging.getLogger("werkzeug").setLevel(logging.WARNING)
@@ -313,6 +315,199 @@ def create_app(config_path: str = "config.json") -> Flask:
                 "domain": config.domain,
                 "error": str(e)
             })
+
+    # =========================================================================
+    # ENDPOINTS DE BAJAS Y PAPELERA DE RECICLAJE
+    # =========================================================================
+    @app.route("/api/student/delete", methods=["POST"])
+    def api_student_delete():
+        """Da de baja una cuenta de alumno enviándola a la Papelera de Entra ID."""
+        data = request.get_json() or {}
+        matricula = data.get("matricula", "").strip()
+        confirmation = data.get("confirmation", "").strip()
+
+        if not matricula:
+            return jsonify({"success": False, "error": "Falta la matrícula del alumno."}), 400
+
+        # Salvaguarda: verificación de doble factor tecleando la matrícula
+        if confirmation != matricula:
+            return jsonify({
+                "success": False,
+                "error": f"Confirmación de seguridad requerida: Debes ingresar exactamente la matrícula '{matricula}' para confirmar la baja."
+            }), 400
+
+        is_valid, msg = is_student_matricula(matricula)
+        if not is_valid:
+            return jsonify({"success": False, "error": msg}), 400
+
+        try:
+            graph = get_graph()
+            res = execute_student_deletion(
+                identifiers=[matricula],
+                graph=graph,
+                excel_path=config.excel_path,
+                sheet_name=config.sheet_name,
+                reports_dir=config.reports_dir,
+                backups_dir=config.backups_dir,
+                auto_confirm=True
+            )
+            deleted_count = res.get("deleted_count", 0)
+            if deleted_count > 0:
+                return jsonify({
+                    "success": True,
+                    "matricula": matricula,
+                    "message": f"El alumno {matricula} fue dado de baja y su cuenta enviada a la Papelera de Reciclaje (30 días de retención recuperable)."
+                })
+            else:
+                errors = res.get("errors", [])
+                err_msg = errors[0].get("error") if errors else "No se pudo eliminar el usuario."
+                return jsonify({"success": False, "error": err_msg}), 400
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/recycle-bin")
+    def api_recycle_bin():
+        """Lista las cuentas de alumnos que se encuentran en la Papelera de Reciclaje (< 30 días)."""
+        try:
+            graph = get_graph()
+            deleted = graph.get_deleted_users()
+            student_users = []
+            from src.validator import is_valid_matricula_format
+            for u in deleted:
+                upn = (u.get("userPrincipalName") or "").strip().lower()
+                prefix = upn.split("@")[0] if "@" in upn else ""
+                nick = (u.get("mailNickname") or "").strip()
+                mat = prefix if is_valid_matricula_format(prefix) else (nick if is_valid_matricula_format(nick) else None)
+                if mat:
+                    student_users.append({
+                        "id": u.get("id"),
+                        "matricula": mat,
+                        "upn": upn,
+                        "display_name": u.get("displayName", "Alumno"),
+                        "deleted_datetime": u.get("deletedDateTime", "Recientemente")
+                    })
+            return jsonify({"success": True, "users": student_users})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/recycle-bin/restore", methods=["POST"])
+    def api_recycle_bin_restore():
+        """Restaura una cuenta de alumno desde la Papelera de Reciclaje reactivando su buzón y OneDrive."""
+        data = request.get_json() or {}
+        matricula = data.get("matricula", "").strip()
+        if not matricula:
+            return jsonify({"success": False, "error": "Falta la matrícula a restaurar."}), 400
+
+        try:
+            graph = get_graph()
+            result = execute_student_restoration(
+                identifier=matricula,
+                graph=graph,
+                domain=config.domain,
+                excel_path=config.excel_path,
+                sheet_name=config.sheet_name
+            )
+            if result:
+                return jsonify({
+                    "success": True,
+                    "matricula": matricula,
+                    "display_name": result.get("display_name"),
+                    "message": f"Cuenta de {result.get('display_name')} ({matricula}) restaurada con éxito desde la Papelera de Reciclaje."
+                })
+            else:
+                return jsonify({"success": False, "error": "No se encontró el alumno en la papelera o ya fue purgado."}), 400
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    # =========================================================================
+    # ENDPOINTS DE AUDITORÍA Y GALERÍA DE FOTOS
+    # =========================================================================
+    @app.route("/api/photos/stats")
+    def api_photos_stats():
+        """Estadísticas ejecutivas del estado de fotografías de perfil de alumnos."""
+        photos_dir = os.path.join(config.reports_dir, "fotos_perfil")
+        has_dir = os.path.exists(photos_dir)
+        photo_files = os.listdir(photos_dir) if has_dir else []
+        photo_count = len([f for f in photo_files if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
+
+        students = get_cached_students()
+        total_students = len(students)
+        with_photo = photo_count
+        without_photo = max(0, total_students - with_photo)
+        pct = round((with_photo / total_students * 100), 1) if total_students > 0 else 0
+
+        return jsonify({
+            "success": True,
+            "total_students": total_students,
+            "with_photo": with_photo,
+            "without_photo": without_photo,
+            "compliance_pct": pct,
+            "has_directory": has_dir
+        })
+
+    @app.route("/api/photos/gallery")
+    def api_photos_gallery():
+        """Retorna la lista de alumnos para la galería con filtrado dinámico."""
+        filter_type = request.args.get("filter", "all")  # all, with, without
+        level_filter = request.args.get("level", "all").lower()
+
+        students = get_cached_students()
+        photos_dir = os.path.join(config.reports_dir, "fotos_perfil")
+        existing_photos = set(os.listdir(photos_dir)) if os.path.exists(photos_dir) else set()
+
+        cards = []
+        for s in students:
+            mat = s["matricula"]
+            has_photo = any(f.startswith(f"{mat}_") for f in existing_photos)
+
+            if filter_type == "with" and not has_photo:
+                continue
+            if filter_type == "without" and has_photo:
+                continue
+            if level_filter != "all" and level_filter not in s["nivel"].lower():
+                continue
+
+            cards.append({
+                "matricula": mat,
+                "nombre": s["nombre"],
+                "nivel": s["nivel"],
+                "grado": s["grado"],
+                "upn": s["upn"],
+                "has_photo": has_photo,
+                "photo_url": f"/api/student/{mat}/photo" if has_photo else None
+            })
+
+        return jsonify({"success": True, "students": cards[:80]})
+
+    _scan_state = {"running": False, "msg": "Inactivo"}
+
+    @app.route("/api/photos/scan", methods=["POST"])
+    def api_photos_scan():
+        """Inicia el escaneo y descarga masiva de fotografías en segundo plano."""
+        nonlocal _scan_state
+        if _scan_state["running"]:
+            return jsonify({"success": False, "error": "Ya hay una auditoría de fotos en ejecución."}), 400
+
+        def _run_scan():
+            nonlocal _scan_state
+            _scan_state["running"] = True
+            _scan_state["msg"] = "Descargando fotos de Microsoft 365..."
+            try:
+                graph = get_graph()
+                from src.photo_auditor import audit_profile_photos
+                audit_profile_photos(graph=graph, config=config, max_workers=8)
+                _scan_state["msg"] = "Auditoría completada exitosamente."
+            except Exception as e:
+                _scan_state["msg"] = f"Error: {e}"
+            finally:
+                _scan_state["running"] = False
+
+        threading.Thread(target=_run_scan, daemon=True).start()
+        return jsonify({"success": True, "message": "Auditoría de fotos iniciada en segundo plano."})
+
+    @app.route("/api/photos/scan/status")
+    def api_photos_scan_status():
+        return jsonify(_scan_state)
 
     return app
 
