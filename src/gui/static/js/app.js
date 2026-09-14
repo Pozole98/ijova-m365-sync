@@ -1,12 +1,13 @@
 /**
- * IJOVA • Panel de Gestión Microsoft 365
- * Lógica interactiva completa:
- * - Reseteo Seguro con Verificación
- * - Bajas con Confirmación Estricta
- * - Papelera de Reciclaje y Restauración
- * - Auditoría y Galería de Fotografías
- * - Bitácora Histórica
- * - Catálogo de Comandos CLI con Copiado Rápido
+ * IJOVA • Cloud Identity Hub • Microsoft 365
+ * Enterprise SaaS Client Controller:
+ * - Reseteo Seguro con Verificación Previa y Confirmación Obligatoria
+ * - Bajas Controladas con Candado de Matrícula
+ * - Papelera de Reciclaje y Restauración en 1 Clic
+ * - Auditoría y Galería Filtrable de Fotos de Perfil
+ * - Bitácora Histórica de Reseteos y Comprobantes
+ * - Terminal & Guía CLI con Botones de Copiado Rápido
+ * - Sistema de Notificaciones Toast Flotantes
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -18,10 +19,50 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeLevelFilter = 'all';
 
   // ==========================================
-  // NAVEGACIÓN POR PESTAÑAS
+  // SISTEMA DE NOTIFICACIONES TOAST
+  // ==========================================
+  function showToast(message, type = 'info') {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+
+    const toast = document.createElement('div');
+    toast.className = `toast-item toast-${type}`;
+
+    let iconSvg = '';
+    if (type === 'success') {
+      iconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--color-green); flex-shrink: 0;"><polyline points="20 6 9 17 4 12"/></svg>';
+    } else if (type === 'error') {
+      iconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--color-danger); flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>';
+    } else {
+      iconSvg = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color: var(--brand-blue); flex-shrink: 0;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>';
+    }
+
+    toast.innerHTML = `${iconSvg}<span>${message}</span>`;
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateY(10px)';
+      setTimeout(() => toast.remove(), 250);
+    }, 3600);
+  }
+
+  // ==========================================
+  // NAVEGACIÓN POR PESTAÑAS & BREADCRUMBS
   // ==========================================
   const tabButtons = document.querySelectorAll('.tab-btn');
   const tabContents = document.querySelectorAll('.tab-content');
+  const breadcrumbCurrent = document.getElementById('active-breadcrumb-title');
+
+  const tabTitles = {
+    'tab-reset': 'Restablecer Contraseña',
+    'tab-delete': 'Bajas de Alumnos',
+    'tab-recycle': 'Papelera & Restauración',
+    'tab-photos': 'Auditoría de Fotos de Perfil',
+    'tab-history': 'Historial de Fichas',
+    'tab-tenant': 'Salud del Tenant',
+    'tab-cli': 'Terminal & Guía CLI'
+  };
 
   function switchTab(targetTabId) {
     tabButtons.forEach(b => {
@@ -42,7 +83,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
 
-    // Carga de datos bajo demanda según pestaña
+    if (breadcrumbCurrent && tabTitles[targetTabId]) {
+      breadcrumbCurrent.textContent = tabTitles[targetTabId];
+    }
+
+    // Carga de datos bajo demanda
     if (targetTabId === 'tab-recycle') {
       loadRecycleBin();
     } else if (targetTabId === 'tab-photos') {
@@ -62,7 +107,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
 
-  // Botón para saltar a la papelera desde el resultado de baja
   const btnGotoRecycleBin = document.getElementById('btn-goto-recycle-bin');
   if (btnGotoRecycleBin) {
     btnGotoRecycleBin.addEventListener('click', () => {
@@ -79,21 +123,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedTheme = localStorage.getItem('ijova_theme');
   if (savedTheme === 'light') {
     document.body.classList.add('light-mode');
-    themeIcon.textContent = '☀️';
+    if (themeIcon) themeIcon.textContent = '☀️';
   }
 
-  btnThemeToggle.addEventListener('click', () => {
-    document.body.classList.toggle('light-mode');
-    const isLight = document.body.classList.contains('light-mode');
-    themeIcon.textContent = isLight ? '☀️' : '🌙';
-    localStorage.setItem('ijova_theme', isLight ? 'light' : 'dark');
-  });
+  if (btnThemeToggle) {
+    btnThemeToggle.addEventListener('click', () => {
+      document.body.classList.toggle('light-mode');
+      const isLight = document.body.classList.contains('light-mode');
+      if (themeIcon) themeIcon.textContent = isLight ? '☀️' : '🌙';
+      localStorage.setItem('ijova_theme', isLight ? 'light' : 'dark');
+      showToast(isLight ? 'Modo claro activado' : 'Modo oscuro activado', 'info');
+    });
+  }
 
   // ==========================================
   // PESTAÑA 1: RESTABLECER CONTRASEÑA
   // ==========================================
   const searchInput = document.getElementById('search-matricula-input');
   const btnSearch = document.getElementById('btn-search-student');
+  const btnClearSearch = document.getElementById('btn-clear-search');
   const autocompleteList = document.getElementById('search-autocomplete-list');
   const loadingIndicator = document.getElementById('student-loading-indicator');
   const notFoundAlert = document.getElementById('student-not-found-alert');
@@ -137,276 +185,324 @@ document.addEventListener('DOMContentLoaded', () => {
   const ticketUpn = document.getElementById('ticket-upn');
   const ticketPassword = document.getElementById('ticket-password');
 
-  // Autocomplete predictivo
-  searchInput.addEventListener('input', (e) => {
-    const query = e.target.value.trim();
-    clearTimeout(searchDebounceTimeout);
-
-    if (query.length < 2) {
-      autocompleteList.style.display = 'none';
-      return;
-    }
-
-    searchDebounceTimeout = setTimeout(async () => {
-      try {
-        const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
-        const data = await resp.json();
-        renderAutocomplete(data.results || []);
-      } catch (err) {
-        console.error('Error en búsqueda predictiva:', err);
-      }
-    }, 250);
-  });
-
-  function renderAutocomplete(results) {
-    autocompleteList.innerHTML = '';
-    if (results.length === 0) {
-      autocompleteList.style.display = 'none';
-      return;
-    }
-
-    results.forEach(item => {
-      const row = document.createElement('div');
-      row.className = 'autocomplete-item';
-      row.innerHTML = `
-        <div>
-          <span class="student-title">${item.nombre}</span>
-          <div class="student-meta">🎓 ${item.matricula} • ${item.nivel} (${item.grado})</div>
-        </div>
-        <span class="badge badge-success">Seleccionar</span>
-      `;
-      row.addEventListener('click', () => {
-        searchInput.value = item.matricula;
-        autocompleteList.style.display = 'none';
-        verifyStudent(item.matricula);
-      });
-      autocompleteList.appendChild(row);
+  // Control de botón limpiar
+  if (searchInput && btnClearSearch) {
+    searchInput.addEventListener('input', () => {
+      btnClearSearch.style.display = searchInput.value.length > 0 ? 'block' : 'none';
     });
-
-    autocompleteList.style.display = 'block';
+    btnClearSearch.addEventListener('click', () => {
+      searchInput.value = '';
+      btnClearSearch.style.display = 'none';
+      autocompleteList.style.display = 'none';
+      searchInput.focus();
+    });
   }
 
-  document.addEventListener('click', (e) => {
-    if (!searchInput.contains(e.target) && !autocompleteList.contains(e.target)) {
-      autocompleteList.style.display = 'none';
-    }
-  });
+  // Autocomplete predictivo
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      const query = e.target.value.trim();
+      clearTimeout(searchDebounceTimeout);
 
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      autocompleteList.style.display = 'none';
-      const val = searchInput.value.trim();
-      if (val) verifyStudent(val);
-    }
-  });
+      if (query.length < 2) {
+        autocompleteList.style.display = 'none';
+        return;
+      }
 
-  btnSearch.addEventListener('click', () => {
+      searchDebounceTimeout = setTimeout(async () => {
+        try {
+          const resp = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+          const data = await resp.json();
+
+          if (!data.success || !data.results || data.results.length === 0) {
+            autocompleteList.style.display = 'none';
+            return;
+          }
+
+          autocompleteList.innerHTML = '';
+          data.results.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'autocomplete-item';
+
+            const nameParts = (item.nombre || item.upn).split(' ');
+            const initials = ((nameParts[0]?.[0] || 'A') + (nameParts[1]?.[0] || 'L')).toUpperCase();
+
+            row.innerHTML = `
+              <div class="auto-student-info">
+                <div class="auto-avatar-mini">${initials}</div>
+                <div>
+                  <div class="auto-name-val">${item.nombre}</div>
+                  <div class="auto-level-val">${item.nivel || 'Estudiante'} • ${item.upn}</div>
+                </div>
+              </div>
+              <span class="auto-mat-val">${item.matricula}</span>
+            `;
+            row.addEventListener('click', () => {
+              searchInput.value = item.matricula;
+              autocompleteList.style.display = 'none';
+              verifyStudent(item.matricula);
+            });
+            autocompleteList.appendChild(row);
+          });
+          autocompleteList.style.display = 'block';
+
+        } catch (err) {
+          console.error('Error en búsqueda predictiva:', err);
+        }
+      }, 220);
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !autocompleteList.contains(e.target)) {
+        autocompleteList.style.display = 'none';
+      }
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        autocompleteList.style.display = 'none';
+        const query = searchInput.value.trim();
+        if (query) verifyStudent(query);
+      }
+    });
+  }
+
+  if (btnSearch) {
+    btnSearch.addEventListener('click', () => {
+      const query = searchInput.value.trim();
+      if (query) verifyStudent(query);
+    });
+  }
+
+  // Verificación en vivo contra Entra ID
+  async function verifyStudent(identifier) {
     autocompleteList.style.display = 'none';
-    const val = searchInput.value.trim();
-    if (val) verifyStudent(val);
-  });
-
-  async function verifyStudent(matricula) {
-    matricula = matricula.trim();
-    if (!matricula) return;
-
     verificationCard.style.display = 'none';
     notFoundAlert.style.display = 'none';
     successCard.style.display = 'none';
-    loadingIndicator.style.display = 'block';
-    currentStudent = null;
-    confirmCheckbox.checked = false;
-    btnExecuteReset.disabled = true;
+
+    loadingIndicator.style.display = 'flex';
+    if (btnSearch) {
+      btnSearch.querySelector('.btn-text').style.display = 'none';
+      btnSearch.querySelector('.btn-spinner').style.display = 'inline-block';
+      btnSearch.disabled = true;
+    }
 
     try {
-      const resp = await fetch(`/api/student/${encodeURIComponent(matricula)}`);
+      const resp = await fetch(`/api/student/${encodeURIComponent(identifier)}`);
       const result = await resp.json();
+
       loadingIndicator.style.display = 'none';
+      if (btnSearch) {
+        btnSearch.querySelector('.btn-text').style.display = 'inline';
+        btnSearch.querySelector('.btn-spinner').style.display = 'none';
+        btnSearch.disabled = false;
+      }
 
       if (!result.success || !result.data || !result.data.registered) {
-        alertErrorTitle.textContent = 'Alumno No Registrado en Microsoft 365';
-        alertErrorDesc.textContent = result.data?.error || result.error || `La matrícula ${matricula} no existe en Entra ID.`;
+        alertErrorTitle.textContent = 'Alumno No Registrado';
+        alertErrorDesc.textContent = result.data?.error || result.error || `La matrícula ${identifier} no existe en Microsoft Entra ID.`;
         notFoundAlert.style.display = 'flex';
+        showToast(`El alumno ${identifier} no está registrado en Microsoft 365.`, 'error');
         return;
       }
 
-      const st = result.data;
-      currentStudent = st;
+      currentStudent = result.data;
 
-      studentDisplayName.textContent = st.nombre_oficial || st.display_name;
-      studentMatriculaVal.textContent = st.matricula;
-      studentUpnVal.textContent = st.upn;
-      studentLevelVal.textContent = `${st.nivel} — ${st.grado_semestre}`;
-      studentIdVal.textContent = st.user_id || 'Microsoft Entra ID';
+      studentDisplayName.textContent = currentStudent.nombre_oficial || currentStudent.display_name;
+      studentMatriculaVal.textContent = currentStudent.matricula;
+      studentUpnVal.textContent = currentStudent.upn;
+      studentLevelVal.textContent = `${currentStudent.nivel} (${currentStudent.grado_semestre})`;
+      studentIdVal.textContent = currentStudent.id || 'Nube Entra ID';
 
-      const nameParts = (st.nombre_oficial || st.display_name).split(' ');
-      const initials = (nameParts[0]?.[0] || 'A') + (nameParts[1]?.[0] || 'L');
-      studentInitials.textContent = initials.toUpperCase();
+      const nameParts = (currentStudent.nombre_oficial || currentStudent.display_name).split(' ');
+      studentInitials.textContent = ((nameParts[0]?.[0] || 'A') + (nameParts[1]?.[0] || 'L')).toUpperCase();
 
-      if (st.has_photo) {
-        studentPhotoImg.src = `/api/student/${encodeURIComponent(st.matricula)}/photo?t=${Date.now()}`;
+      if (currentStudent.has_photo) {
+        studentPhotoImg.src = `/api/student/${encodeURIComponent(currentStudent.matricula)}/photo?t=${Date.now()}`;
         studentPhotoImg.style.display = 'block';
         studentAvatarPlaceholder.style.display = 'none';
-        studentPhotoStatus.textContent = '📸 Fotografía institucional';
+        studentPhotoStatus.textContent = '✓ Foto Oficial Configurada';
+        studentPhotoStatus.style.color = 'var(--color-green)';
       } else {
         studentPhotoImg.style.display = 'none';
         studentAvatarPlaceholder.style.display = 'flex';
-        studentPhotoStatus.textContent = '⚪ Sin foto de perfil';
+        studentPhotoStatus.textContent = 'Sin foto registrada';
+        studentPhotoStatus.style.color = 'var(--text-muted)';
       }
 
-      if (st.account_enabled) {
-        accountStatusBadge.textContent = 'Cuenta Activa';
-        accountStatusBadge.className = 'account-status-badge';
-      } else {
-        accountStatusBadge.textContent = 'Cuenta Deshabilitada';
-        accountStatusBadge.className = 'account-status-badge disabled';
-      }
+      confirmCheckbox.checked = false;
+      btnExecuteReset.disabled = true;
 
       verificationCard.style.display = 'block';
       verificationCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showToast(`Alumno ${currentStudent.matricula} verificado con éxito en Entra ID.`, 'success');
 
     } catch (err) {
       loadingIndicator.style.display = 'none';
-      alertErrorTitle.textContent = 'Error de Comunicación';
-      alertErrorDesc.textContent = `No fue posible conectar con el servicio: ${err.message}`;
+      if (btnSearch) {
+        btnSearch.querySelector('.btn-text').style.display = 'inline';
+        btnSearch.querySelector('.btn-spinner').style.display = 'none';
+        btnSearch.disabled = false;
+      }
+      alertErrorTitle.textContent = 'Error de Conexión';
+      alertErrorDesc.textContent = `No se pudo conectar con el servidor: ${err.message}`;
       notFoundAlert.style.display = 'flex';
+      showToast(`Error de conexión con el servidor: ${err.message}`, 'error');
     }
   }
 
-  confirmCheckbox.addEventListener('change', () => {
-    btnExecuteReset.disabled = !confirmCheckbox.checked;
-  });
+  // Checkbox de confirmación obligatoria
+  if (confirmCheckbox) {
+    confirmCheckbox.addEventListener('change', (e) => {
+      btnExecuteReset.disabled = !e.target.checked;
+    });
+  }
 
-  btnCancelReset.addEventListener('click', () => {
-    verificationCard.style.display = 'none';
-    currentStudent = null;
-    searchInput.value = '';
-    searchInput.focus();
-  });
+  // Alternador de modos de contraseña
+  if (pwModeAuto && pwModeCustom) {
+    pwModeAuto.addEventListener('change', () => {
+      customPwField.style.display = 'none';
+    });
 
-  pwModeAuto.addEventListener('change', () => {
-    customPwField.style.display = 'none';
-  });
+    pwModeCustom.addEventListener('change', () => {
+      customPwField.style.display = 'block';
+      inputCustomPassword.focus();
+    });
+  }
 
-  pwModeCustom.addEventListener('change', () => {
-    customPwField.style.display = 'block';
-    inputCustomPassword.focus();
-  });
+  if (btnToggleCustomPw && inputCustomPassword) {
+    btnToggleCustomPw.addEventListener('click', () => {
+      const isPw = inputCustomPassword.type === 'password';
+      inputCustomPassword.type = isPw ? 'text' : 'password';
+      btnToggleCustomPw.textContent = isPw ? '🔒 Ocultar' : '👁️ Ver';
+    });
+  }
 
-  btnToggleCustomPw.addEventListener('click', () => {
-    const isPassword = inputCustomPassword.type === 'password';
-    inputCustomPassword.type = isPassword ? 'text' : 'password';
-    btnToggleCustomPw.textContent = isPassword ? '🔒 Ocultar' : '👁️ Ver';
-  });
-
-  btnExecuteReset.addEventListener('click', async () => {
-    if (!currentStudent || !confirmCheckbox.checked) {
-      alert('Debes confirmar expresamente la identidad del alumno antes de continuar.');
-      return;
-    }
-
-    let customPw = null;
-    if (pwModeCustom.checked) {
-      customPw = inputCustomPassword.value.trim();
-      if (!customPw) {
-        alert('Por favor ingresa la contraseña personalizada o selecciona la opción aleatoria.');
-        inputCustomPassword.focus();
-        return;
-      }
-    }
-
-    const forceChange = forceChangeCheckbox.checked;
-
-    btnExecuteReset.disabled = true;
-    const btnText = btnExecuteReset.querySelector('.btn-text');
-    const btnSpinner = btnExecuteReset.querySelector('.btn-spinner');
-    if (btnText) btnText.style.display = 'none';
-    if (btnSpinner) btnSpinner.style.display = 'inline';
-
-    try {
-      const payload = {
-        matricula: currentStudent.matricula,
-        confirmed: true,
-        custom_password: customPw || undefined,
-        force_change: forceChange
-      };
-
-      const resp = await fetch('/api/reset-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const result = await resp.json();
-
-      if (!result.success) {
-        alert(`❌ Error al restablecer: ${result.error}`);
-        btnExecuteReset.disabled = false;
-        if (btnText) btnText.style.display = 'inline';
-        if (btnSpinner) btnSpinner.style.display = 'none';
-        return;
-      }
-
+  // Cancelar reseteo
+  if (btnCancelReset) {
+    btnCancelReset.addEventListener('click', () => {
       verificationCard.style.display = 'none';
-      successCard.style.display = 'block';
+      currentStudent = null;
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+      }
+      showToast('Operación cancelada por el usuario.', 'info');
+    });
+  }
 
-      successStudentName.textContent = result.nombre_oficial || result.display_name;
-      successStudentUpn.textContent = result.upn;
-      successPasswordVal.textContent = result.password;
-
-      ticketName.textContent = result.nombre_oficial || result.display_name;
-      ticketMatricula.textContent = result.matricula;
-      ticketLevel.textContent = `${result.nivel} (${result.grado_semestre})`;
-      ticketUpn.textContent = result.upn;
-      ticketPassword.textContent = result.password;
-
-      if (result.pdf_url) {
-        btnPrintVoucher.href = result.pdf_url;
-        btnPrintVoucher.onclick = (e) => {
-          e.preventDefault();
-          const win = window.open(result.pdf_url, '_blank');
-          if (win) win.focus();
-        };
-
-        btnDownloadVoucher.href = `${result.pdf_url}?download=1`;
-        btnDownloadVoucher.style.display = 'inline-flex';
-      } else {
-        btnPrintVoucher.onclick = (e) => {
-          e.preventDefault();
-          window.print();
-        };
-        btnDownloadVoucher.style.display = 'none';
+  // Ejecución de reseteo
+  if (btnExecuteReset) {
+    btnExecuteReset.addEventListener('click', async () => {
+      if (!currentStudent || !confirmCheckbox.checked) {
+        showToast('Debes marcar la casilla de verificación antes de continuar.', 'error');
+        return;
       }
 
-      successCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      let passwordMode = 'auto';
+      let customPassword = null;
 
-    } catch (err) {
-      alert(`Error inesperado al comunicarse con el servidor: ${err.message}`);
-    } finally {
-      btnExecuteReset.disabled = false;
-      if (btnText) btnText.style.display = 'inline';
-      if (btnSpinner) btnSpinner.style.display = 'none';
-    }
-  });
+      if (pwModeCustom.checked) {
+        passwordMode = 'custom';
+        customPassword = inputCustomPassword.value.trim();
+        if (!customPassword || customPassword.length < 8) {
+          showToast('La contraseña personalizada debe tener al menos 8 caracteres.', 'error');
+          inputCustomPassword.focus();
+          return;
+        }
+      }
 
-  btnCopyPw.addEventListener('click', async () => {
-    const pw = successPasswordVal.textContent.trim();
-    try {
-      await navigator.clipboard.writeText(pw);
-      btnCopyPw.textContent = '✓ ¡Copiada!';
-      setTimeout(() => { btnCopyPw.textContent = '📋 Copiar'; }, 2000);
-    } catch (err) {
-      alert(`Contraseña: ${pw}`);
-    }
-  });
+      btnExecuteReset.disabled = true;
+      btnExecuteReset.querySelector('.btn-text').style.display = 'none';
+      btnExecuteReset.querySelector('.btn-spinner').style.display = 'inline-flex';
 
-  btnResetAnother.addEventListener('click', () => {
-    successCard.style.display = 'none';
-    searchInput.value = '';
-    searchInput.focus();
-    currentStudent = null;
-  });
+      try {
+        const payload = {
+          matricula: currentStudent.matricula,
+          confirmed: true,
+          password_mode: passwordMode,
+          custom_password: customPassword,
+          force_change: forceChangeCheckbox.checked
+        };
+
+        const resp = await fetch('/api/reset-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await resp.json();
+
+        btnExecuteReset.querySelector('.btn-text').style.display = 'inline';
+        btnExecuteReset.querySelector('.btn-spinner').style.display = 'none';
+
+        if (!data.success) {
+          btnExecuteReset.disabled = false;
+          showToast(`Error: ${data.error}`, 'error');
+          return;
+        }
+
+        verificationCard.style.display = 'none';
+
+        successStudentName.textContent = data.data.display_name;
+        successStudentUpn.textContent = data.data.upn;
+        successPasswordVal.textContent = data.data.new_password;
+
+        ticketName.textContent = data.data.display_name;
+        ticketMatricula.textContent = data.data.matricula;
+        ticketLevel.textContent = data.data.nivel || currentStudent.nivel || 'Estudiante';
+        ticketUpn.textContent = data.data.upn;
+        ticketPassword.textContent = data.data.new_password;
+
+        if (data.data.pdf_filename) {
+          btnPrintVoucher.href = `/api/pdf/${data.data.pdf_filename}`;
+          btnDownloadVoucher.href = `/api/pdf/${data.data.pdf_filename}`;
+          btnPrintVoucher.style.display = 'inline-flex';
+          btnDownloadVoucher.style.display = 'inline-flex';
+        } else {
+          btnPrintVoucher.style.display = 'none';
+          btnDownloadVoucher.style.display = 'none';
+        }
+
+        successCard.style.display = 'block';
+        successCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        showToast('¡Contraseña restablecida exitosamente en Microsoft 365!', 'success');
+
+      } catch (err) {
+        btnExecuteReset.disabled = false;
+        btnExecuteReset.querySelector('.btn-text').style.display = 'inline';
+        btnExecuteReset.querySelector('.btn-spinner').style.display = 'none';
+        showToast(`Error al procesar el reseteo: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  // Copiar contraseña
+  if (btnCopyPw) {
+    btnCopyPw.addEventListener('click', async () => {
+      const pw = successPasswordVal.textContent;
+      try {
+        await navigator.clipboard.writeText(pw);
+        showToast('Contraseña temporal copiada al portapapeles.', 'success');
+      } catch (e) {
+        prompt('Copia manualmente la contraseña:', pw);
+      }
+    });
+  }
+
+  // Atender a otro alumno
+  if (btnResetAnother) {
+    btnResetAnother.addEventListener('click', () => {
+      successCard.style.display = 'none';
+      currentStudent = null;
+      if (searchInput) {
+        searchInput.value = '';
+        searchInput.focus();
+      }
+    });
+  }
 
   // ==========================================
   // PESTAÑA 2: BAJAS DE ALUMNOS (ZONA CONTROLADA)
@@ -415,6 +511,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnSearchDelete = document.getElementById('btn-search-delete-student');
   const deleteStudentCard = document.getElementById('delete-student-card');
   const deleteResultAlert = document.getElementById('delete-result-alert');
+  const deleteResultTitle = document.getElementById('delete-result-title');
   const deleteResultDesc = document.getElementById('delete-result-desc');
 
   const deleteStudentDisplayName = document.getElementById('delete-student-display-name');
@@ -427,6 +524,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const deleteTargetHint = document.getElementById('delete-target-hint');
   const inputDeleteConfirmCode = document.getElementById('input-delete-confirm-code');
+  const deleteLockBadge = document.getElementById('delete-lock-status-badge');
   const btnExecuteDelete = document.getElementById('btn-execute-delete');
   const btnCancelDelete = document.getElementById('btn-cancel-delete');
 
@@ -439,12 +537,17 @@ document.addEventListener('DOMContentLoaded', () => {
     inputDeleteConfirmCode.value = '';
     btnExecuteDelete.disabled = true;
 
+    if (deleteLockBadge) {
+      deleteLockBadge.className = 'lock-status-pill locked';
+      deleteLockBadge.textContent = '🔒 Bloqueado';
+    }
+
     try {
       const resp = await fetch(`/api/student/${encodeURIComponent(matricula)}`);
       const result = await resp.json();
 
       if (!result.success || !result.data || !result.data.registered) {
-        alert(result.data?.error || result.error || `El alumno ${matricula} no existe en Microsoft 365.`);
+        showToast(result.data?.error || result.error || `El alumno ${matricula} no existe en Microsoft 365.`, 'error');
         return;
       }
 
@@ -471,80 +574,99 @@ document.addEventListener('DOMContentLoaded', () => {
       deleteStudentCard.style.display = 'block';
       deleteStudentCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
       inputDeleteConfirmCode.focus();
+      showToast(`Alumno ${currentDeleteStudent.matricula} localizado. Escribe su matrícula para confirmar la baja.`, 'info');
 
     } catch (err) {
-      alert(`Error al buscar alumno: ${err.message}`);
+      showToast(`Error al buscar alumno: ${err.message}`, 'error');
     }
   }
 
-  btnSearchDelete.addEventListener('click', searchStudentForDelete);
-  deleteSearchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      searchStudentForDelete();
-    }
-  });
+  if (btnSearchDelete) btnSearchDelete.addEventListener('click', searchStudentForDelete);
+  if (deleteSearchInput) {
+    deleteSearchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchStudentForDelete();
+      }
+    });
+  }
 
-  // Candado de seguridad: solo se activa si la matrícula escrita coincide exactamente
-  inputDeleteConfirmCode.addEventListener('input', (e) => {
-    const val = e.target.value.trim();
-    if (currentDeleteStudent && val === currentDeleteStudent.matricula) {
-      btnExecuteDelete.disabled = false;
-    } else {
-      btnExecuteDelete.disabled = true;
-    }
-  });
+  // Candado de seguridad estricto: la matrícula debe coincidir exactamente
+  if (inputDeleteConfirmCode) {
+    inputDeleteConfirmCode.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      const isMatch = currentDeleteStudent && val === currentDeleteStudent.matricula;
+      btnExecuteDelete.disabled = !isMatch;
 
-  btnCancelDelete.addEventListener('click', () => {
-    deleteStudentCard.style.display = 'none';
-    currentDeleteStudent = null;
-    deleteSearchInput.value = '';
-    deleteSearchInput.focus();
-  });
+      if (deleteLockBadge) {
+        if (isMatch) {
+          deleteLockBadge.className = 'lock-status-pill unlocked';
+          deleteLockBadge.textContent = '🔓 Desbloqueado';
+        } else {
+          deleteLockBadge.className = 'lock-status-pill locked';
+          deleteLockBadge.textContent = '🔒 Bloqueado';
+        }
+      }
+    });
+  }
 
-  btnExecuteDelete.addEventListener('click', async () => {
-    if (!currentDeleteStudent) return;
-    const confirmVal = inputDeleteConfirmCode.value.trim();
+  if (btnCancelDelete) {
+    btnCancelDelete.addEventListener('click', () => {
+      deleteStudentCard.style.display = 'none';
+      currentDeleteStudent = null;
+      if (deleteSearchInput) {
+        deleteSearchInput.value = '';
+        deleteSearchInput.focus();
+      }
+      showToast('Baja cancelada.', 'info');
+    });
+  }
 
-    if (confirmVal !== currentDeleteStudent.matricula) {
-      alert(`Debes escribir exactamente la matrícula '${currentDeleteStudent.matricula}' para confirmar.`);
-      inputDeleteConfirmCode.focus();
-      return;
-    }
-
-    btnExecuteDelete.disabled = true;
-    btnExecuteDelete.textContent = '⏳ Enviando a Papelera...';
-
-    try {
-      const resp = await fetch('/api/student/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          matricula: currentDeleteStudent.matricula,
-          confirmation: confirmVal
-        })
-      });
-
-      const res = await resp.json();
-
-      if (!res.success) {
-        alert(`❌ Error al dar de baja: ${res.error}`);
-        btnExecuteDelete.disabled = false;
-        btnExecuteDelete.textContent = '🗑️ Confirmar Baja a Papelera de Reciclaje';
+  if (btnExecuteDelete) {
+    btnExecuteDelete.addEventListener('click', async () => {
+      if (!currentDeleteStudent) return;
+      const code = inputDeleteConfirmCode.value.trim();
+      if (code !== currentDeleteStudent.matricula) {
+        showToast('Debes ingresar exactamente la matrícula del alumno para confirmar.', 'error');
         return;
       }
 
-      deleteStudentCard.style.display = 'none';
-      deleteResultDesc.textContent = res.message;
-      deleteResultAlert.style.display = 'flex';
-      deleteResultAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      btnExecuteDelete.disabled = true;
+      btnExecuteDelete.textContent = '⏳ Procesando baja en Microsoft 365...';
 
-    } catch (err) {
-      alert(`Error inesperado: ${err.message}`);
-      btnExecuteDelete.disabled = false;
-      btnExecuteDelete.textContent = '🗑️ Confirmar Baja a Papelera de Reciclaje';
-    }
-  });
+      try {
+        const resp = await fetch('/api/student/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matricula: currentDeleteStudent.matricula,
+            confirmation: code
+          })
+        });
+
+        const data = await resp.json();
+
+        if (data.success) {
+          deleteStudentCard.style.display = 'none';
+          deleteResultTitle.textContent = 'Baja Aplicada Exitosamente';
+          deleteResultDesc.textContent = `La cuenta ${currentDeleteStudent.matricula} (@${currentDeleteStudent.upn}) fue enviada a la Papelera de Reciclaje (30 días de retención).`;
+          deleteResultAlert.style.display = 'flex';
+          deleteResultAlert.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          showToast(`Alumno ${currentDeleteStudent.matricula} enviado a la papelera.`, 'success');
+          currentDeleteStudent = null;
+          if (deleteSearchInput) deleteSearchInput.value = '';
+        } else {
+          btnExecuteDelete.disabled = false;
+          btnExecuteDelete.textContent = 'Confirmar Baja a Papelera de Reciclaje';
+          showToast(`Error al procesar la baja: ${data.error}`, 'error');
+        }
+      } catch (err) {
+        btnExecuteDelete.disabled = false;
+        btnExecuteDelete.textContent = 'Confirmar Baja a Papelera de Reciclaje';
+        showToast(`Error de conexión: ${err.message}`, 'error');
+      }
+    });
+  }
 
   // ==========================================
   // PESTAÑA 3: PAPELERA DE RECICLAJE & RESTAURACIÓN
@@ -553,14 +675,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRefreshRecycle = document.getElementById('btn-refresh-recycle');
 
   async function loadRecycleBin() {
-    recycleTbody.innerHTML = '<tr><td colspan="6" class="text-center">Consultando Papelera de Microsoft Entra ID...</td></tr>';
+    recycleTbody.innerHTML = '<tr><td colspan="6" class="table-empty-row">Consultando Papelera de Microsoft Entra ID...</td></tr>';
     try {
       const resp = await fetch('/api/recycle-bin');
       const data = await resp.json();
       const users = data.users || [];
 
       if (users.length === 0) {
-        recycleTbody.innerHTML = '<tr><td colspan="6" class="text-center">✨ La Papelera de Reciclaje está vacía. No hay cuentas de alumnos eliminadas recientemente.</td></tr>';
+        recycleTbody.innerHTML = '<tr><td colspan="6" class="table-empty-row">✨ La Papelera de Reciclaje está vacía. No hay cuentas de alumnos en retención.</td></tr>';
         return;
       }
 
@@ -573,9 +695,9 @@ document.addEventListener('DOMContentLoaded', () => {
           <td class="mono">${u.upn}</td>
           <td class="mono">${u.deleted_datetime}</td>
           <td><span class="badge badge-success">Recuperable (< 30 días)</span></td>
-          <td>
-            <button type="button" class="btn btn-sm btn-primary btn-restore-user" data-mat="${u.matricula}">
-              🔄 Restaurar Cuenta
+          <td class="text-right">
+            <button type="button" class="btn btn-sm btn-primary-saas btn-restore-user" data-mat="${u.matricula}">
+              Restaurar Alumno
             </button>
           </td>
         `;
@@ -586,10 +708,8 @@ document.addEventListener('DOMContentLoaded', () => {
       document.querySelectorAll('.btn-restore-user').forEach(b => {
         b.addEventListener('click', async () => {
           const mat = b.getAttribute('data-mat');
-          if (!confirm(`¿Deseas restaurar la cuenta del alumno ${mat} preservando su buzón y OneDrive?`)) return;
-
           b.disabled = true;
-          b.textContent = '⏳ Restaurando...';
+          b.textContent = 'Restaurando...';
 
           try {
             const rResp = await fetch('/api/recycle-bin/restore', {
@@ -600,23 +720,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const rData = await rResp.json();
 
             if (rData.success) {
-              alert(`✅ ${rData.message}`);
+              showToast(`Cuenta ${mat} restaurada con éxito en Microsoft 365.`, 'success');
               loadRecycleBin();
             } else {
-              alert(`❌ Error al restaurar: ${rData.error}`);
+              showToast(`Error al restaurar: ${rData.error}`, 'error');
               b.disabled = false;
-              b.textContent = '🔄 Restaurar Cuenta';
+              b.textContent = 'Restaurar Alumno';
             }
           } catch (err) {
-            alert(`Error de conexión: ${err.message}`);
+            showToast(`Error de conexión: ${err.message}`, 'error');
             b.disabled = false;
-            b.textContent = '🔄 Restaurar Cuenta';
+            b.textContent = 'Restaurar Alumno';
           }
         });
       });
 
     } catch (err) {
-      recycleTbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--color-danger);">Error al consultar papelera: ${err.message}</td></tr>`;
+      recycleTbody.innerHTML = `<tr><td colspan="6" class="table-empty-row" style="color: var(--color-danger);">Error al consultar papelera: ${err.message}</td></tr>`;
     }
   }
 
@@ -650,47 +770,47 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   async function loadPhotosGallery(filterType = 'all', levelFilter = 'all') {
-    photosGalleryGrid.innerHTML = '<p class="text-center" style="grid-column: 1 / -1; padding: 2rem; color: var(--text-muted);">Cargando catálogo fotográfico...</p>';
+    photosGalleryGrid.innerHTML = '<p class="table-empty-row" style="grid-column: 1 / -1;">Cargando catálogo fotográfico...</p>';
     try {
       const resp = await fetch(`/api/photos/gallery?filter=${encodeURIComponent(filterType)}&level=${encodeURIComponent(levelFilter)}`);
       const data = await resp.json();
       const students = data.students || [];
 
       if (students.length === 0) {
-        photosGalleryGrid.innerHTML = '<p class="text-center" style="grid-column: 1 / -1; padding: 2rem; color: var(--text-muted);">No se encontraron alumnos con los filtros seleccionados.</p>';
+        photosGalleryGrid.innerHTML = '<p class="table-empty-row" style="grid-column: 1 / -1;">No se encontraron alumnos con los filtros seleccionados.</p>';
         return;
       }
 
       photosGalleryGrid.innerHTML = '';
       students.forEach(s => {
         const card = document.createElement('div');
-        card.className = 'photo-student-card';
+        card.className = 'photo-card-saas';
 
         const nameParts = s.nombre.split(' ');
         const initials = ((nameParts[0]?.[0] || 'A') + (nameParts[1]?.[0] || 'L')).toUpperCase();
 
         const avatarHtml = s.has_photo
           ? `<img src="${s.photo_url}" alt="Foto de ${s.nombre}" loading="lazy">`
-          : `<div class="avatar-ph">${initials}</div>`;
+          : `<span>${initials}</span>`;
 
-        const badgeHtml = s.has_photo
-          ? `<span class="badge badge-success">📸 Con foto</span>`
-          : `<span class="badge badge-danger">⚪ Sin foto</span>`;
+        const pillHtml = s.has_photo
+          ? `<span class="photo-card-pill has-photo">✓ Foto Oficial</span>`
+          : `<span class="photo-card-pill no-photo">○ Sin Foto</span>`;
 
         card.innerHTML = `
           <div class="photo-card-avatar">
             ${avatarHtml}
           </div>
           <div class="photo-card-name" title="${s.nombre}">${s.nombre}</div>
-          <div class="photo-card-matricula">🎓 ${s.matricula}</div>
-          <div class="photo-card-level">${s.nivel} (${s.grado})</div>
-          <div style="margin-top: 0.5rem;">${badgeHtml}</div>
+          <div class="photo-card-mat">${s.matricula}</div>
+          <div style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 0.65rem;">${s.nivel} (${s.grado})</div>
+          <div>${pillHtml}</div>
         `;
         photosGalleryGrid.appendChild(card);
       });
 
     } catch (err) {
-      photosGalleryGrid.innerHTML = `<p class="text-center" style="grid-column: 1 / -1; padding: 2rem; color: var(--color-danger);">Error al cargar galería: ${err.message}</p>`;
+      photosGalleryGrid.innerHTML = `<p class="table-empty-row" style="grid-column: 1 / -1; color: var(--color-danger);">Error al cargar galería: ${err.message}</p>`;
     }
   }
 
@@ -717,33 +837,42 @@ document.addEventListener('DOMContentLoaded', () => {
   // Botón para iniciar escaneo masivo
   if (btnTriggerPhotoScan) {
     btnTriggerPhotoScan.addEventListener('click', async () => {
-      if (!confirm('¿Deseas iniciar la auditoría y descarga masiva de fotos desde Microsoft 365? Se ejecutará en segundo plano.')) return;
-
       btnTriggerPhotoScan.disabled = true;
-      btnTriggerPhotoScan.textContent = '⏳ Escaneando fotos...';
+      btnTriggerPhotoScan.innerHTML = '⚡ Escaneando en segundo plano...';
 
       try {
         const resp = await fetch('/api/photos/scan', { method: 'POST' });
         const data = await resp.json();
-        alert(data.message || 'Auditoría en curso.');
 
-        // Polling del estado
-        const interval = setInterval(async () => {
-          const sResp = await fetch('/api/photos/scan/status');
-          const sData = await sResp.json();
-          if (!sData.running) {
-            clearInterval(interval);
-            btnTriggerPhotoScan.disabled = false;
-            btnTriggerPhotoScan.textContent = '⚡ Iniciar / Actualizar Descarga de Fotos';
-            loadPhotosStats();
-            loadPhotosGallery(activePhotoFilter, activeLevelFilter);
-          }
-        }, 3000);
-
+        if (data.success) {
+          showToast('Escaneo concurrente de fotos iniciado en segundo plano.', 'info');
+          const pollInterval = setInterval(async () => {
+            try {
+              const sResp = await fetch('/api/photos/scan/status');
+              const sData = await sResp.json();
+              if (!sData.running) {
+                clearInterval(pollInterval);
+                btnTriggerPhotoScan.disabled = false;
+                btnTriggerPhotoScan.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Sincronizar Fotos desde Nube</span>';
+                showToast(`Escaneo finalizado: ${sData.downloaded} fotos descargadas.`, 'success');
+                loadPhotosStats();
+                loadPhotosGallery(activePhotoFilter, activeLevelFilter);
+              }
+            } catch (e) {
+              clearInterval(pollInterval);
+              btnTriggerPhotoScan.disabled = false;
+              btnTriggerPhotoScan.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Sincronizar Fotos desde Nube</span>';
+            }
+          }, 3000);
+        } else {
+          showToast(`No se pudo iniciar el escaneo: ${data.message}`, 'error');
+          btnTriggerPhotoScan.disabled = false;
+          btnTriggerPhotoScan.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Sincronizar Fotos desde Nube</span>';
+        }
       } catch (err) {
-        alert(`Error al iniciar auditoría: ${err.message}`);
+        showToast(`Error de conexión: ${err.message}`, 'error');
         btnTriggerPhotoScan.disabled = false;
-        btnTriggerPhotoScan.textContent = '⚡ Iniciar / Actualizar Descarga de Fotos';
+        btnTriggerPhotoScan.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span>Sincronizar Fotos desde Nube</span>';
       }
     });
   }
@@ -755,14 +884,14 @@ document.addEventListener('DOMContentLoaded', () => {
   const btnRefreshHistory = document.getElementById('btn-refresh-history');
 
   async function loadHistory() {
-    historyTbody.innerHTML = '<tr><td colspan="6" class="text-center">Cargando bitácora de reseteos...</td></tr>';
+    historyTbody.innerHTML = '<tr><td colspan="6" class="table-empty-row">Cargando bitácora de reseteos...</td></tr>';
     try {
       const resp = await fetch('/api/history');
       const data = await resp.json();
       const rows = data.history || [];
 
       if (rows.length === 0) {
-        historyTbody.innerHTML = '<tr><td colspan="6" class="text-center">No hay registros de reseteos aún en la bitácora.</td></tr>';
+        historyTbody.innerHTML = '<tr><td colspan="6" class="table-empty-row">No hay registros de reseteos aún en la bitácora.</td></tr>';
         return;
       }
 
@@ -770,21 +899,21 @@ document.addEventListener('DOMContentLoaded', () => {
       rows.forEach(r => {
         const tr = document.createElement('tr');
         const pdfLink = r.pdf_url
-          ? `<a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-secondary">📄 Abrir Ficha</a>`
+          ? `<a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-secondary-saas">📄 Ver Comprobante</a>`
           : `<span style="color: var(--text-muted);">No generada</span>`;
 
         tr.innerHTML = `
           <td class="mono">${r.timestamp_utc}</td>
-          <td><strong>${r.matricula}</strong></td>
+          <td><strong class="highlight">${r.matricula}</strong></td>
           <td>${r.display_name}</td>
           <td class="mono">${r.upn}</td>
           <td><span class="badge badge-success">${r.reset_by}</span></td>
-          <td>${pdfLink}</td>
+          <td class="text-right">${pdfLink}</td>
         `;
         historyTbody.appendChild(tr);
       });
     } catch (err) {
-      historyTbody.innerHTML = `<tr><td colspan="6" class="text-center" style="color: var(--color-danger);">Error al cargar historial: ${err.message}</td></tr>`;
+      historyTbody.innerHTML = `<tr><td colspan="6" class="table-empty-row" style="color: var(--color-danger);">Error al cargar historial: ${err.message}</td></tr>`;
     }
   }
 
@@ -793,11 +922,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
-  // PESTAÑA 6: ESTADO DEL TENANT
+  // PESTAÑA 6: SALUD DEL TENANT
   // ==========================================
   const tenantAdminUpn = document.getElementById('tenant-admin-upn');
   const tenantAuthType = document.getElementById('tenant-auth-type');
   const tenantDomainVerified = document.getElementById('tenant-domain-verified');
+  const btnRefreshStatus = document.getElementById('btn-refresh-status');
 
   async function loadTenantStatus() {
     try {
@@ -807,13 +937,18 @@ document.addEventListener('DOMContentLoaded', () => {
         tenantAdminUpn.textContent = data.admin_upn || 'Conectado';
         tenantAuthType.textContent = data.auth_type || 'Managed';
         tenantDomainVerified.textContent = data.is_verified ? 'Verificado' : 'No verificado';
-        tenantDomainVerified.className = data.is_verified ? 'tile-tag tag-success' : 'tile-tag tag-danger';
+        tenantDomainVerified.className = data.is_verified ? 'chip-status-ok' : 'chip-status-danger';
+        showToast('Diagnóstico de tenant actualizado.', 'info');
       } else {
         tenantAdminUpn.textContent = 'Error de conexión';
       }
     } catch (err) {
       tenantAdminUpn.textContent = 'Desconectado';
     }
+  }
+
+  if (btnRefreshStatus) {
+    btnRefreshStatus.addEventListener('click', loadTenantStatus);
   }
 
   // ==========================================
@@ -826,16 +961,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
       try {
         await navigator.clipboard.writeText(cmd);
-        const originalText = btn.textContent;
-        btn.textContent = '✓ ¡Copiado!';
-        btn.style.background = 'var(--color-success)';
-        btn.style.color = '#ffffff';
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span style="color: var(--color-green); font-weight: 700;">✓ Copiado</span>';
+        showToast(`Comando copiado: "${cmd}"`, 'success');
 
         setTimeout(() => {
-          btn.textContent = originalText;
-          btn.style.background = '';
-          btn.style.color = '';
-        }, 1800);
+          btn.innerHTML = originalHtml;
+        }, 2000);
       } catch (err) {
         prompt('Copia el comando manualmente:', cmd);
       }

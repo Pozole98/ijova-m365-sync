@@ -3,724 +3,1028 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IJOVA • Panel de Gestión y Control Microsoft 365</title>
-  <meta name="description" content="Sistema integral de gestión de alumnos, verificación de identidad, reseteo de contraseñas, bajas seguras, papelera de reciclaje y auditoría para el Instituto José Vasconcelos.">
+  <title>IJOVA • Cloud Identity Hub • Microsoft 365</title>
+  <meta name="description" content="Plataforma SaaS empresarial de gestión de identidades, reseteo de contraseñas, bajas seguras, papelera de reciclaje y auditoría para el Instituto José Vasconcelos.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
-<body>
-  <!-- Header Institucional -->
-  <header class="app-header">
-    <div class="header-container">
-      <div class="brand-group">
-        <img src="/logo" alt="Logotipo IJOVA" class="school-logo" id="header-logo" onerror="this.style.display='none'">
-        <div class="brand-text">
-          <span class="institution-sub">INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS</span>
-          <h1 class="system-title">Gestión de Alumnos • Microsoft 365</h1>
+<body class="saas-body">
+  <!-- Notificaciones Flotantes (Toasts) -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <div class="app-layout">
+    <!-- ====================================================================
+         SIDEBAR LATERAL (SaaS Navigation)
+         ==================================================================== -->
+    <aside class="app-sidebar" id="app-sidebar">
+      <!-- Marca y Logotipo Institucional -->
+      <div class="sidebar-brand">
+        <div class="brand-logo-container">
+          <img src="/logo" alt="Logotipo IJOVA" class="brand-logo" id="header-logo" onerror="this.style.display='none'">
+          <div class="brand-fallback-icon" id="brand-fallback-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+          </div>
+        </div>
+        <div class="brand-info">
+          <div class="brand-title-row">
+            <span class="brand-name">IJOVA</span>
+            <span class="brand-edition-badge">ENTERPRISE</span>
+          </div>
+          <span class="brand-institution">Identity & Cloud Hub</span>
         </div>
       </div>
 
-      <div class="header-status">
-        <div class="status-pill verified" id="domain-status-pill">
-          <span class="status-dot"></span>
-          <span class="status-label">{{ domain }}</span>
-        </div>
-        <button class="theme-toggle" id="btn-theme-toggle" title="Cambiar modo visual" aria-label="Cambiar tema">
-          <span id="theme-icon">🌙</span>
+      <!-- Navegación Categorizada -->
+      <nav class="sidebar-nav" aria-label="Navegación principal">
+        <div class="nav-section-label">OPERACIONES DE ALUMNOS</div>
+
+        <button class="tab-btn active" id="tab-btn-reset" data-tab="tab-reset" title="Restablecer Contraseña">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+            </svg>
+            <span class="tab-title">Restablecer Contraseña</span>
+          </div>
+          <span class="nav-pill pill-blue">Seguro</span>
         </button>
+
+        <button class="tab-btn" id="tab-btn-delete" data-tab="tab-delete" title="Bajas de Alumnos">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            <span class="tab-title">Bajas de Alumnos</span>
+          </div>
+          <span class="nav-pill pill-danger">Control</span>
+        </button>
+
+        <button class="tab-btn" id="tab-btn-recycle" data-tab="tab-recycle" title="Papelera & Restauración">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+            <span class="tab-title">Papelera & Restauración</span>
+          </div>
+          <span class="nav-pill pill-gray">30 días</span>
+        </button>
+
+        <div class="nav-section-label">AUDITORÍA Y FOTOS</div>
+
+        <button class="tab-btn" id="tab-btn-photos" data-tab="tab-photos" title="Auditoría de Fotos">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <circle cx="8.5" cy="8.5" r="1.5"/>
+              <polyline points="21 15 16 10 5 21"/>
+            </svg>
+            <span class="tab-title">Auditoría de Fotos</span>
+          </div>
+        </button>
+
+        <button class="tab-btn" id="tab-btn-history" data-tab="tab-history" title="Historial de Fichas">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+            <span class="tab-title">Historial de Fichas</span>
+          </div>
+        </button>
+
+        <div class="nav-section-label">SISTEMA Y CLI</div>
+
+        <button class="tab-btn" id="tab-btn-tenant" data-tab="tab-tenant" title="Salud del Tenant">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+            </svg>
+            <span class="tab-title">Salud del Tenant</span>
+          </div>
+          <span class="status-indicator-dot online"></span>
+        </button>
+
+        <button class="tab-btn" id="tab-btn-cli" data-tab="tab-cli" title="Terminal & Guía CLI">
+          <div class="tab-btn-inner">
+            <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="4 17 10 11 4 5"></polyline>
+              <line x1="12" y1="19" x2="20" y2="19"></line>
+            </svg>
+            <span class="tab-title">Terminal & Guía CLI</span>
+          </div>
+          <span class="nav-pill pill-purple">8 cmds</span>
+        </button>
+      </nav>
+
+      <!-- Pie del Sidebar: Tenant & Administrador -->
+      <div class="sidebar-footer">
+        <div class="tenant-badge" id="domain-status-pill">
+          <div class="tenant-dot-live"></div>
+          <div class="tenant-meta">
+            <span class="tenant-domain">{{ domain }}</span>
+            <span class="tenant-state">Microsoft Graph Online</span>
+          </div>
+        </div>
+
+        <div class="operator-profile-card">
+          <div class="operator-avatar">AD</div>
+          <div class="operator-info">
+            <span class="operator-name">Administrador TI</span>
+            <span class="operator-role">Control Escolar</span>
+          </div>
+          <button class="theme-toggle-btn" id="btn-theme-toggle" title="Alternar tema oscuro / claro" aria-label="Cambiar tema">
+            <span id="theme-icon">🌙</span>
+          </button>
+        </div>
       </div>
-    </div>
-
-    <!-- Navegación por pestañas -->
-    <nav class="nav-tabs" aria-label="Navegación principal">
-      <button class="tab-btn active" id="tab-btn-reset" data-tab="tab-reset">
-        <span class="tab-icon">🔑</span> Restablecer Contraseña
-      </button>
-      <button class="tab-btn" id="tab-btn-delete" data-tab="tab-delete">
-        <span class="tab-icon">🗑️</span> Bajas de Alumnos
-      </button>
-      <button class="tab-btn" id="tab-btn-recycle" data-tab="tab-recycle">
-        <span class="tab-icon">🔄</span> Papelera & Restauración
-      </button>
-      <button class="tab-btn" id="tab-btn-photos" data-tab="tab-photos">
-        <span class="tab-icon">🖼️</span> Auditoría de Fotos
-      </button>
-      <button class="tab-btn" id="tab-btn-history" data-tab="tab-history">
-        <span class="tab-icon">📋</span> Historial de Fichas
-      </button>
-      <button class="tab-btn" id="tab-btn-tenant" data-tab="tab-tenant">
-        <span class="tab-icon">📈</span> Salud del Tenant
-      </button>
-      <button class="tab-btn" id="tab-btn-cli" data-tab="tab-cli">
-        <span class="tab-icon">💻</span> Terminal & Guía CLI
-      </button>
-    </nav>
-  </header>
-
-  <!-- Contenedor Principal -->
-  <main class="app-main">
+    </aside>
 
     <!-- ====================================================================
-         PESTAÑA 1: RESTABLECER CONTRASEÑA
+         ÁREA DE TRABAJO PRINCIPAL (Header + Canvas)
          ==================================================================== -->
-    <section class="tab-content active" id="tab-reset">
-      <div class="hero-banner">
-        <h2>Restablecimiento Seguro de Contraseña de Alumnos</h2>
-        <p>Verifica en tiempo real el registro escolar del alumno en Microsoft 365 y confirma su identidad antes de emitir credenciales temporales con código QR.</p>
-      </div>
-
-      <!-- Buscador y Verificador -->
-      <div class="search-card">
-        <label for="search-matricula-input" class="search-label">
-          <span>🔍 Buscar y Verificar Alumno</span>
-          <span class="search-hint">Ingresa la matrícula (ej. 250081) o escribe el nombre del estudiante</span>
-        </label>
-        
-        <div class="search-input-wrapper">
-          <input 
-            type="text" 
-            id="search-matricula-input" 
-            class="search-input" 
-            placeholder="Ejemplo: 250081 o González..." 
-            autocomplete="off"
-            spellcheck="false"
-          >
-          <button type="button" id="btn-search-student" class="btn btn-primary">
-            <span class="btn-text">Verificar Alumno</span>
-            <span class="btn-spinner" style="display: none;">⏳</span>
-          </button>
+    <div class="app-workspace">
+      <!-- Navbar Superior -->
+      <header class="workspace-header">
+        <div class="header-breadcrumb">
+          <span class="bc-root">IJOVA Cloud Hub</span>
+          <span class="bc-divider">/</span>
+          <span class="bc-current" id="active-breadcrumb-title">Restablecer Contraseña</span>
         </div>
 
-        <div id="search-autocomplete-list" class="autocomplete-dropdown" style="display: none;"></div>
-      </div>
-
-      <!-- Indicador de Carga -->
-      <div id="student-loading-indicator" class="loading-state" style="display: none;">
-        <div class="pulse-spinner"></div>
-        <p>Consultando Microsoft Entra ID y catálogo escolar...</p>
-      </div>
-
-      <!-- Alerta: Alumno NO Registrado -->
-      <div id="student-not-found-alert" class="alert-box alert-danger" style="display: none;">
-        <div class="alert-icon">⛔</div>
-        <div class="alert-body">
-          <h3 id="alert-error-title">Alumno No Registrado</h3>
-          <p id="alert-error-desc">La matrícula ingresada no existe en Microsoft Entra ID (@{{ domain }}).</p>
-          <div class="alert-actions">
-            <span>⚠️ Verifica que el número de matrícula esté bien escrito o revisa si el alumno aún no ha sido aprovisionado.</span>
+        <div class="header-actions">
+          <div class="quick-status-chip">
+            <span class="pulse-dot"></span>
+            <span class="quick-status-text">Entra ID Sync: Listo</span>
+          </div>
+          <div class="tenant-pill-header">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span>{{ domain }}</span>
           </div>
         </div>
-      </div>
+      </header>
 
-      <!-- Ficha de Verificación del Alumno -->
-      <div id="student-verification-card" class="student-profile-card" style="display: none;">
-        <div class="card-header">
-          <div class="card-title-group">
-            <span class="badge badge-success">✓ REGISTRADO EN MICROSOFT 365</span>
-            <h3>Ficha de Verificación de Identidad</h3>
-          </div>
-          <span class="account-status-badge" id="account-status-badge">Cuenta Activa</span>
-        </div>
+      <!-- Canvas de Contenido Dinámico -->
+      <main class="workspace-content">
 
-        <div class="profile-layout">
-          <div class="photo-column">
-            <div class="avatar-frame">
-              <img id="student-photo-img" src="" alt="Fotografía del alumno" class="student-avatar" style="display: none;">
-              <div id="student-avatar-placeholder" class="avatar-placeholder">
-                <span id="student-initials">AL</span>
-              </div>
+        <!-- ==================================================================
+             PESTAÑA 1: RESTABLECER CONTRASEÑA
+             ================================================================== -->
+        <section class="tab-content active" id="tab-reset">
+          <!-- Encabezado de Página -->
+          <div class="page-title-banner">
+            <div>
+              <h2 class="page-main-title">Restablecer Contraseña</h2>
+              <p class="page-main-desc">Restablecimiento Seguro de Contraseñas • Verifica la identidad del estudiante en tiempo real en Microsoft 365 antes de generar credenciales con código QR de acceso seguro.</p>
             </div>
-            <span class="photo-caption" id="student-photo-status">Sin foto registrada</span>
           </div>
 
-          <div class="details-column">
-            <h2 class="student-official-name" id="student-display-name">JUAN PÉREZ LÓPEZ</h2>
-            
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="info-label">🎓 Matrícula Oficial</span>
-                <span class="info-value highlight" id="student-matricula-val">250081</span>
+          <!-- Buscador Predictivo Omnibar -->
+          <div class="saas-card search-card-premium">
+            <div class="search-box-header">
+              <label for="search-matricula-input" class="search-title-label">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <span>Búsqueda y Verificación en Vivo</span>
+              </label>
+              <span class="search-help-tag">Presiona ENTER o haz clic en Verificar</span>
+            </div>
+
+            <div class="omnibar-input-container">
+              <div class="omnibar-inner">
+                <svg class="omnibar-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input 
+                  type="text" 
+                  id="search-matricula-input" 
+                  class="omnibar-input" 
+                  placeholder="Escribe la matrícula (ej. 250081) o apellido del alumno..." 
+                  autocomplete="off"
+                  spellcheck="false"
+                >
+                <button type="button" id="btn-clear-search" class="omnibar-clear-btn" style="display: none;" title="Limpiar búsqueda">✕</button>
               </div>
-              <div class="info-item">
-                <span class="info-label">📧 Correo Institucional (UPN)</span>
-                <span class="info-value mail" id="student-upn-val">250081@ijova.com</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">🏫 Nivel y Grado Escolar</span>
-                <span class="info-value" id="student-level-val">Preparatoria — 2do Semestre</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">⚡ Identificador Microsoft Entra ID</span>
-                <span class="info-value mono" id="student-id-val">mock-id</span>
+              <button type="button" id="btn-search-student" class="btn btn-primary-saas">
+                <span class="btn-text">Verificar Alumno</span>
+                <span class="btn-spinner" style="display: none;">
+                  <svg class="spinner-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-linecap="round"/></svg>
+                </span>
+              </button>
+            </div>
+
+            <div id="search-autocomplete-list" class="autocomplete-dropdown-premium" style="display: none;"></div>
+          </div>
+
+          <!-- Estado de Carga -->
+          <div id="student-loading-indicator" class="loading-state-premium" style="display: none;">
+            <div class="saas-spinner-ring"></div>
+            <span>Consultando registro en Microsoft Entra ID y catálogo escolar...</span>
+          </div>
+
+          <!-- Alerta: Alumno No Registrado -->
+          <div id="student-not-found-alert" class="saas-alert-banner alert-danger" style="display: none;">
+            <div class="alert-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            </div>
+            <div class="alert-text-body">
+              <h4 id="alert-error-title">Alumno No Registrado en Microsoft 365</h4>
+              <p id="alert-error-desc">La matrícula ingresada no existe en Microsoft Entra ID (@{{ domain }}).</p>
+              <div class="alert-footer-tip">
+                Verifica que la matrícula sea de 6 dígitos o corrobora si el alumno aún no ha sido sincronizado al tenant.
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Barrera de Confirmación Obligatoria -->
-        <div class="security-barrier">
-          <div class="security-icon">⚠️</div>
-          <div class="security-content">
-            <h4>CONFIRMACIÓN DE SEGURIDAD OBLIGATORIA</h4>
-            <p>Para evitar cambiar la contraseña a un alumno equivocado, verifica cuidadosamente los datos arriba mostrados.</p>
-            <label class="confirm-checkbox-label">
-              <input type="checkbox" id="confirm-student-checkbox">
-              <span class="checkbox-custom"></span>
-              <span class="confirm-text"><strong>Confirmo expresamente que este es el alumno correcto</strong> y autorizo el restablecimiento de su contraseña.</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Opciones de Contraseña -->
-        <div class="password-options-panel">
-          <h4>Configuración de la Nueva Contraseña</h4>
-          
-          <div class="radio-options">
-            <label class="radio-card">
-              <input type="radio" name="pw_mode" id="pw_mode_auto" value="auto" checked>
-              <div class="radio-card-content">
-                <strong>⚡ Generar Contraseña Aleatoria Segura (Recomendado)</strong>
-                <span>12 caracteres que cumplen complejidad de Entra ID (mayúsculas, minúsculas, dígitos y símbolos).</span>
+          <!-- Ficha de Verificación del Alumno -->
+          <div id="student-verification-card" class="saas-card student-identity-card" style="display: none;">
+            <div class="card-top-bar">
+              <div class="card-status-chip chip-success">
+                <span class="dot-indicator"></span>
+                <span>REGISTRADO EN MICROSOFT 365</span>
               </div>
-            </label>
+              <span class="account-status-badge" id="account-status-badge">Cuenta Activa</span>
+            </div>
 
-            <label class="radio-card">
-              <input type="radio" name="pw_mode" id="pw_mode_custom" value="custom">
-              <div class="radio-card-content">
-                <strong>✏️ Asignar Contraseña Específica</strong>
-                <span>Define manualmente la contraseña que se le asignará al alumno.</span>
+            <!-- Cabecera de Identidad con Avatar -->
+            <div class="student-identity-hero">
+              <div class="avatar-wrapper-premium">
+                <img id="student-photo-img" src="" alt="Fotografía del alumno" class="student-avatar-img" style="display: none;">
+                <div id="student-avatar-placeholder" class="student-avatar-fallback">
+                  <span id="student-initials">AL</span>
+                </div>
+                <div class="photo-indicator-dot" id="photo-indicator-dot" title="Estado de foto"></div>
               </div>
-            </label>
-          </div>
 
-          <div id="custom-password-field" class="custom-pw-box" style="display: none;">
-            <label for="input-custom-password">Contraseña personalizada:</label>
-            <div class="input-with-button">
-              <input type="password" id="input-custom-password" placeholder="Mínimo 8 caracteres, mayúsculas, números y símbolos">
-              <button type="button" id="btn-toggle-custom-pw" class="btn btn-secondary">👁️ Ver</button>
+              <div class="identity-hero-text">
+                <div class="identity-eyebrow" id="student-photo-status">Sin foto registrada</div>
+                <h3 class="student-name-heading" id="student-display-name">JUAN PÉREZ LÓPEZ</h3>
+                <div class="identity-tags-row">
+                  <span class="id-tag"><strong id="student-matricula-val">250081</strong></span>
+                  <span class="id-tag-sec" id="student-level-val">Preparatoria • Activo</span>
+                </div>
+              </div>
             </div>
-            <small class="pw-rules">Debe contener al menos 8 caracteres y mezclar mayúsculas, minúsculas, números y símbolos.</small>
-          </div>
 
-          <div class="force-change-wrapper">
-            <label class="toggle-label">
-              <input type="checkbox" id="force-change-checkbox" checked>
-              <span class="toggle-switch"></span>
-              <span class="toggle-text">Exigir cambio de contraseña obligatorio en el próximo inicio de sesión (Recomendado por seguridad)</span>
-            </label>
-          </div>
-        </div>
-
-        <!-- Botones de Acción -->
-        <div class="card-footer-actions">
-          <button type="button" id="btn-cancel-reset" class="btn btn-secondary">
-            ❌ Cancelar Operación
-          </button>
-          <button type="button" id="btn-execute-reset" class="btn btn-accent" disabled>
-            <span class="btn-text">🔒 Restablecer Contraseña Ahora</span>
-            <span class="btn-spinner" style="display: none;">⏳ Procesando...</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Pantalla de Éxito / Ficha Imprimible Generada -->
-      <div id="reset-success-card" class="success-card" style="display: none;">
-        <div class="success-banner">
-          <div class="success-icon-animated">✓</div>
-          <div>
-            <h3>¡Contraseña Restablecida con Éxito en Microsoft 365!</h3>
-            <p>La nueva clave temporal ya se encuentra activa en la nube y registrada en la bitácora protegida de <code>secrets/</code>.</p>
-          </div>
-        </div>
-
-        <div class="credential-box">
-          <div class="cred-row">
-            <span class="cred-label">👤 Alumno:</span>
-            <span class="cred-value" id="success-student-name">JUAN PÉREZ LÓPEZ</span>
-          </div>
-          <div class="cred-row">
-            <span class="cred-label">📧 Correo / Usuario:</span>
-            <span class="cred-value" id="success-student-upn">250081@ijova.com</span>
-          </div>
-          <div class="cred-row highlight">
-            <span class="cred-label">🔑 Nueva Contraseña Temporal:</span>
-            <div class="pw-display-group">
-              <span class="cred-value-pw mono" id="success-password-val">Abc123xyz!@#</span>
-              <button type="button" id="btn-copy-pw" class="btn btn-sm btn-secondary" title="Copiar contraseña">📋 Copiar</button>
+            <!-- Grilla de Atributos Técnicos -->
+            <div class="spec-grid-saas">
+              <div class="spec-cell">
+                <span class="spec-label">CORREO INSTITUCIONAL (UPN)</span>
+                <span class="spec-value mono" id="student-upn-val">250081@ijova.com</span>
+              </div>
+              <div class="spec-cell">
+                <span class="spec-label">ESTADO DE CUENTA</span>
+                <span class="spec-value highlight-green">Habilitada (Activa)</span>
+              </div>
+              <div class="spec-cell">
+                <span class="spec-label">ENTRA ID OBJECT GUID</span>
+                <span class="spec-value mono text-muted" id="student-id-val">mock-id</span>
+              </div>
             </div>
-          </div>
-        </div>
 
-        <div class="print-actions-toolbar">
-          <a id="btn-print-voucher" href="#" target="_blank" class="btn btn-primary btn-large">
-            🖨️ Imprimir Ficha de Acceso con QR
-          </a>
-          <a id="btn-download-voucher" href="#" download class="btn btn-secondary btn-large">
-            📥 Descargar PDF
-          </a>
-          <button type="button" id="btn-reset-another" class="btn btn-ghost">
-            🔄 Atender a otro alumno
-          </button>
-        </div>
-
-        <!-- Vista previa de la Ficha Recortable -->
-        <div class="voucher-preview-container">
-          <div class="voucher-preview-header">
-            <span>Vista Previa de la Ficha de Entrega</span>
-            <small>Listo para imprimir y entregar al estudiante</small>
-          </div>
-          <div class="voucher-ticket" id="voucher-ticket-print">
-            <div class="ticket-top">
-              <div class="ticket-brand">
-                <img src="/logo" alt="IJOVA Logo" class="ticket-logo" onerror="this.style.display='none'">
+            <!-- Barrera de Confirmación Obligatoria (Seguridad Anti-Errores) -->
+            <div class="safety-checkpoint-card">
+              <div class="safety-checkpoint-header">
+                <div class="checkpoint-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
                 <div>
-                  <strong>INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS</strong>
-                  <div class="ticket-sub">FICHA INDIVIDUAL DE ACCESO A MICROSOFT 365</div>
+                  <h4>Verificación de Identidad Requerida</h4>
+                  <p>Confirma que el estudiante que tienes frente a ti o en ventanilla corresponde exactamente con los datos de esta ficha.</p>
+                </div>
+              </div>
+              <label class="saas-switch-label" for="confirm-student-checkbox">
+                <input type="checkbox" id="confirm-student-checkbox" class="saas-checkbox-input">
+                <span class="saas-checkbox-ui"></span>
+                <span class="switch-text-content">
+                  <strong>Confirmo expresamente que este es el alumno correcto</strong> y autorizo la emisión de una nueva contraseña.
+                </span>
+              </label>
+            </div>
+
+            <!-- Panel de Configuración de Contraseña -->
+            <div class="password-configuration-panel">
+              <div class="panel-section-title">OPCIONES DE CONTRASEÑA</div>
+              
+              <div class="segmented-radio-grid">
+                <label class="radio-segment-card">
+                  <input type="radio" name="pw_mode" id="pw_mode_auto" value="auto" checked>
+                  <div class="segment-card-body">
+                    <div class="segment-title-row">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                      <strong>Generación Criptográfica Segura</strong>
+                      <span class="badge-recommended">Recomendado</span>
+                    </div>
+                    <span class="segment-desc">Genera una clave aleatoria de 12 caracteres de alta entropía que cumple las políticas de Entra ID.</span>
+                  </div>
+                </label>
+
+                <label class="radio-segment-card">
+                  <input type="radio" name="pw_mode" id="pw_mode_custom" value="custom">
+                  <div class="segment-card-body">
+                    <div class="segment-title-row">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+                      <strong>Asignar Contraseña Personalizada</strong>
+                    </div>
+                    <span class="segment-desc">Ingresa manualmente una clave definida para casos específicos solicitados por soporte.</span>
+                  </div>
+                </label>
+              </div>
+
+              <!-- Campo para Contraseña Manual -->
+              <div id="custom-password-field" class="custom-password-container" style="display: none;">
+                <label for="input-custom-password" class="field-label-sm">Nueva Contraseña:</label>
+                <div class="field-button-group">
+                  <input type="password" id="input-custom-password" class="saas-input mono" placeholder="Mínimo 8 caracteres, mayúsculas, dígitos y símbolos">
+                  <button type="button" id="btn-toggle-custom-pw" class="btn btn-secondary-saas">👁️ Ver</button>
+                </div>
+                <span class="field-hint">Complejidad requerida: 8+ caracteres con mayúsculas, minúsculas, números y caracteres especiales.</span>
+              </div>
+
+              <!-- Switch para Cambio Forzoso en Primer Inicio -->
+              <div class="force-change-row">
+                <label class="saas-toggle-switch">
+                  <input type="checkbox" id="force-change-checkbox" checked>
+                  <span class="toggle-slider"></span>
+                  <span class="toggle-label-text">Exigir cambio de contraseña en el primer inicio de sesión (Recomendado)</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Barra de Acciones del Pie de Ficha -->
+            <div class="card-footer-buttons">
+              <button type="button" id="btn-cancel-reset" class="btn btn-secondary-saas">
+                Cancelar Operación
+              </button>
+              <button type="button" id="btn-execute-reset" class="btn btn-primary-saas" disabled>
+                <span class="btn-text">Restablecer Contraseña Ahora</span>
+                <span class="btn-spinner" style="display: none;">
+                  <svg class="spinner-svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-linecap="round"/></svg>
+                  Procesando en Microsoft 365...
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Tarjeta de Éxito / Emisión de Ficha -->
+          <div id="reset-success-card" class="saas-card success-result-card" style="display: none;">
+            <div class="success-header-badge">
+              <div class="success-icon-pulse">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+              <div>
+                <h3>¡Contraseña Restablecida Exitosamente en Microsoft 365!</h3>
+                <p>La nueva clave se encuentra activa en el tenant de Entra ID y resguardada con permisos 0600 en <code>secrets/</code>.</p>
+              </div>
+            </div>
+
+            <div class="credential-display-panel">
+              <div class="cred-info-row">
+                <span class="cred-tag">ESTUDIANTE:</span>
+                <span class="cred-data" id="success-student-name">JUAN PÉREZ LÓPEZ</span>
+              </div>
+              <div class="cred-info-row">
+                <span class="cred-tag">USUARIO / CORREO:</span>
+                <span class="cred-data mono" id="success-student-upn">250081@ijova.com</span>
+              </div>
+              <div class="cred-info-row pw-highlight-box">
+                <span class="cred-tag">NUEVA CLAVE TEMPORAL:</span>
+                <div class="pw-action-wrapper">
+                  <span class="cred-password-text mono" id="success-password-val">Abc123xyz!@#</span>
+                  <button type="button" id="btn-copy-pw" class="btn-copy-action" title="Copiar contraseña al portapapeles">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
                 </div>
               </div>
             </div>
-            <div class="ticket-body">
-              <div class="ticket-fields">
-                <p><strong>Alumno:</strong> <span id="ticket-name">ALUMNO</span></p>
-                <p><strong>Matrícula:</strong> <span id="ticket-matricula">000000</span></p>
-                <p><strong>Nivel Escolar:</strong> <span id="ticket-level">Secundaria</span></p>
-                <p><strong>Usuario / Correo:</strong> <span id="ticket-upn" class="mono">alumno@ijova.com</span></p>
-                <p><strong>Contraseña Temporal:</strong> <span id="ticket-password" class="mono highlight">********</span></p>
-                <p><strong>Portal de Acceso:</strong> <span class="mono">https://portal.office.com</span></p>
+
+            <!-- Toolbar de Impresión y Descarga -->
+            <div class="voucher-actions-toolbar">
+              <a id="btn-print-voucher" href="#" target="_blank" class="btn btn-primary-saas btn-lg">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+                <span>Imprimir Ficha Oficial con QR</span>
+              </a>
+              <a id="btn-download-voucher" href="#" download class="btn btn-secondary-saas btn-lg">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Descargar PDF</span>
+              </a>
+              <button type="button" id="btn-reset-another" class="btn btn-ghost-saas">
+                Atender a otro alumno
+              </button>
+            </div>
+
+            <!-- Vista Previa de la Ficha Recortable -->
+            <div class="voucher-card-preview-shell">
+              <div class="voucher-preview-headline">
+                <span>VISTA PREVIA DEL COMPROBANTE DE ENTREGA</span>
+                <span class="preview-badge">Formato Ficha Recortable</span>
               </div>
-              <div class="ticket-qr-box">
-                <div class="qr-placeholder" id="ticket-qr-placeholder">
-                  <span style="font-size: 2.2rem;">📱</span>
-                  <small>Escanear para acceder</small>
+
+              <div class="voucher-physical-ticket" id="voucher-ticket-print">
+                <div class="ticket-header-strip">
+                  <div class="ticket-school-meta">
+                    <img src="/logo" alt="IJOVA" class="ticket-school-logo" onerror="this.style.display='none'">
+                    <div>
+                      <div class="ticket-school-name">INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS</div>
+                      <div class="ticket-doc-type">FICHA DE ACCESO A MICROSOFT 365 EDUCATION</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ticket-body-grid">
+                  <div class="ticket-student-details">
+                    <div class="t-row"><span class="t-lbl">Alumno:</span> <span class="t-val" id="ticket-name">ALUMNO</span></div>
+                    <div class="t-row"><span class="t-lbl">Matrícula:</span> <span class="t-val bold" id="ticket-matricula">000000</span></div>
+                    <div class="t-row"><span class="t-lbl">Nivel Escolar:</span> <span class="t-val" id="ticket-level">Secundaria</span></div>
+                    <div class="t-row"><span class="t-lbl">Correo Institucional:</span> <span class="t-val mono" id="ticket-upn">alumno@ijova.com</span></div>
+                    <div class="t-row t-pw-row"><span class="t-lbl">Clave Temporal:</span> <span class="t-val mono bold" id="ticket-password">********</span></div>
+                    <div class="t-row"><span class="t-lbl">Portal de Acceso:</span> <span class="t-val mono">https://portal.office.com</span></div>
+                  </div>
+
+                  <div class="ticket-qr-section">
+                    <div class="qr-box-premium" id="ticket-qr-placeholder">
+                      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                      <span class="qr-sub-text">Escanear para acceder</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="ticket-footer-strip">
+                  <span>ℹ️ El sistema te solicitará cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.</span>
                 </div>
               </div>
             </div>
-            <div class="ticket-footer">
-              ℹ️ Deberás cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.
-            </div>
           </div>
-        </div>
-      </div>
-    </section>
+        </section>
 
-    <!-- ====================================================================
-         PESTAÑA 2: BAJAS DE ALUMNOS (ZONA CONTROLADA)
-         ==================================================================== -->
-    <section class="tab-content" id="tab-delete" style="display: none;">
-      <div class="hero-banner">
-        <h2>Baja Controlada de Alumnos (Envío a Papelera)</h2>
-        <p>Deshabilita el acceso del alumno y libera su licencia Microsoft 365 A1 enviando la cuenta a la Papelera de Reciclaje (30 días de retención recuperable intacta).</p>
-      </div>
-
-      <div class="search-card">
-        <label for="delete-matricula-input" class="search-label">
-          <span>🔍 Buscar Alumno para Baja</span>
-          <span class="search-hint">Ingresa la matrícula del estudiante a dar de baja</span>
-        </label>
-        
-        <div class="search-input-wrapper">
-          <input 
-            type="text" 
-            id="delete-matricula-input" 
-            class="search-input" 
-            placeholder="Ejemplo: 250010..." 
-            autocomplete="off"
-            spellcheck="false"
-          >
-          <button type="button" id="btn-search-delete-student" class="btn btn-primary">
-            <span>Consultar Alumno</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- Ficha de Alumno para Baja -->
-      <div id="delete-student-card" class="student-profile-card border-danger-card" style="display: none;">
-        <div class="card-header">
-          <div class="card-title-group">
-            <span class="badge badge-danger">⚠️ CUENTA EN RIESGO DE BAJA</span>
-            <h3>Confirmación de Baja Escolar</h3>
-          </div>
-          <span class="account-status-badge" id="delete-account-status-badge">Activa en Nube</span>
-        </div>
-
-        <div class="profile-layout">
-          <div class="photo-column">
-            <div class="avatar-frame">
-              <img id="delete-student-photo-img" src="" alt="Foto alumno" class="student-avatar" style="display: none;">
-              <div id="delete-student-avatar-placeholder" class="avatar-placeholder bg-danger-gradient">
-                <span id="delete-student-initials">AL</span>
-              </div>
+        <!-- ==================================================================
+             PESTAÑA 2: BAJAS DE ALUMNOS (ZONA CONTROLADA)
+             ================================================================== -->
+        <section class="tab-content" id="tab-delete" style="display: none;">
+          <div class="page-title-banner">
+            <div>
+              <h2 class="page-main-title">Bajas de Alumnos</h2>
+              <p class="page-main-desc">Deshabilita el acceso del alumno y libera su licencia Microsoft 365 A1. La cuenta se traslada a la Papelera de Reciclaje con retención de 30 días.</p>
             </div>
           </div>
 
-          <div class="details-column">
-            <h2 class="student-official-name" id="delete-student-display-name">ALUMNO</h2>
-            <div class="info-grid">
-              <div class="info-item">
-                <span class="info-label">🎓 Matrícula</span>
-                <span class="info-value highlight" id="delete-student-matricula-val">000000</span>
+          <!-- Buscador de Baja -->
+          <div class="saas-card search-card-premium">
+            <div class="search-box-header">
+              <label for="delete-matricula-input" class="search-title-label">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Localizar Alumno para Baja</span>
+              </label>
+              <span class="search-help-tag">Ingresa la matrícula del estudiante a dar de baja</span>
+            </div>
+
+            <div class="omnibar-input-container">
+              <div class="omnibar-inner">
+                <input 
+                  type="text" 
+                  id="delete-matricula-input" 
+                  class="omnibar-input" 
+                  placeholder="Ejemplo: 250010..." 
+                  autocomplete="off"
+                  spellcheck="false"
+                >
               </div>
-              <div class="info-item">
-                <span class="info-label">📧 Correo Institucional</span>
-                <span class="info-value mail" id="delete-student-upn-val">alumno@ijova.com</span>
+              <button type="button" id="btn-search-delete-student" class="btn btn-secondary-saas">
+                <span>Consultar Alumno</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Ficha de Alumno para Baja (Danger Zone) -->
+          <div id="delete-student-card" class="saas-card danger-zone-card" style="display: none;">
+            <div class="danger-card-top">
+              <div class="card-status-chip chip-danger">
+                <span class="dot-indicator"></span>
+                <span>ZONA DE RIESGO • BAJA ESCOLAR</span>
               </div>
-              <div class="info-item">
-                <span class="info-label">🏫 Nivel y Grado</span>
-                <span class="info-value" id="delete-student-level-val">Estudiante</span>
+              <span class="account-status-badge" id="delete-account-status-badge">Activa en Nube</span>
+            </div>
+
+            <div class="student-identity-hero">
+              <div class="avatar-wrapper-premium border-danger">
+                <img id="delete-student-photo-img" src="" alt="Foto alumno" class="student-avatar-img" style="display: none;">
+                <div id="delete-student-avatar-placeholder" class="student-avatar-fallback bg-danger-avatar">
+                  <span id="delete-student-initials">AL</span>
+                </div>
+              </div>
+
+              <div class="identity-hero-text">
+                <div class="identity-eyebrow text-danger">CONFIRMACIÓN DE BAJA REQUERIDA</div>
+                <h3 class="student-name-heading" id="delete-student-display-name">ALUMNO</h3>
+                <div class="identity-tags-row">
+                  <span class="id-tag"><strong id="delete-student-matricula-val">000000</strong></span>
+                  <span class="id-tag-sec" id="delete-student-level-val">Estudiante</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="spec-grid-saas">
+              <div class="spec-cell">
+                <span class="spec-label">CORREO INSTITUCIONAL</span>
+                <span class="spec-value mono" id="delete-student-upn-val">alumno@ijova.com</span>
+              </div>
+              <div class="spec-cell">
+                <span class="spec-label">DESTINO DE BAJA</span>
+                <span class="spec-value">Papelera de Entra ID (Soft-Delete)</span>
+              </div>
+              <div class="spec-cell">
+                <span class="spec-label">VENTANA DE RECUPERACIÓN</span>
+                <span class="spec-value">30 días de retención completa</span>
+              </div>
+            </div>
+
+            <!-- Candado de Seguridad Estricto: Escribir la Matrícula -->
+            <div class="strict-type-lock-panel">
+              <div class="lock-panel-header">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <div>
+                  <h4>Confirmación de Seguridad Requerida</h4>
+                  <p>Para desbloquear la baja, escribe la matrícula exacta del alumno (<strong id="delete-target-hint">250000</strong>) en el recuadro:</p>
+                </div>
+              </div>
+
+              <div class="type-input-row">
+                <input 
+                  type="text" 
+                  id="input-delete-confirm-code" 
+                  class="saas-input mono input-code-match" 
+                  placeholder="Escribe aquí la matrícula exacta..." 
+                  autocomplete="off"
+                >
+                <div id="delete-lock-status-badge" class="lock-status-pill locked">🔒 Bloqueado</div>
+              </div>
+            </div>
+
+            <div class="card-footer-buttons">
+              <button type="button" id="btn-cancel-delete" class="btn btn-secondary-saas">
+                Cancelar Operación
+              </button>
+              <button type="button" id="btn-execute-delete" class="btn btn-danger-solid" disabled>
+                Confirmar Baja a Papelera de Reciclaje
+              </button>
+            </div>
+          </div>
+
+          <!-- Resultado de Baja -->
+          <div id="delete-result-alert" class="saas-alert-banner alert-success" style="display: none;">
+            <div class="alert-icon-wrap">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <div class="alert-text-body">
+              <h4 id="delete-result-title">Baja Aplicada Exitosamente</h4>
+              <p id="delete-result-desc">El alumno fue enviado a la Papelera de Reciclaje de Microsoft Entra ID.</p>
+              <div class="alert-footer-tip" style="margin-top: 0.75rem;">
+                <button type="button" id="btn-goto-recycle-bin" class="btn btn-sm btn-secondary-saas">
+                  Ver en Papelera & Restauración
+                </button>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <!-- Candado estricto: escribir la matrícula -->
-        <div class="delete-confirmation-box">
-          <div class="delete-icon">🛑</div>
-          <div class="delete-text-block">
-            <h4>CONFIRMACIÓN ESTRICTA DE SEGURIDAD</h4>
-            <p>La cuenta será enviada a la Papelera de Reciclaje de Microsoft Entra ID. Sus correos de Outlook, archivos de OneDrive y tareas se conservarán durante 30 días en caso de que requiera ser restaurado.</p>
-            <div class="type-confirmation-wrapper">
-              <label for="input-delete-confirm-code">Para desbloquear la baja, escribe la matrícula del alumno (<strong id="delete-target-hint">250000</strong>):</label>
-              <input type="text" id="input-delete-confirm-code" class="confirm-type-input mono" placeholder="Escribe aquí la matrícula exacta..." autocomplete="off">
+        <!-- ==================================================================
+             PESTAÑA 3: PAPELERA & RESTAURACIÓN
+             ================================================================== -->
+        <section class="tab-content" id="tab-recycle" style="display: none;">
+          <div class="page-title-banner">
+            <div>
+              <h2 class="page-main-title">Papelera & Restauración</h2>
+              <p class="page-main-desc">Alumnos eliminados en los últimos 30 días en Microsoft Entra ID. Puedes restaurarlos en 1 clic manteniendo intactos sus correos, OneDrive y tareas de Teams.</p>
             </div>
-          </div>
-        </div>
-
-        <div class="card-footer-actions">
-          <button type="button" id="btn-cancel-delete" class="btn btn-secondary">❌ Cancelar</button>
-          <button type="button" id="btn-execute-delete" class="btn btn-danger-solid" disabled>
-            🗑️ Confirmar Baja a Papelera de Reciclaje
-          </button>
-        </div>
-      </div>
-
-      <!-- Resultado de Baja -->
-      <div id="delete-result-alert" class="alert-box alert-success-custom" style="display: none;">
-        <div class="alert-icon">✓</div>
-        <div class="alert-body">
-          <h3 id="delete-result-title">Baja Aplicada Exitosamente</h3>
-          <p id="delete-result-desc">El alumno fue enviado a la Papelera de Reciclaje.</p>
-          <div class="alert-actions" style="margin-top: 0.75rem;">
-            <button type="button" id="btn-goto-recycle-bin" class="btn btn-sm btn-secondary">
-              🔄 Ver en Papelera de Reciclaje
+            <button type="button" id="btn-refresh-recycle" class="btn btn-secondary-saas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Actualizar Papelera</span>
             </button>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- ====================================================================
-         PESTAÑA 3: PAPELERA DE RECICLAJE & RESTAURACIÓN
-         ==================================================================== -->
-    <section class="tab-content" id="tab-recycle" style="display: none;">
-      <div class="section-card">
-        <div class="section-card-header">
-          <div>
-            <h3>Papelera de Reciclaje de Microsoft Entra ID</h3>
-            <p>Alumnos dados de baja en los últimos 30 días. Puedes reactivar su cuenta en 1 segundo preservando sus datos intactos.</p>
-          </div>
-          <button type="button" id="btn-refresh-recycle" class="btn btn-secondary btn-sm">🔄 Actualizar Papelera</button>
-        </div>
-
-        <div class="table-responsive">
-          <table class="data-table" id="recycle-table">
-            <thead>
-              <tr>
-                <th>Matrícula</th>
-                <th>Nombre Completo</th>
-                <th>Correo Institucional</th>
-                <th>Fecha de Eliminación</th>
-                <th>Estado de Retención</th>
-                <th>Acción de Recuperación</th>
-              </tr>
-            </thead>
-            <tbody id="recycle-tbody">
-              <tr>
-                <td colspan="6" class="text-center">Cargando cuentas en papelera...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ====================================================================
-         PESTAÑA 4: AUDITORÍA Y GALERÍA DE FOTOS
-         ==================================================================== -->
-    <section class="tab-content" id="tab-photos" style="display: none;">
-      <div class="hero-banner">
-        <h2>Auditoría y Galería de Fotografías Institucionales</h2>
-        <p>Monitorea qué alumnos tienen fotografía configurada en Microsoft 365 para credencialización y verificación del reglamento escolar.</p>
-      </div>
-
-      <!-- Tarjetas de Estadísticas de Fotos -->
-      <div class="status-grid" style="margin-bottom: 1.5rem;">
-        <div class="status-tile">
-          <span class="tile-title">📸 Alumnos CON Fotografía</span>
-          <span class="tile-val highlight-green" id="photo-stat-with">0</span>
-          <span class="tile-sub" id="photo-stat-pct">0% del alumnado</span>
-        </div>
-
-        <div class="status-tile">
-          <span class="tile-title">⚪ Alumnos SIN Fotografía</span>
-          <span class="tile-val highlight-amber" id="photo-stat-without">0</span>
-          <span class="tile-sub">Pendientes de subir foto</span>
-        </div>
-
-        <div class="status-tile">
-          <span class="tile-title">👥 Total de Alumnos Evaluados</span>
-          <span class="tile-val" id="photo-stat-total">0</span>
-          <span class="tile-sub">Catálogo escolar activo</span>
-        </div>
-      </div>
-
-      <!-- Barra de Herramientas y Filtros -->
-      <div class="photos-toolbar">
-        <div class="filter-btn-group">
-          <button type="button" class="btn btn-sm btn-filter active" data-filter="all">Todos</button>
-          <button type="button" class="btn btn-sm btn-filter" data-filter="with">📸 Con Foto</button>
-          <button type="button" class="btn btn-sm btn-filter" data-filter="without">⚪ Sin Foto</button>
-        </div>
-
-        <div class="filter-btn-group">
-          <button type="button" class="btn btn-sm btn-filter-level active" data-level="all">Todos los Niveles</button>
-          <button type="button" class="btn btn-sm btn-filter-level" data-level="secundaria">Secundaria</button>
-          <button type="button" class="btn btn-sm btn-filter-level" data-level="preparatoria">Preparatoria</button>
-        </div>
-
-        <button type="button" id="btn-trigger-photo-scan" class="btn btn-primary btn-sm">
-          ⚡ Iniciar / Actualizar Descarga de Fotos
-        </button>
-      </div>
-
-      <!-- Galería en Cuadrícula -->
-      <div id="photos-gallery-grid" class="photos-grid">
-        <p class="text-center" style="grid-column: 1 / -1; padding: 2rem; color: var(--text-muted);">
-          Cargando galería de alumnos...
-        </p>
-      </div>
-    </section>
-
-    <!-- ====================================================================
-         PESTAÑA 5: HISTORIAL DE FICHAS
-         ==================================================================== -->
-    <section class="tab-content" id="tab-history" style="display: none;">
-      <div class="section-card">
-        <div class="section-card-header">
-          <div>
-            <h3>Bitácora de Contraseñas Restablecidas</h3>
-            <p>Registro histórico seguro de reseteos realizados por operadores administrativos.</p>
-          </div>
-          <button type="button" id="btn-refresh-history" class="btn btn-secondary btn-sm">🔄 Actualizar</button>
-        </div>
-
-        <div class="table-responsive">
-          <table class="data-table" id="history-table">
-            <thead>
-              <tr>
-                <th>Fecha y Hora (UTC)</th>
-                <th>Matrícula</th>
-                <th>Nombre del Alumno</th>
-                <th>Correo Institucional</th>
-                <th>Operador</th>
-                <th>Ficha PDF</th>
-              </tr>
-            </thead>
-            <tbody id="history-tbody">
-              <tr>
-                <td colspan="6" class="text-center">Cargando bitácora de reseteos...</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- ====================================================================
-         PESTAÑA 6: SALUD DEL TENANT
-         ==================================================================== -->
-    <section class="tab-content" id="tab-tenant" style="display: none;">
-      <div class="section-card">
-        <h3>Estado de Conexión con Microsoft 365 / Entra ID</h3>
-        <p>Parámetros de autenticación y verificación del dominio institucional.</p>
-
-        <div class="status-grid" id="tenant-status-grid">
-          <div class="status-tile">
-            <span class="tile-title">🌐 Dominio Institucional</span>
-            <span class="tile-val" id="tenant-domain-name">{{ domain }}</span>
-            <span class="tile-tag tag-success" id="tenant-domain-verified">Verificado</span>
-          </div>
-
-          <div class="status-tile">
-            <span class="tile-title">🔐 Tipo de Autenticación</span>
-            <span class="tile-val" id="tenant-auth-type">Managed</span>
-            <span class="tile-sub">Nube Pura (Sin ADFS)</span>
-          </div>
-
-          <div class="status-tile">
-            <span class="tile-title">👤 Administrador en Sesión</span>
-            <span class="tile-val mono" id="tenant-admin-upn">Cargando...</span>
-            <span class="tile-sub">Microsoft Graph Device Code</span>
-          </div>
-
-          <div class="status-tile">
-            <span class="tile-title">📑 Archivo Excel Base</span>
-            <span class="tile-val mono">{{ excel_path }}</span>
-            <span class="tile-sub">Listado Global Matriculado</span>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ====================================================================
-         PESTAÑA 7: TERMINAL & GUÍA DE COMANDOS CLI
-         ==================================================================== -->
-    <section class="tab-content" id="tab-cli" style="display: none;">
-      <div class="hero-banner">
-        <h2>Guía de Comandos CLI en Terminal (Operaciones de Lote)</h2>
-        <p>Las tareas masivas de inicio de ciclo escolar y auditoría profunda se ejecutan directamente en la terminal de Linux. Haz clic en cualquier comando para copiarlo.</p>
-      </div>
-
-      <div class="cli-catalog-grid">
-        <!-- Comando 1 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">🚀</span>
-            <div>
-              <h4>Aprovisionamiento Masivo (Crear Alumnos Nuevos)</h4>
-              <p>Lee el archivo Excel, identifica quiénes no tienen cuenta y crea los usuarios en Microsoft Entra ID asignándoles su licencia Office 365 A1.</p>
+          <div class="saas-card table-card-premium">
+            <div class="table-responsive">
+              <table class="saas-table" id="recycle-table">
+                <thead>
+                  <tr>
+                    <th>Matrícula</th>
+                    <th>Nombre Completo</th>
+                    <th>Correo Institucional</th>
+                    <th>Fecha de Eliminación</th>
+                    <th>Estado de Retención</th>
+                    <th class="text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="recycle-tbody">
+                  <tr>
+                    <td colspan="6" class="table-empty-row">Cargando cuentas en papelera...</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py apply</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py apply" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Garantía: Cero escrituras en cuentas de alumnos existentes.</span>
-        </div>
+        </section>
 
-        <!-- Comando 2 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">🌐</span>
+        <!-- ==================================================================
+             PESTAÑA 4: AUDITORÍA Y GALERÍA DE FOTOS
+             ================================================================== -->
+        <section class="tab-content" id="tab-photos" style="display: none;">
+          <div class="page-title-banner">
             <div>
-              <h4>Simulación DRY-RUN en la Nube</h4>
-              <p>Compara el listado escolar contra todo el tenant de Entra ID sin realizar ningún cambio ni tocar licencias. Genera un reporte previo.</p>
+              <h2 class="page-main-title">Auditoría de Fotos de Perfil</h2>
+              <p class="page-main-desc">Control y diagnóstico institucional de fotografías de perfil en Microsoft 365 para credencialización y verificación del reglamento escolar.</p>
+            </div>
+            <button type="button" id="btn-trigger-photo-scan" class="btn btn-primary-saas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <span>Sincronizar Fotos desde Nube</span>
+            </button>
+          </div>
+
+          <!-- Métricas Ejecutivas KPI -->
+          <div class="kpi-metric-grid">
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">ALUMNOS CON FOTO</span>
+                <span class="kpi-badge badge-green">Activo</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-green" id="photo-stat-with">0</span>
+                <span class="kpi-sub" id="photo-stat-pct">0% del total</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">ALUMNOS SIN FOTO</span>
+                <span class="kpi-badge badge-amber">Pendiente</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-amber" id="photo-stat-without">0</span>
+                <span class="kpi-sub">Falta subir foto</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">TOTAL AUDITADO</span>
+                <span class="kpi-badge badge-blue">Catálogo</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number" id="photo-stat-total">0</span>
+                <span class="kpi-sub">Alumnos registrados</span>
+              </div>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py dry-run</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py dry-run" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Garantía: 100% lectura segura (Cero escritura).</span>
-        </div>
 
-        <!-- Comando 3 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">🔍</span>
-            <div>
-              <h4>Validación Offline del Archivo Excel</h4>
-              <p>Revisa que las matrículas cumplan la norma de 6 dígitos, detecta duplicados y normaliza nombres sin requerir conexión a internet.</p>
+          <!-- Barra de Filtros Segmentados -->
+          <div class="saas-card gallery-filter-bar">
+            <div class="filter-pill-group">
+              <span class="filter-group-lbl">Estado:</span>
+              <button type="button" class="pill-btn btn-filter active" data-filter="all">Todos</button>
+              <button type="button" class="pill-btn btn-filter" data-filter="with">Con Foto</button>
+              <button type="button" class="pill-btn btn-filter" data-filter="without">Sin Foto</button>
+            </div>
+
+            <div class="filter-pill-group">
+              <span class="filter-group-lbl">Nivel:</span>
+              <button type="button" class="pill-btn btn-filter-level active" data-level="all">Todos los Niveles</button>
+              <button type="button" class="pill-btn btn-filter-level" data-level="secundaria">Secundaria</button>
+              <button type="button" class="pill-btn btn-filter-level" data-level="preparatoria">Preparatoria</button>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py validate</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py validate" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ No consume cuotas de API ni altera ningún registro.</span>
-        </div>
 
-        <!-- Comando 4 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">🎓</span>
+          <!-- Mosaico / Galería de Fotos -->
+          <div id="photos-gallery-grid" class="photos-masonry-grid">
+            <p class="table-empty-row" style="grid-column: 1 / -1;">Cargando galería de alumnos...</p>
+          </div>
+        </section>
+
+        <!-- ==================================================================
+             PESTAÑA 5: HISTORIAL DE FICHAS
+             ================================================================== -->
+        <section class="tab-content" id="tab-history" style="display: none;">
+          <div class="page-title-banner">
             <div>
-              <h4>Alta Rápida de Alumno Extemporáneo</h4>
-              <p>Crea interactivamente una sola cuenta de alumno que llegó después del inicio de ciclo y actualiza de inmediato el archivo Excel.</p>
+              <h2 class="page-main-title">Historial de Fichas Emitidas</h2>
+              <p class="page-main-desc">Bitácora protegida de contraseñas restablecidas en la sesión. Permite reimprimir o volver a descargar los comprobantes PDF oficiales.</p>
+            </div>
+            <button type="button" id="btn-refresh-history" class="btn btn-secondary-saas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Actualizar Bitácora</span>
+            </button>
+          </div>
+
+          <div class="saas-card table-card-premium">
+            <div class="table-responsive">
+              <table class="saas-table" id="history-table">
+                <thead>
+                  <tr>
+                    <th>Fecha y Hora (UTC)</th>
+                    <th>Matrícula</th>
+                    <th>Nombre del Alumno</th>
+                    <th>Correo Institucional</th>
+                    <th>Operador</th>
+                    <th class="text-right">Comprobante PDF</th>
+                  </tr>
+                </thead>
+                <tbody id="history-tbody">
+                  <tr>
+                    <td colspan="6" class="table-empty-row">Cargando bitácora de reseteos...</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py enroll</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py enroll" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Genera ficha de bienvenida de entrega inmediata.</span>
-        </div>
+        </section>
 
-        <!-- Comando 5 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">🔑</span>
+        <!-- ==================================================================
+             PESTAÑA 6: SALUD DEL TENANT
+             ================================================================== -->
+        <section class="tab-content" id="tab-tenant" style="display: none;">
+          <div class="page-title-banner">
             <div>
-              <h4>Reseteo Masivo de Todo el Colegio (--all)</h4>
-              <p>Genera nuevas contraseñas temporales para todos los alumnos activos en Microsoft 365 con un solo comando para inicio de semestre.</p>
+              <h2 class="page-main-title">Salud del Tenant Microsoft 365</h2>
+              <p class="page-main-desc">Parámetros de conexión, estado del dominio institucional `@{{ domain }}` y configuración de autenticación en Microsoft Entra ID.</p>
+            </div>
+            <button type="button" id="btn-refresh-status" class="btn btn-secondary-saas">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+              <span>Diagnosticar Conexión</span>
+            </button>
+          </div>
+
+          <div class="saas-card tenant-overview-card">
+            <div class="tenant-overview-grid">
+              <div class="tenant-tile">
+                <span class="tile-eyebrow">DOMINIO INSTITUCIONAL</span>
+                <div class="tile-main-row">
+                  <span class="tile-strong" id="tenant-domain-name">{{ domain }}</span>
+                  <span class="chip-status-ok" id="tenant-domain-verified">Verificado</span>
+                </div>
+                <span class="tile-meta-desc">Dominio principal federado para correos de alumnos</span>
+              </div>
+
+              <div class="tenant-tile">
+                <span class="tile-eyebrow">TIPO DE AUTENTICACIÓN</span>
+                <div class="tile-main-row">
+                  <span class="tile-strong" id="tenant-auth-type">Managed</span>
+                  <span class="chip-status-blue">Cloud-Only</span>
+                </div>
+                <span class="tile-meta-desc">Autenticación en la nube pura de Microsoft Entra ID</span>
+              </div>
+
+              <div class="tenant-tile">
+                <span class="tile-eyebrow">ADMINISTRADOR EN SESIÓN</span>
+                <div class="tile-main-row">
+                  <span class="tile-strong mono" id="tenant-admin-upn">Cargando...</span>
+                </div>
+                <span class="tile-meta-desc">Sesión delegada mediante Microsoft Graph Device Code</span>
+              </div>
+
+              <div class="tenant-tile">
+                <span class="tile-eyebrow">ORIGEN DE DATOS ESCOLAR</span>
+                <div class="tile-main-row">
+                  <span class="tile-strong mono" style="font-size: 0.85rem;">{{ excel_path }}</span>
+                </div>
+                <span class="tile-meta-desc">Hoja: {{ sheet_name }}</span>
+              </div>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py reset --all</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py reset --all" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Requiere confirmación expresa 'RESETEAR' para ejecutarse.</span>
-        </div>
+        </section>
 
-        <!-- Comando 6 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">📑</span>
+        <!-- ==================================================================
+             PESTAÑA 7: TERMINAL & GUÍA CLI
+             ================================================================== -->
+        <section class="tab-content" id="tab-cli" style="display: none;">
+          <div class="page-title-banner">
             <div>
-              <h4>Bajas Masivas desde Archivo Excel</h4>
-              <p>Da de baja a toda una lista de alumnos (por ejemplo, egresados o graduados) leyendo una columna de matrículas desde un archivo Excel.</p>
+              <h2 class="page-main-title">Terminal & Guía CLI</h2>
+              <p class="page-main-desc">Catálogo de comandos de alto rendimiento para operaciones masivas por lotes. Haz clic en <strong>Copiar</strong> para pegarlos directamente en tu terminal de Linux.</p>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py delete --excel "Bajas.xlsx"</code>
-            <button type="button" class="btn-copy-cli" data-cmd='python3 main.py delete --excel "Bajas.xlsx"' title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Envía a papelera por 30 días liberando las licencias A1.</span>
-        </div>
 
-        <!-- Comando 7 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">📸</span>
-            <div>
-              <h4>Auditoría Concurrente y Descarga de Fotos</h4>
-              <p>Descarga masivamente las fotos de perfil de todos los alumnos en segundo plano con múltiples hilos y genera una galería HTML local.</p>
+          <div class="cli-terminal-grid">
+            <!-- Comando 1 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-blue">APROVISIONAMIENTO</span>
+                  <h4>Aprovisionamiento Masivo (Crear Alumnos Nuevos)</h4>
+                </div>
+                <p>Lee el listado escolar en Excel, detecta alumnos sin cuenta y los crea en Entra ID asignándoles su licencia Office 365 A1.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • python3</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py apply</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py apply" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Cero impacto en cuentas existentes • Protección criptográfica</div>
+            </div>
+
+            <!-- Comando 2 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-gray">AUDITORÍA</span>
+                  <h4>Simulación DRY-RUN en la Nube</h4>
+                </div>
+                <p>Compara el listado escolar contra todo el catálogo de Entra ID sin realizar ninguna modificación ni consumir licencias.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • dry-run</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py dry-run</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py dry-run" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ 100% de sólo lectura garantizada</div>
+            </div>
+
+            <!-- Comando 3 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-green">OFFLINE</span>
+                  <h4>Validación Offline de Listas Excel</h4>
+                </div>
+                <p>Verifica que las matrículas cumplan la regla de 6 dígitos, detecta duplicados y normaliza acentos sin requerir internet.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • validate</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py validate</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py validate" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Operación instantánea sin consumo de cuotas de red</div>
+            </div>
+
+            <!-- Comando 4 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-amber">EXTEMPORÁNEO</span>
+                  <h4>Alta Rápida de Alumno Extemporáneo</h4>
+                </div>
+                <p>Asistente interactivo en terminal para dar de alta a un estudiante a mitad de ciclo y actualizar el archivo Excel escolar.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • enroll</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py enroll</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py enroll" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Emite ficha de bienvenida con código QR de entrega inmediata</div>
+            </div>
+
+            <!-- Comando 5 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-purple">SEMESTRAL</span>
+                  <h4>Reseteo Masivo de Todo el Colegio (--all)</h4>
+                </div>
+                <p>Genera nuevas contraseñas temporales para todos los alumnos activos en Microsoft 365 para inicio de semestre.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • reset all</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py reset --all</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py reset --all" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Requiere confirmación textual 'RESETEAR' para ejecutarse</div>
+            </div>
+
+            <!-- Comando 6 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-danger">BAJAS MASIVAS</span>
+                  <h4>Bajas Masivas desde Archivo Excel</h4>
+                </div>
+                <p>Da de baja a un grupo de alumnos (egresados o graduados) leyendo una columna de matrículas desde una hoja de cálculo.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • batch delete</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py delete --excel "Bajas.xlsx"</code>
+                  <button type="button" class="btn-copy-cli" data-cmd='python3 main.py delete --excel "Bajas.xlsx"' title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Envío a papelera por 30 días liberando licencias A1</div>
+            </div>
+
+            <!-- Comando 7 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-blue">FOTOS</span>
+                  <h4>Auditoría Concurrente y Descarga de Fotos</h4>
+                </div>
+                <p>Descarga masivamente las fotos de perfil de todos los alumnos en segundo plano con múltiples hilos de red concurrentes.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • photos</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py photos -w 8</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py photos -w 8" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Genera reporte en reports/auditoria_fotos_perfil.xlsx</div>
+            </div>
+
+            <!-- Comando 8 -->
+            <div class="terminal-cmd-card">
+              <div class="cmd-card-header">
+                <div class="cmd-meta-group">
+                  <span class="cmd-badge badge-green">BACKUP</span>
+                  <h4>Respaldo Snapshot de Auditoría</h4>
+                </div>
+                <p>Descarga un volcado completo con timestamp de todos los usuarios, UPNs y licencias del tenant en formato JSON en <code>backups/</code>.</p>
+              </div>
+              <div class="terminal-shell-box">
+                <div class="terminal-window-dots">
+                  <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                  <span class="terminal-title">bash • backup</span>
+                </div>
+                <div class="terminal-code-row">
+                  <code>python3 main.py backup</code>
+                  <button type="button" class="btn-copy-cli" data-cmd="python3 main.py backup" title="Copiar comando">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                    <span>Copiar</span>
+                  </button>
+                </div>
+              </div>
+              <div class="cmd-guarantee-tag">🛡️ Respaldo protegido con permisos de archivo 0700</div>
             </div>
           </div>
-          <div class="cli-code-block">
-            <code>python3 main.py photos -w 8</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py photos -w 8" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Exporta auditoría a Excel en reports/auditoria_fotos_perfil.xlsx.</span>
+        </section>
+
+      </main>
+
+      <!-- Footer del Workspace -->
+      <footer class="workspace-footer">
+        <div class="footer-meta-left">
+          <span>Instituto de Desarrollo Integral Lic. José Vasconcelos</span>
+          <span class="sep">•</span>
+          <span>Microsoft 365 Education Cloud Connector</span>
         </div>
-
-        <!-- Comando 8 -->
-        <div class="cli-card">
-          <div class="cli-card-header">
-            <span class="cli-icon">💾</span>
-            <div>
-              <h4>Respaldo Snapshot de Auditoría</h4>
-              <p>Descarga un volcado completo con timestamp de todos los usuarios, UPNs y licencias del tenant en formato JSON en backups/.</p>
-            </div>
-          </div>
-          <div class="cli-code-block">
-            <code>python3 main.py backup</code>
-            <button type="button" class="btn-copy-cli" data-cmd="python3 main.py backup" title="Copiar comando">📋 Copiar</button>
-          </div>
-          <span class="cli-guarantee">🛡️ Respaldo protegido con permisos de archivo 0700.</span>
+        <div class="footer-meta-right">
+          <span class="version-tag">Release v2.5.0 Enterprise</span>
         </div>
-      </div>
-    </section>
-
-  </main>
-
-  <footer class="app-footer">
-    <div class="footer-container">
-      <span>Instituto de Desarrollo Integral Lic. José Vasconcelos • Sistema de Gestión de Alumnos Microsoft 365</span>
-      <span class="footer-version">v2.2.0 • Control Escolar & Soporte TI</span>
+      </footer>
     </div>
-  </footer>
+  </div>
 
   <script src="/static/js/app.js"></script>
 </body>
