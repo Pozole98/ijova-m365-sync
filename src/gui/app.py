@@ -568,6 +568,177 @@ def create_app(config_path: str = "config.json") -> Flask:
     def api_photos_scan_status():
         return jsonify(_scan_state)
 
+    # =========================================================================
+    # ENDPOINTS REST: MÓDULO DE EQUIPOS Y CLASES DE MICROSOFT TEAMS
+    # =========================================================================
+    _teams_cache: Optional[Dict[str, Any]] = None
+
+    @app.route("/api/teams")
+    def api_teams_list():
+        """Retorna la lista completa auditada de equipos con métricas consolidadas."""
+        nonlocal _teams_cache
+        force_refresh = request.args.get("refresh", "false").lower() == "true"
+        if _teams_cache is not None and not force_refresh:
+            return jsonify({"success": True, "data": _teams_cache})
+
+        try:
+            from src.teams_engine import audit_all_teams
+            graph = get_graph()
+            _teams_cache = audit_all_teams(graph)
+            return jsonify({"success": True, "data": _teams_cache})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/teachers")
+    def api_teams_teachers():
+        """Retorna la lista de docentes para el selector de titular."""
+        try:
+            graph = get_graph()
+            teachers = graph.get_all_teachers()
+            return jsonify({"success": True, "teachers": teachers})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/students-by-grade")
+    def api_teams_students_by_grade():
+        """Devuelve los alumnos a matricular según el nivel y grado seleccionados."""
+        nivel = request.args.get("nivel", "")
+        grado = request.args.get("grado", "")
+        if not nivel or not grado:
+            return jsonify({"success": False, "error": "Parámetros nivel y grado requeridos"}), 400
+
+        try:
+            from export_students_m365 import build_school_db
+            from src.teams_engine import get_students_for_grade
+            school_db = build_school_db()
+            matched = get_students_for_grade(school_db, nivel, grado)
+            return jsonify({
+                "success": True,
+                "nivel": nivel,
+                "grado": grado,
+                "count": len(matched),
+                "students": matched
+            })
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/create", methods=["POST"])
+    def api_teams_create_class():
+        """Crea una nueva clase educativa en Teams con matriculación automática de alumnos."""
+        nonlocal _teams_cache
+        data = request.get_json() or {}
+        subject = data.get("subject_name", "").strip()
+        nivel = data.get("nivel", "").strip()
+        grado = data.get("grado", "").strip()
+        teacher_id = data.get("teacher_id", "").strip()
+        desc = data.get("description", "").strip()
+
+        if not subject or not nivel or not grado or not teacher_id:
+            return jsonify({"success": False, "error": "Materia, nivel, grado y profesor son obligatorios."}), 400
+
+        try:
+            from export_students_m365 import build_school_db
+            from src.teams_engine import create_class_assisted
+            graph = get_graph()
+            school_db = build_school_db()
+            res = create_class_assisted(
+                graph=graph,
+                subject_name=subject,
+                nivel=nivel,
+                grado=grado,
+                teacher_user_id=teacher_id,
+                school_db=school_db,
+                custom_description=desc or None
+            )
+            # Invalidate teams cache to reflect newly created team on next audit
+            _teams_cache = None
+            return jsonify({"success": True, "result": res})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/<team_id>/rename", methods=["PATCH"])
+    def api_teams_rename(team_id: str):
+        """Renombra un equipo existente en Teams."""
+        nonlocal _teams_cache
+        data = request.get_json() or {}
+        new_name = data.get("new_name", "").strip()
+        new_desc = data.get("new_description")
+        if not new_name:
+            return jsonify({"success": False, "error": "El nuevo nombre es obligatorio."}), 400
+
+        try:
+            graph = get_graph()
+            graph.update_team_info(team_id, new_name, new_desc)
+            # Update cache locally if present
+            if _teams_cache and "teams" in _teams_cache:
+                for t in _teams_cache["teams"]:
+                    if t["id"] == team_id:
+                        t["name"] = new_name
+                        if new_desc is not None:
+                            t["description"] = new_desc
+            return jsonify({"success": True, "message": f"Equipo renombrado a '{new_name}' exitosamente."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/<team_id>/archive", methods=["POST"])
+    def api_teams_archive(team_id: str):
+        """Pone un equipo en modo solo lectura (archivado)."""
+        nonlocal _teams_cache
+        try:
+            graph = get_graph()
+            graph.archive_team(team_id)
+            if _teams_cache and "teams" in _teams_cache:
+                for t in _teams_cache["teams"]:
+                    if t["id"] == team_id:
+                        t["is_archived"] = True
+            return jsonify({"success": True, "message": "Equipo archivado exitosamente."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/<team_id>/unarchive", methods=["POST"])
+    def api_teams_unarchive(team_id: str):
+        """Desarchiva un equipo en Teams."""
+        nonlocal _teams_cache
+        try:
+            graph = get_graph()
+            graph.unarchive_team(team_id)
+            if _teams_cache and "teams" in _teams_cache:
+                for t in _teams_cache["teams"]:
+                    if t["id"] == team_id:
+                        t["is_archived"] = False
+            return jsonify({"success": True, "message": "Equipo desarchivado exitosamente."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/<team_id>/members")
+    def api_teams_members(team_id: str):
+        """Obtiene la lista detallada de docentes y alumnos de un equipo."""
+        try:
+            from src.teams_engine import get_team_members_detailed
+            graph = get_graph()
+            details = get_team_members_detailed(graph, team_id)
+            return jsonify({"success": True, "data": details})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/export-excel")
+    def api_teams_export_excel():
+        """Genera y descarga el archivo Excel oficial de auditoría de Teams."""
+        try:
+            from src.teams_engine import audit_all_teams, export_teams_audit_excel
+            graph = get_graph()
+            audit_data = audit_all_teams(graph)
+            out_file = os.path.join(config.reports_dir, f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            export_teams_audit_excel(audit_data, out_file)
+            return send_file(
+                out_file,
+                as_attachment=True,
+                download_name=os.path.basename(out_file),
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     return app
 
 

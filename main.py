@@ -595,6 +595,126 @@ def cmd_audit_photos(args):
     )
 
 
+def cmd_teams(args):
+    """
+    Comando 'teams': Auditoría en vivo, exportación a Excel, creación asistida y
+    renombrado de equipos y clases en Microsoft Teams.
+    """
+    config = load_config(args.config)
+    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes)
+    graph.authenticate_device_code()
+
+    from src.teams_engine import (
+        audit_all_teams,
+        export_teams_audit_excel,
+        create_class_assisted,
+    )
+    from export_students_m365 import build_school_db
+    from datetime import datetime
+
+    subaction = getattr(args, "action", "audit") or "audit"
+
+    if subaction == "audit":
+        print("\n🔍 Ejecutando auditoría en tiempo real de todos los equipos de Microsoft Teams...")
+        data = audit_all_teams(graph)
+        summary = data["summary"]
+        print("\n" + "=" * 80)
+        print(f"📊 RESUMEN AUDITORÍA DE MICROSOFT TEAMS (IJOVA)")
+        print("=" * 80)
+        print(f"  • Total Equipos en Tenant:         {summary['total_teams']}")
+        print(f"  • Clases Activas Ciclo 2026-2027:  {summary['cycle_2026_2027']}")
+        print(f"  • Clases Ciclo Anterior 2025-2026: {summary['past_cycles']}")
+        print(f"  • Clases / Equipos Educativos:     {summary['class_teams']}")
+        print(f"  • Equipos de Docentes / Staff:     {summary['staff_teams']}")
+        print(f"  • Equipos Huérfanos (0 Dueños):    {summary['orphan_teams']}")
+        print(f"  • Equipos Creados por Alumnos:     {summary['student_owned_teams']}")
+        print(f"  • Equipos Vacíos (0 Miembros):     {summary['empty_teams']}")
+        print("=" * 80)
+
+        if getattr(args, "export", False) or getattr(args, "output", None):
+            out_file = args.output or os.path.join(
+                config.reports_dir,
+                f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            export_teams_audit_excel(data, out_file)
+            print(f"💾 Reporte Excel exportado a: {out_file}\n")
+        else:
+            print("💡 Para generar el libro Excel con las 4 hojas de auditoría ejecuta:")
+            print("   python3 main.py teams export\n")
+
+    elif subaction == "export":
+        print("\n📊 Generando libro Excel de auditoría consolidada de Teams...")
+        data = audit_all_teams(graph)
+        out_file = args.output or os.path.join(
+            config.reports_dir,
+            f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        export_teams_audit_excel(data, out_file)
+        print(f"✅ Libro Excel exportado exitosamente a: {out_file}\n")
+
+    elif subaction == "rename":
+        team_id = getattr(args, "id", None)
+        new_name = getattr(args, "name", None)
+        new_desc = getattr(args, "desc", None)
+
+        if not team_id:
+            team_id = input("👉 Introduce el ID del equipo en Teams: ").strip()
+        if not new_name:
+            new_name = input("👉 Introduce el nuevo nombre para el equipo: ").strip()
+
+        if not team_id or not new_name:
+            print("❌ Se requiere ID del equipo y nuevo nombre.")
+            return
+
+        print(f"🔄 Renombrando equipo '{team_id}' a '{new_name}'...")
+        graph.update_team_info(team_id, new_name, new_desc)
+        print(f"✅ Equipo renombrado a '{new_name}' exitosamente en Microsoft Teams.\n")
+
+    elif subaction == "create":
+        subject = getattr(args, "subject", None)
+        nivel = getattr(args, "nivel", None)
+        grado = getattr(args, "grado", None)
+        teacher = getattr(args, "teacher", None)
+        desc = getattr(args, "desc", None)
+
+        if not subject:
+            subject = input("👉 Nombre de la materia (ej. Lengua y Comunicación): ").strip()
+        if not nivel:
+            nivel = input("👉 Nivel (Preparatoria, Secundaria, Primaria, Preescolar): ").strip()
+        if not grado:
+            grado = input("👉 Grado o semestre (ej. 3er Semestre, 1° Secundaria): ").strip()
+        if not teacher:
+            teacher = input("👉 Correo o ID del docente responsable (Owner): ").strip()
+
+        teacher_id = teacher
+        if "@" in teacher:
+            user = graph.get_user_by_upn(teacher)
+            if not user:
+                print(f"❌ Docente con correo '{teacher}' no encontrado en Entra ID.")
+                return
+            teacher_id = user["id"]
+
+        print("\n🚀 Creando clase en Microsoft Teams y matriculando alumnos automáticamente...")
+        school_db = build_school_db()
+        res = create_class_assisted(
+            graph=graph,
+            subject_name=subject,
+            nivel=nivel,
+            grado=grado,
+            teacher_user_id=teacher_id,
+            school_db=school_db,
+            custom_description=desc
+        )
+        print("=" * 80)
+        print(f"🎉 CLASE CREADA EXITOSAMENTE EN MICROSOFT TEAMS")
+        print("=" * 80)
+        print(f"  • Nombre Oficial:    {res['team_name']}")
+        print(f"  • ID de Equipo:      {res['team_id']}")
+        print(f"  • Nivel / Grado:     {nivel} - {grado}")
+        print(f"  • Alumnos Inscritos: {res['students_enrolled_count']}")
+        print("=" * 80 + "\n")
+
+
 def cmd_gui(args):
     """
     Comando 'gui': Inicia la Interfaz Gráfica Web Local (Dashboard) para verificación,
@@ -729,6 +849,25 @@ def main():
         help="Confirma automáticamente el reseteo sin solicitar confirmación interactiva"
     )
 
+    # teams command
+    p_teams = subparsers.add_parser("teams", help="Auditoría, creación asistida y renombrado de equipos en Microsoft Teams")
+    p_teams.add_argument(
+        "action",
+        nargs="?",
+        default="audit",
+        choices=["audit", "export", "rename", "create"],
+        help="Acción a realizar: audit (por defecto), export, rename, create"
+    )
+    p_teams.add_argument("-o", "--output", help="Ruta de salida del archivo Excel de auditoría")
+    p_teams.add_argument("--export", action="store_true", help="Exporta a Excel automáticamente tras auditar")
+    p_teams.add_argument("--id", help="ID del equipo a modificar (para acción rename)")
+    p_teams.add_argument("--name", help="Nuevo nombre del equipo (para acción rename)")
+    p_teams.add_argument("--desc", help="Descripción opcional del equipo")
+    p_teams.add_argument("--subject", help="Nombre de la materia (para acción create)")
+    p_teams.add_argument("--nivel", help="Nivel educativo (para acción create)")
+    p_teams.add_argument("--grado", help="Grado escolar o semestre (para acción create)")
+    p_teams.add_argument("--teacher", help="Correo o ID del docente responsable (para acción create)")
+
     # audit-photos command
     p_photos = subparsers.add_parser("audit-photos", help="Audita y descarga las fotos de perfil de alumnos con galería interactiva")
     p_photos.add_argument(
@@ -762,6 +901,8 @@ def main():
 
     if args.command == "gui":
         cmd_gui(args)
+    elif args.command == "teams":
+        cmd_teams(args)
     elif args.command == "validate":
         cmd_validate(args)
     elif args.command == "dry-run":

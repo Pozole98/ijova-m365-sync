@@ -581,6 +581,128 @@ def menu_photos(config: AppConfig):
     pause()
 
 
+def menu_teams(config: AppConfig):
+    """Módulo interactivo de auditoría y gestión de equipos y clases en Teams."""
+    clear_screen()
+    print("=" * 80)
+    print("👥 [T] AUDITORÍA Y ADMINISTRACIÓN DE MICROSOFT TEAMS (CLASES ESCOLARES)")
+    print("=" * 80)
+    print("📌 Funciones disponibles:")
+    print("   [1] 🔍 Auditoría en Tiempo Real de Equipos y Clases (Consola)")
+    print("   [2] 📊 Generar y Descargar Libro Excel de Auditoría Oficial (.xlsx)")
+    print("   [3] ✏️ Renombrar Equipo o Clase en Microsoft Teams")
+    print("   [4] 🎓 Crear Nueva Clase Educativa (Matriculación Automática por Nivel/Grado)")
+    print("   [0] 🔙 Volver al Menú Principal")
+    print("-" * 80)
+
+    sub_choice = input("👉 Selecciona una sub-opción (1-4 o 0): ").strip()
+    if sub_choice == "0" or not sub_choice:
+        return
+
+    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes)
+    graph.authenticate_device_code()
+
+    from src.teams_engine import (
+        audit_all_teams,
+        export_teams_audit_excel,
+        create_class_assisted,
+    )
+    from export_students_m365 import build_school_db
+    from datetime import datetime
+
+    if sub_choice == "1":
+        print("\n🔍 Auditando los equipos en Microsoft Teams en tiempo real...")
+        data = audit_all_teams(graph)
+        s = data["summary"]
+        print("\n" + "=" * 80)
+        print("📊 RESUMEN EJECUTIVO DE TEAMS:")
+        print("=" * 80)
+        print(f"  • Total de Equipos:               {s['total_teams']}")
+        print(f"  • Clases Activas Ciclo 26-27:     {s['cycle_2026_2027']}")
+        print(f"  • Clases de Ciclos Anteriores:    {s['past_cycles']}")
+        print(f"  • Clases Educativas:              {s['class_teams']}")
+        print(f"  • Equipos de Docentes / Staff:    {s['staff_teams']}")
+        print(f"  • Equipos Huérfanos (0 Dueños):   {s['orphan_teams']}")
+        print(f"  • Creados por Alumnos:            {s['student_owned_teams']}")
+        print(f"  • Equipos Vacíos (0 Miembros):    {s['empty_teams']}")
+        print("=" * 80)
+
+    elif sub_choice == "2":
+        print("\n📊 Generando libro de auditoría de Teams...")
+        data = audit_all_teams(graph)
+        out_file = os.path.join(
+            config.reports_dir,
+            f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        export_teams_audit_excel(data, out_file)
+        print(f"✅ Libro Excel exportado exitosamente:")
+        print(f"   \033[1;32m{out_file}\033[0m")
+
+    elif sub_choice == "3":
+        team_id = input("👉 Introduce el ID del equipo en Teams: ").strip()
+        new_name = input("👉 Introduce el nuevo nombre institucional: ").strip()
+        new_desc = input("👉 Nueva descripción (opcional): ").strip()
+        if team_id and new_name:
+            print(f"\n🔄 Renombrando equipo en Microsoft Teams...")
+            graph.update_team_info(team_id, new_name, new_desc or None)
+            print(f"✅ Equipo renombrado a '{new_name}' con éxito.")
+
+    elif sub_choice == "4":
+        print("\n🎓 ASISTENTE DE CREACIÓN DE CLASES ESCOLARES")
+        print("-" * 80)
+        subject = input("👉 Nombre de la materia (ej. Lengua y Comunicación): ").strip()
+        print("\nNiveles disponibles: Preparatoria, Secundaria, Primaria, Preescolar")
+        nivel = input("👉 Nivel educativo: ").strip()
+        grado = input("👉 Grado escolar o semestre (ej. 3er Semestre, 1° Secundaria): ").strip()
+
+        print("\n🔍 Consultando catálogo de docentes en Microsoft 365...")
+        teachers = graph.get_all_teachers()
+        print(f"Docentes disponibles ({len(teachers)} encontrados):")
+        for i, t in enumerate(teachers[:15], 1):
+            print(f"  [{i}] {t['displayName']} ({t['userPrincipalName']})")
+        if len(teachers) > 15:
+            print(f"  ... y {len(teachers) - 15} más.")
+
+        teacher_input = input("\n👉 Correo o número del docente responsable: ").strip()
+        teacher_id = None
+        if teacher_input.isdigit() and 1 <= int(teacher_input) <= len(teachers):
+            teacher_id = teachers[int(teacher_input) - 1]["id"]
+        elif "@" in teacher_input:
+            u = graph.get_user_by_upn(teacher_input)
+            if u:
+                teacher_id = u["id"]
+        else:
+            teacher_id = teacher_input
+
+        if not teacher_id:
+            print("❌ No se pudo identificar al docente.")
+            pause()
+            return
+
+        desc = input("👉 Descripción del equipo (opcional): ").strip()
+
+        print("\n🚀 Creando clase y matriculando alumnos automáticamente...")
+        school_db = build_school_db()
+        res = create_class_assisted(
+            graph=graph,
+            subject_name=subject,
+            nivel=nivel,
+            grado=grado,
+            teacher_user_id=teacher_id,
+            school_db=school_db,
+            custom_description=desc or None
+        )
+        print("=" * 80)
+        print("🎉 CLASE CREADA EXITOSAMENTE EN MICROSOFT TEAMS")
+        print("=" * 80)
+        print(f"  • Nombre Oficial:    {res['team_name']}")
+        print(f"  • ID de Equipo:      {res['team_id']}")
+        print(f"  • Alumnos Inscritos: {res['students_enrolled_count']}")
+        print("=" * 80)
+
+    pause()
+
+
 def menu_gui(config: AppConfig):
     """Inicia la interfaz gráfica web local desde el menú."""
     clear_screen()
@@ -620,6 +742,9 @@ def run_interactive_menu(config_path: str = "config.json"):
         print("  \033[1;32m[5]\033[0m 🔑 Restablecer Contraseña Olvidada de Alumno (Por matrícula con verificación)")
         print("  \033[1;32m[6]\033[0m 📄 Generar Fichas de Acceso en PDF con Código QR (Imprimibles)\n")
 
+        print("👥 EQUIPOS Y CLASES DE MICROSOFT TEAMS:")
+        print("  \033[1;34m[T]\033[0m 👥 Auditoría y Gestión de Equipos / Clases Teams (Creación, Renombrado, Excel)\n")
+
         print("🗑️ BAJAS, REINICIO DE CICLO Y RECUPERACIÓN:")
         print("  \033[1;31m[7]\033[0m ❌ Dar de Baja Alumno(s) (Individual, Lote o Archivo Excel)")
         print("  \033[1;33m[8]\033[0m 🔄 Restaurar Alumno desde la Papelera de Reciclaje (< 30 días)\n")
@@ -631,12 +756,12 @@ def run_interactive_menu(config_path: str = "config.json"):
         print("  \033[1;32m[12]\033[0m 🖼️ Auditoría de Fotos de Perfil (Descarga + Galería Web Interactiva)\n")
 
         print("🖥️ PANEL DE CONTROL VISUAL:")
-        print("  \033[1;36m[G]\033[0m 🌐 Iniciar Interfaz Gráfica Web (Buscador, Fotos y Fichas Imprimibles)\n")
+        print("  \033[1;36m[G]\033[0m 🌐 Iniciar Interfaz Gráfica Web (Buscador, Fotos, Fichas y Módulo Teams)\n")
 
         print("  \033[1m[0]\033[0m 🚪 Salir del Sistema\n")
         print("=" * 80)
 
-        choice = input("👉 Selecciona una opción (0-12 o G): ").strip()
+        choice = input("👉 Selecciona una opción (0-12, T o G): ").strip()
 
         if choice == "1":
             menu_validate(config)
@@ -650,6 +775,8 @@ def run_interactive_menu(config_path: str = "config.json"):
             menu_reset(config)
         elif choice == "6":
             menu_export_pdf(config)
+        elif choice.upper() in ["T", "TEAMS"]:
+            menu_teams(config)
         elif choice == "7":
             menu_delete(config)
         elif choice == "8":
@@ -669,5 +796,6 @@ def run_interactive_menu(config_path: str = "config.json"):
             print("\n👋 ¡Hasta luego! Sistema cerrado de forma segura.\n")
             break
         else:
-            print("\n❌ Opción no válida. Por favor introduce un número del 0 al 12 o 'G'.")
+            print("\n❌ Opción no válida. Por favor introduce un número del 0 al 12, 'T' o 'G'.")
             pause()
+

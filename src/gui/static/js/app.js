@@ -60,6 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'tab-recycle': 'Papelera & Restauración',
     'tab-photos': 'Auditoría de Fotos de Perfil',
     'tab-history': 'Historial de Fichas',
+    'tab-teams': 'Equipos & Clases Teams',
     'tab-tenant': 'Salud del Tenant',
     'tab-cli': 'Terminal & Guía CLI'
   };
@@ -95,6 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
       loadPhotosGallery(activePhotoFilter, activeLevelFilter);
     } else if (targetTabId === 'tab-history') {
       loadHistory();
+    } else if (targetTabId === 'tab-teams') {
+      loadTeamsData();
     } else if (targetTabId === 'tab-tenant') {
       loadTenantStatus();
     }
@@ -952,6 +955,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ==========================================
+  // ==========================================
   // PESTAÑA 7: GUÍA DE COMANDOS CLI (COPIADO)
   // ==========================================
   document.querySelectorAll('.btn-copy-cli').forEach(btn => {
@@ -973,4 +977,791 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // =========================================================================
+  // PESTAÑA 6: AUDITORÍA Y GESTIÓN DE EQUIPOS Y CLASES DE MICROSOFT TEAMS
+  // =========================================================================
+  let teamsCacheList = [];
+  let teamsDataLoading = false;
+  let filterCycle = 'all';
+  let filterType = 'all';
+  let filterCreator = 'all';
+  let filterStatus = 'all';
+  let teamsSearchQuery = '';
+  let teamsSearchDebounce = null;
+  let teachersList = [];
+  let currentMembersTeamList = [];
+
+  const teamsTableTbody = document.getElementById('teams-table-tbody');
+  const teamsFilteredCount = document.getElementById('teams-filtered-count');
+  const teamsSearchInput = document.getElementById('teams-search-input');
+  const btnRefreshTeams = document.getElementById('btn-refresh-teams');
+  const btnExportTeamsExcel = document.getElementById('btn-export-teams-excel');
+
+  // KPIs elements
+  const kpiTeamsTotal = document.getElementById('teams-kpi-total');
+  const kpiTeamsActive = document.getElementById('teams-kpi-active2627');
+  const kpiTeamsPast = document.getElementById('teams-kpi-pastcycles');
+  const kpiTeamsAnomalies = document.getElementById('teams-kpi-anomalies');
+  const kpiTeamsStudentOwned = document.getElementById('teams-kpi-studentowned');
+
+  async function loadTeamsData(forceRefresh = false) {
+    if (teamsDataLoading) return;
+    teamsDataLoading = true;
+
+    if (teamsTableTbody) {
+      teamsTableTbody.innerHTML = '<tr><td colspan="8" class="table-empty-row"><span style="display: inline-flex; align-items: center; gap: 8px;">Auditando equipos en Microsoft Teams en vivo...</span></td></tr>';
+    }
+
+    try {
+      const url = '/api/teams' + (forceRefresh ? '?refresh=true' : '');
+      const resp = await fetch(url);
+      const res = await resp.json();
+
+      if (res.success && res.data) {
+        const d = res.data;
+        teamsCacheList = d.teams || [];
+
+        if (kpiTeamsTotal) kpiTeamsTotal.textContent = d.summary.total_teams || 0;
+        if (kpiTeamsActive) kpiTeamsActive.textContent = d.summary.cycle_2026_2027 || 0;
+        if (kpiTeamsPast) kpiTeamsPast.textContent = d.summary.past_cycles || 0;
+        if (kpiTeamsAnomalies) kpiTeamsAnomalies.textContent = (d.summary.empty_teams || 0) + (d.summary.orphan_teams || 0);
+        if (kpiTeamsStudentOwned) kpiTeamsStudentOwned.textContent = d.summary.student_owned_teams || 0;
+
+        applyTeamsFilters();
+
+        if (forceRefresh) {
+          showToast('Auditoría de Teams actualizada con éxito.', 'success');
+        }
+      } else {
+        if (teamsTableTbody) {
+          teamsTableTbody.innerHTML = `<tr><td colspan="8" class="table-empty-row" style="color: var(--color-danger);">Error al auditar equipos: ${res.error || 'Error desconocido'}</td></tr>`;
+        }
+        showToast('Error al auditar equipos de Teams: ' + (res.error || ''), 'error');
+      }
+    } catch (err) {
+      if (teamsTableTbody) {
+        teamsTableTbody.innerHTML = `<tr><td colspan="8" class="table-empty-row" style="color: var(--color-danger);">Error de conexión: ${err.message}</td></tr>`;
+      }
+      showToast('Error al conectar con el servidor: ' + err.message, 'error');
+    } finally {
+      teamsDataLoading = false;
+    }
+  }
+
+  function applyTeamsFilters() {
+    if (!teamsCacheList) return;
+
+    const q = teamsSearchQuery.trim().toLowerCase();
+
+    const filtered = teamsCacheList.filter(t => {
+      // 1. Filtro de búsqueda libre
+      if (q) {
+        const nameMatch = (t.name || '').toLowerCase().includes(q);
+        const descMatch = (t.description || '').toLowerCase().includes(q);
+        const idMatch = (t.id || '').toLowerCase().includes(q);
+        const ownersMatch = (t.owners || []).some(o =>
+          (o.name || '').toLowerCase().includes(q) || (o.upn || '').toLowerCase().includes(q)
+        );
+        if (!nameMatch && !descMatch && !idMatch && !ownersMatch) {
+          return false;
+        }
+      }
+
+      // 2. Filtro de Ciclo
+      const cycleVal = t.academic_cycle || t.cycle || '';
+      if (filterCycle !== 'all' && cycleVal !== filterCycle) {
+        return false;
+      }
+
+      // 3. Filtro de Tipo
+      if (filterType !== 'all' && t.team_type !== filterType) {
+        return false;
+      }
+
+      // 4. Filtro de Creador / Origen
+      if (filterCreator !== 'all' && t.creator_type !== filterCreator) {
+        return false;
+      }
+
+      // 5. Filtro de Estado
+      const countForStatus = (t.students_count !== undefined) ? t.students_count : ((t.members_count !== undefined) ? t.members_count : (t.member_count || 0));
+      if (filterStatus === 'active' && countForStatus === 0) {
+        return false;
+      }
+      if (filterStatus === 'vacio' && countForStatus > 0) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (teamsFilteredCount) {
+      teamsFilteredCount.textContent = `Mostrando ${filtered.length} de ${teamsCacheList.length} equipos`;
+    }
+
+    renderTeamsTable(filtered);
+  }
+
+  function escapeHtml(str) {
+    if (!str) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function renderTeamsTable(teams) {
+    if (!teamsTableTbody) return;
+
+    if (teams.length === 0) {
+      teamsTableTbody.innerHTML = '<tr><td colspan="8" class="table-empty-row">No se encontraron equipos que coincidan con los filtros seleccionados.</td></tr>';
+      return;
+    }
+
+    teamsTableTbody.innerHTML = '';
+
+    teams.forEach(t => {
+      const tr = document.createElement('tr');
+
+      // Badges de Ciclo
+      const cycleVal = t.academic_cycle || t.cycle || '2026-2027';
+      let cycleBadge = '<span class="badge badge-gray">Otro</span>';
+      if (cycleVal === '2026-2027') {
+        cycleBadge = '<span class="badge badge-green">26-27</span>';
+      } else if (cycleVal === '2025-2026') {
+        cycleBadge = '<span class="badge badge-blue">25-26</span>';
+      }
+
+      // Badges de Tipo
+      let typeBadge = '<span class="badge badge-gray">General</span>';
+      if (t.team_type === 'CLASE') {
+        typeBadge = '<span class="badge badge-purple">Clase</span>';
+      } else if (t.team_type === 'DOCENTES') {
+        typeBadge = '<span class="badge badge-blue">Docentes</span>';
+      }
+
+      // Propietarios
+      let ownersHtml = '';
+      if (!t.owners || t.owners.length === 0) {
+        ownersHtml = '<span class="owner-orphan-tag">⚠️ Huérfano (0 Propietarios)</span>';
+      } else {
+        const ownerNames = t.owners.map(o => escapeHtml(o.name || o.upn)).join(', ');
+        ownersHtml = `<div class="owners-tag-list" title="${escapeHtml(ownerNames)}"><strong>${escapeHtml(t.owners[0].name || t.owners[0].upn)}</strong>${t.owners.length > 1 ? `<span style="font-size:0.72rem; color:var(--text-muted);">+${t.owners.length - 1} más</span>` : ''}</div>`;
+      }
+
+      // Creador / Origen
+      let creatorHtml = '';
+      if (t.creator_type === 'MAESTRO_STAFF') {
+        creatorHtml = '<span class="badge badge-green">Docente / Staff</span>';
+      } else if (t.creator_type === 'ALUMNO') {
+        creatorHtml = `<span class="badge badge-purple" title="Propietario estudiantil">Alumno (${t.owners && t.owners[0] ? escapeHtml(t.owners[0].upn.split('@')[0]) : ''})</span>`;
+      } else {
+        creatorHtml = '<span class="badge badge-amber">Huérfano</span>';
+      }
+
+      // Alumnos / Miembros
+      const studentCount = (t.students_count !== undefined) ? t.students_count : ((t.members_count !== undefined) ? t.members_count : (t.member_count || 0));
+      const memberCount = (t.members_count !== undefined) ? t.members_count : (t.member_count !== undefined ? t.member_count : studentCount);
+      const memberBadgeClass = studentCount > 0 ? 'badge-green' : 'badge-amber';
+      const membersBadge = `<span class="badge ${memberBadgeClass}" title="${memberCount} miembros totales en Teams">${studentCount}</span>`;
+
+      // Fecha creación
+      const rawDate = t.created_date_str || t.created_date || t.created_datetime || '';
+      const createdDate = rawDate ? rawDate.substring(0, 10) : 'N/D';
+
+      // Nombre y descripción
+      const isArchived = Boolean(t.is_archived);
+      const archivedIcon = isArchived ? '<span title="Archivado / Solo lectura" style="font-size: 0.8rem; margin-right: 4px;">🔒</span>' : '';
+      const descHtml = t.description ? `<span class="team-desc-muted" title="${escapeHtml(t.description)}">${escapeHtml(t.description)}</span>` : '';
+
+      tr.innerHTML = `
+        <td>
+          <div class="team-title-cell">
+            <span class="team-name-primary">${archivedIcon}${escapeHtml(t.name)}</span>
+            ${descHtml}
+          </div>
+        </td>
+        <td>${cycleBadge}</td>
+        <td>${typeBadge}</td>
+        <td>${ownersHtml}</td>
+        <td class="text-center">${membersBadge}</td>
+        <td>${creatorHtml}</td>
+        <td class="mono" style="font-size: 0.78rem;">${createdDate}</td>
+        <td class="text-right">
+          <div class="team-actions-cell">
+            <button type="button" class="btn-action-sm btn-rename" data-id="${t.id}" title="Renombrar equipo">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              <span>Renombrar</span>
+            </button>
+            <button type="button" class="btn-action-sm btn-members" data-id="${t.id}" title="Ver alumnos y docentes">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Integrantes</span>
+            </button>
+            <button type="button" class="btn-action-sm btn-archive" data-id="${t.id}" data-archived="${isArchived ? 'true' : 'false'}" title="${isArchived ? 'Desarchivar' : 'Archivar (Solo lectura)'}">
+              <span>${isArchived ? '🔓 Desarchivar' : '📦 Archivar'}</span>
+            </button>
+          </div>
+        </td>
+      `;
+
+      teamsTableTbody.appendChild(tr);
+    });
+
+    // Wire action buttons
+    teamsTableTbody.querySelectorAll('.btn-rename').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.getAttribute('data-id');
+        openRenameModal(teamId);
+      });
+    });
+
+    teamsTableTbody.querySelectorAll('.btn-members').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.getAttribute('data-id');
+        openMembersModal(teamId);
+      });
+    });
+
+    teamsTableTbody.querySelectorAll('.btn-archive').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.getAttribute('data-id');
+        const isArchived = btn.getAttribute('data-archived') === 'true';
+        toggleArchiveTeam(teamId, isArchived);
+      });
+    });
+  }
+
+  // Configuración de Filtros tipo Pill
+  function setupPillFilters(containerId, activeCallback) {
+    const container = document.getElementById(containerId);
+    if (!container) return;
+    const buttons = container.querySelectorAll('.pill-btn');
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        buttons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeCallback(btn);
+        applyTeamsFilters();
+      });
+    });
+  }
+
+  setupPillFilters('filter-group-cycle', btn => {
+    filterCycle = btn.getAttribute('data-cycle');
+  });
+
+  setupPillFilters('filter-group-type', btn => {
+    filterType = btn.getAttribute('data-type');
+  });
+
+  setupPillFilters('filter-group-creator', btn => {
+    filterCreator = btn.getAttribute('data-creator');
+  });
+
+  setupPillFilters('filter-group-status', btn => {
+    filterStatus = btn.getAttribute('data-status');
+  });
+
+  // Búsqueda en tiempo real
+  if (teamsSearchInput) {
+    teamsSearchInput.addEventListener('input', e => {
+      clearTimeout(teamsSearchDebounce);
+      teamsSearchDebounce = setTimeout(() => {
+        teamsSearchQuery = e.target.value;
+        applyTeamsFilters();
+      }, 200);
+    });
+  }
+
+  if (btnRefreshTeams) {
+    btnRefreshTeams.addEventListener('click', () => {
+      loadTeamsData(true);
+    });
+  }
+
+  if (btnExportTeamsExcel) {
+    btnExportTeamsExcel.addEventListener('click', () => {
+      showToast('Generando libro Excel de auditoría consolidada...', 'info');
+      window.location.href = '/api/teams/export-excel';
+    });
+  }
+
+  // ==========================================
+  // MODAL 1: CREAR NUEVA CLASE EDUCATIVA
+  // ==========================================
+  const modalCreateClass = document.getElementById('modal-create-class');
+  const btnOpenCreateClass = document.getElementById('btn-open-create-class-modal');
+  const btnCloseModalCreate = document.getElementById('btn-close-modal-create');
+  const btnCancelCreateClass = document.getElementById('btn-cancel-create-class');
+  const btnSubmitCreateClass = document.getElementById('btn-submit-create-class');
+
+  const inputClassSubject = document.getElementById('input-class-subject');
+  const selectClassNivel = document.getElementById('select-class-nivel');
+  const selectClassGrado = document.getElementById('select-class-grado');
+  const selectClassTeacher = document.getElementById('select-class-teacher');
+  const inputClassDesc = document.getElementById('input-class-desc');
+
+  const previewContainer = document.getElementById('create-class-preview-container');
+  const previewCount = document.getElementById('create-class-preview-count');
+  const chipsList = document.getElementById('create-class-chips-list');
+  const modalCreateAlert = document.getElementById('modal-create-alert');
+
+  const gradosPorNivel = {
+    'Preparatoria': ['1er Semestre', '2do Semestre', '3er Semestre', '4to Semestre', '5to Semestre', '6to Semestre'],
+    'Secundaria': ['1° Secundaria', '2° Secundaria', '3° Secundaria'],
+    'Primaria': ['1° Primaria', '2° Primaria', '3° Primaria', '4° Primaria', '5° Primaria', '6° Primaria'],
+    'Preescolar': ['1° Preescolar', '2° Preescolar', '3° Preescolar']
+  };
+
+  async function loadTeachersDropdown() {
+    if (teachersList.length > 0) return;
+    try {
+      const resp = await fetch('/api/teams/teachers');
+      const res = await resp.json();
+      if (res.success && res.teachers) {
+        teachersList = res.teachers;
+        if (selectClassTeacher) {
+          selectClassTeacher.innerHTML = '<option value="">-- Seleccionar Profesor Titular --</option>';
+          teachersList.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = `${t.displayName} (${t.userPrincipalName})`;
+            selectClassTeacher.appendChild(opt);
+          });
+        }
+      }
+    } catch (err) {
+      if (selectClassTeacher) {
+        selectClassTeacher.innerHTML = '<option value="">Error al cargar docentes</option>';
+      }
+    }
+  }
+
+  function resetCreateClassModal() {
+    if (inputClassSubject) inputClassSubject.value = '';
+    if (selectClassNivel) selectClassNivel.value = '';
+    if (selectClassGrado) {
+      selectClassGrado.innerHTML = '<option value="">-- Primero elija nivel --</option>';
+      selectClassGrado.disabled = true;
+    }
+    if (inputClassDesc) inputClassDesc.value = '';
+    if (previewContainer) previewContainer.style.display = 'none';
+    if (chipsList) chipsList.innerHTML = '';
+    if (modalCreateAlert) {
+      modalCreateAlert.style.display = 'none';
+      modalCreateAlert.textContent = '';
+    }
+    if (btnSubmitCreateClass) {
+      btnSubmitCreateClass.disabled = true;
+      btnSubmitCreateClass.innerHTML = '<span>Crear Clase en Microsoft Teams</span>';
+    }
+  }
+
+  if (btnOpenCreateClass) {
+    btnOpenCreateClass.addEventListener('click', () => {
+      resetCreateClassModal();
+      loadTeachersDropdown();
+      if (modalCreateClass) modalCreateClass.style.display = 'flex';
+    });
+  }
+
+  function closeCreateClassModal() {
+    if (modalCreateClass) modalCreateClass.style.display = 'none';
+    resetCreateClassModal();
+  }
+
+  if (btnCloseModalCreate) btnCloseModalCreate.addEventListener('click', closeCreateClassModal);
+  if (btnCancelCreateClass) btnCancelCreateClass.addEventListener('click', closeCreateClassModal);
+
+  if (selectClassNivel) {
+    selectClassNivel.addEventListener('change', () => {
+      const nivel = selectClassNivel.value;
+      if (!nivel || !gradosPorNivel[nivel]) {
+        selectClassGrado.innerHTML = '<option value="">-- Primero elija nivel --</option>';
+        selectClassGrado.disabled = true;
+        previewContainer.style.display = 'none';
+        validateCreateForm();
+        return;
+      }
+
+      selectClassGrado.innerHTML = '<option value="">-- Seleccionar Grado --</option>';
+      gradosPorNivel[nivel].forEach(g => {
+        const opt = document.createElement('option');
+        opt.value = g;
+        opt.textContent = g;
+        selectClassGrado.appendChild(opt);
+      });
+      selectClassGrado.disabled = false;
+      previewContainer.style.display = 'none';
+      validateCreateForm();
+    });
+  }
+
+  async function updatePreviewStudents() {
+    const nivel = selectClassNivel ? selectClassNivel.value : '';
+    const grado = selectClassGrado ? selectClassGrado.value : '';
+
+    if (!nivel || !grado) {
+      if (previewContainer) previewContainer.style.display = 'none';
+      validateCreateForm();
+      return;
+    }
+
+    if (previewContainer) previewContainer.style.display = 'block';
+    if (chipsList) chipsList.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Cargando lista de alumnos del grado...</span>';
+
+    try {
+      const url = `/api/teams/students-by-grade?nivel=${encodeURIComponent(nivel)}&grado=${encodeURIComponent(grado)}`;
+      const resp = await fetch(url);
+      const res = await resp.json();
+
+      if (res.success && res.students) {
+        if (previewCount) previewCount.textContent = `${res.count} Alumnos`;
+        if (chipsList) {
+          if (res.students.length === 0) {
+            chipsList.innerHTML = '<span style="color: var(--color-amber); font-size: 0.8rem;">No se encontraron alumnos registrados para este grado en la base institucional.</span>';
+          } else {
+            chipsList.innerHTML = '';
+            res.students.forEach(st => {
+              const chip = document.createElement('div');
+              chip.className = 'student-chip';
+              chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.display_name)}</span>`;
+              chipsList.appendChild(chip);
+            });
+          }
+        }
+      }
+    } catch (err) {
+      if (chipsList) chipsList.innerHTML = `<span style="color: var(--color-danger); font-size: 0.8rem;">Error al obtener alumnos: ${err.message}</span>`;
+    }
+    validateCreateForm();
+  }
+
+  if (selectClassGrado) {
+    selectClassGrado.addEventListener('change', updatePreviewStudents);
+  }
+
+  function validateCreateForm() {
+    const subject = inputClassSubject ? inputClassSubject.value.trim() : '';
+    const nivel = selectClassNivel ? selectClassNivel.value : '';
+    const grado = selectClassGrado ? selectClassGrado.value : '';
+    const teacher = selectClassTeacher ? selectClassTeacher.value : '';
+
+    const isValid = Boolean(subject && nivel && grado && teacher);
+    if (btnSubmitCreateClass) {
+      btnSubmitCreateClass.disabled = !isValid;
+    }
+  }
+
+  if (inputClassSubject) inputClassSubject.addEventListener('input', validateCreateForm);
+  if (selectClassTeacher) selectClassTeacher.addEventListener('change', validateCreateForm);
+
+  if (btnSubmitCreateClass) {
+    btnSubmitCreateClass.addEventListener('click', async () => {
+      const subject = inputClassSubject.value.trim();
+      const nivel = selectClassNivel.value;
+      const grado = selectClassGrado.value;
+      const teacherId = selectClassTeacher.value;
+      const desc = inputClassDesc ? inputClassDesc.value.trim() : '';
+
+      if (!subject || !nivel || !grado || !teacherId) {
+        showToast('Por favor completa todos los campos obligatorios.', 'error');
+        return;
+      }
+
+      btnSubmitCreateClass.disabled = true;
+      btnSubmitCreateClass.innerHTML = '<span style="display: inline-flex; align-items: center; gap: 8px;">Creando clase y matriculando alumnos en M365...</span>';
+      if (modalCreateAlert) modalCreateAlert.style.display = 'none';
+
+      try {
+        const resp = await fetch('/api/teams/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            subject_name: subject,
+            nivel: nivel,
+            grado: grado,
+            teacher_id: teacherId,
+            description: desc
+          })
+        });
+        const res = await resp.json();
+
+        if (res.success && res.result) {
+          const r = res.result;
+          showToast(`Clase "${r.team_name}" creada con éxito en Teams con ${r.students_enrolled_count} alumnos.`, 'success');
+          closeCreateClassModal();
+          loadTeamsData(true);
+        } else {
+          if (modalCreateAlert) {
+            modalCreateAlert.style.display = 'block';
+            modalCreateAlert.className = 'saas-alert-banner alert-danger';
+            modalCreateAlert.textContent = `Error al crear clase: ${res.error || 'Ocurrió un error inesperado'}`;
+          }
+          btnSubmitCreateClass.disabled = false;
+          btnSubmitCreateClass.innerHTML = '<span>Crear Clase en Microsoft Teams</span>';
+        }
+      } catch (err) {
+        if (modalCreateAlert) {
+          modalCreateAlert.style.display = 'block';
+          modalCreateAlert.className = 'saas-alert-banner alert-danger';
+          modalCreateAlert.textContent = `Error de red: ${err.message}`;
+        }
+        btnSubmitCreateClass.disabled = false;
+        btnSubmitCreateClass.innerHTML = '<span>Crear Clase en Microsoft Teams</span>';
+      }
+    });
+  }
+
+  // ==========================================
+  // MODAL 2: RENOMBRAR EQUIPO EN TEAMS
+  // ==========================================
+  const modalRenameTeam = document.getElementById('modal-rename-team');
+  const btnCloseModalRename = document.getElementById('btn-close-modal-rename');
+  const btnCancelRenameTeam = document.getElementById('btn-cancel-rename-team');
+  const btnSubmitRenameTeam = document.getElementById('btn-submit-rename-team');
+
+  const renameTeamId = document.getElementById('rename-team-id');
+  const renameCurrentName = document.getElementById('rename-current-name');
+  const renameNewName = document.getElementById('rename-new-name');
+  const renameNewDesc = document.getElementById('rename-new-desc');
+  const modalRenameAlert = document.getElementById('modal-rename-alert');
+
+  function openRenameModal(teamId) {
+    const team = teamsCacheList.find(t => t.id === teamId);
+    if (!team) return;
+
+    if (renameTeamId) renameTeamId.value = team.id;
+    if (renameCurrentName) renameCurrentName.value = team.name;
+    if (renameNewName) renameNewName.value = team.name;
+    if (renameNewDesc) renameNewDesc.value = team.description || '';
+    if (modalRenameAlert) {
+      modalRenameAlert.style.display = 'none';
+      modalRenameAlert.textContent = '';
+    }
+    if (btnSubmitRenameTeam) {
+      btnSubmitRenameTeam.disabled = false;
+      btnSubmitRenameTeam.innerHTML = '<span>Guardar Cambios</span>';
+    }
+
+    if (modalRenameTeam) modalRenameTeam.style.display = 'flex';
+    if (renameNewName) {
+      setTimeout(() => renameNewName.focus(), 150);
+    }
+  }
+
+  function closeRenameModal() {
+    if (modalRenameTeam) modalRenameTeam.style.display = 'none';
+  }
+
+  if (btnCloseModalRename) btnCloseModalRename.addEventListener('click', closeRenameModal);
+  if (btnCancelRenameTeam) btnCancelRenameTeam.addEventListener('click', closeRenameModal);
+
+  if (btnSubmitRenameTeam) {
+    btnSubmitRenameTeam.addEventListener('click', async () => {
+      const teamId = renameTeamId ? renameTeamId.value : '';
+      const newName = renameNewName ? renameNewName.value.trim() : '';
+      const newDesc = renameNewDesc ? renameNewDesc.value.trim() : '';
+
+      if (!teamId || !newName) {
+        showToast('El nombre no puede estar vacío.', 'error');
+        return;
+      }
+
+      btnSubmitRenameTeam.disabled = true;
+      btnSubmitRenameTeam.innerHTML = '<span>Guardando cambios en M365...</span>';
+      if (modalRenameAlert) modalRenameAlert.style.display = 'none';
+
+      try {
+        const resp = await fetch(`/api/teams/${teamId}/rename`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            new_name: newName,
+            new_description: newDesc
+          })
+        });
+        const res = await resp.json();
+
+        if (res.success) {
+          showToast(`Equipo renombrado a "${newName}" con éxito.`, 'success');
+          // Actualizar en memoria local
+          const team = teamsCacheList.find(t => t.id === teamId);
+          if (team) {
+            team.name = newName;
+            team.description = newDesc;
+          }
+          applyTeamsFilters();
+          closeRenameModal();
+        } else {
+          if (modalRenameAlert) {
+            modalRenameAlert.style.display = 'block';
+            modalRenameAlert.className = 'saas-alert-banner alert-danger';
+            modalRenameAlert.textContent = `Error: ${res.error || 'No se pudo renombrar el equipo'}`;
+          }
+          btnSubmitRenameTeam.disabled = false;
+          btnSubmitRenameTeam.innerHTML = '<span>Guardar Cambios</span>';
+        }
+      } catch (err) {
+        if (modalRenameAlert) {
+          modalRenameAlert.style.display = 'block';
+          modalRenameAlert.className = 'saas-alert-banner alert-danger';
+          modalRenameAlert.textContent = `Error de conexión: ${err.message}`;
+        }
+        btnSubmitRenameTeam.disabled = false;
+        btnSubmitRenameTeam.innerHTML = '<span>Guardar Cambios</span>';
+      }
+    });
+  }
+
+  // ==========================================
+  // MODAL 3: DETALLE DE INTEGRANTES DE EQUIPO
+  // ==========================================
+  const modalTeamMembers = document.getElementById('modal-team-members');
+  const btnCloseModalMembers = document.getElementById('btn-close-modal-members');
+  const btnCloseMembersModal = document.getElementById('btn-close-members-modal');
+  const membersModalTeamName = document.getElementById('members-modal-team-name');
+  const membersModalTeamMeta = document.getElementById('members-modal-team-meta');
+  const membersTeachersRow = document.getElementById('members-teachers-row');
+  const membersStudentCount = document.getElementById('members-student-count');
+  const filterMembersSubsearch = document.getElementById('filter-members-subsearch');
+  const membersStudentsTbody = document.getElementById('members-students-tbody');
+
+  function closeMembersModal() {
+    if (modalTeamMembers) modalTeamMembers.style.display = 'none';
+  }
+
+  if (btnCloseModalMembers) btnCloseModalMembers.addEventListener('click', closeMembersModal);
+  if (btnCloseMembersModal) btnCloseMembersModal.addEventListener('click', closeMembersModal);
+
+  async function openMembersModal(teamId) {
+    const team = teamsCacheList.find(t => t.id === teamId);
+    if (!team) return;
+
+    if (membersModalTeamName) membersModalTeamName.textContent = team.name;
+    if (membersModalTeamMeta) {
+      membersModalTeamMeta.textContent = `ID: ${team.id} • Tipo: ${team.team_type} • Ciclo: ${team.academic_cycle}`;
+    }
+    if (membersTeachersRow) {
+      membersTeachersRow.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Cargando propietarios...</span>';
+    }
+    if (membersStudentCount) membersStudentCount.textContent = '...';
+    if (filterMembersSubsearch) filterMembersSubsearch.value = '';
+    if (membersStudentsTbody) {
+      membersStudentsTbody.innerHTML = '<tr><td colspan="4" class="table-empty-row">Consultando padrón de integrantes en Microsoft Graph...</td></tr>';
+    }
+
+    if (modalTeamMembers) modalTeamMembers.style.display = 'flex';
+
+    try {
+      const resp = await fetch(`/api/teams/${teamId}/members`);
+      const res = await resp.json();
+
+      if (res.success && res.data) {
+        const d = res.data;
+
+        // Render Teachers
+        if (membersTeachersRow) {
+          if (!d.teachers || d.teachers.length === 0) {
+            membersTeachersRow.innerHTML = '<span class="owner-orphan-tag">⚠️ No hay profesores propietarios asignados (Equipo Huérfano)</span>';
+          } else {
+            membersTeachersRow.innerHTML = '';
+            d.teachers.forEach(tc => {
+              const pill = document.createElement('div');
+              pill.className = 'teacher-pill';
+              pill.innerHTML = `<span>👤 ${escapeHtml(tc.displayName || tc.userPrincipalName)}</span><span style="font-size: 0.72rem; opacity: 0.85;">(${escapeHtml(tc.userPrincipalName)})</span>`;
+              membersTeachersRow.appendChild(pill);
+            });
+          }
+        }
+
+        // Render Students
+        currentMembersTeamList = d.students || [];
+        if (membersStudentCount) membersStudentCount.textContent = currentMembersTeamList.length;
+        renderMembersSubTable(currentMembersTeamList);
+      } else {
+        if (membersStudentsTbody) {
+          membersStudentsTbody.innerHTML = `<tr><td colspan="4" class="table-empty-row" style="color: var(--color-danger);">Error al cargar integrantes: ${res.error || 'Desconocido'}</td></tr>`;
+        }
+      }
+    } catch (err) {
+      if (membersStudentsTbody) {
+        membersStudentsTbody.innerHTML = `<tr><td colspan="4" class="table-empty-row" style="color: var(--color-danger);">Error de conexión: ${err.message}</td></tr>`;
+      }
+    }
+  }
+
+  function renderMembersSubTable(students) {
+    if (!membersStudentsTbody) return;
+
+    if (students.length === 0) {
+      membersStudentsTbody.innerHTML = '<tr><td colspan="4" class="table-empty-row">No hay alumnos inscritos en este equipo.</td></tr>';
+      return;
+    }
+
+    membersStudentsTbody.innerHTML = '';
+    students.forEach(st => {
+      const tr = document.createElement('tr');
+      const mat = st.matricula || (st.userPrincipalName ? st.userPrincipalName.split('@')[0] : 'N/D');
+      tr.innerHTML = `
+        <td><strong class="highlight mono">${escapeHtml(mat)}</strong></td>
+        <td>${escapeHtml(st.displayName || 'Sin nombre')}</td>
+        <td class="mono" style="font-size: 0.78rem;">${escapeHtml(st.userPrincipalName)}</td>
+        <td class="text-center"><span class="badge badge-outline">Estudiante</span></td>
+      `;
+      membersStudentsTbody.appendChild(tr);
+    });
+  }
+
+  if (filterMembersSubsearch) {
+    filterMembersSubsearch.addEventListener('input', e => {
+      const q = e.target.value.trim().toLowerCase();
+      if (!currentMembersTeamList) return;
+
+      const filtered = currentMembersTeamList.filter(st => {
+        const name = (st.displayName || '').toLowerCase();
+        const upn = (st.userPrincipalName || '').toLowerCase();
+        const mat = (st.matricula || '').toLowerCase();
+        return name.includes(q) || upn.includes(q) || mat.includes(q);
+      });
+      renderMembersSubTable(filtered);
+    });
+  }
+
+  // ==========================================
+  // ACCIÓN DE ARCHIVADO / DESARCHIVADO
+  // ==========================================
+  async function toggleArchiveTeam(teamId, isCurrentlyArchived) {
+    const actionName = isCurrentlyArchived ? 'desarchivar' : 'archivar';
+    const actionEndpoint = isCurrentlyArchived ? 'unarchive' : 'archive';
+
+    const confirmMsg = isCurrentlyArchived
+      ? '¿Deseas desarchivar este equipo y habilitar nuevamente la participación de alumnos y maestros?'
+      : '¿Deseas archivar este equipo? Pasará a modo solo lectura y ningún integrante podrá escribir ni enviar tareas.';
+
+    if (!confirm(confirmMsg)) return;
+
+    showToast(`${isCurrentlyArchived ? 'Desarchivando' : 'Archivando'} equipo en Microsoft Teams...`, 'info');
+
+    try {
+      const resp = await fetch(`/api/teams/${teamId}/${actionEndpoint}`, { method: 'POST' });
+      const res = await resp.json();
+
+      if (res.success) {
+        showToast(res.message, 'success');
+        const team = teamsCacheList.find(t => t.id === teamId);
+        if (team) {
+          team.is_archived = !isCurrentlyArchived;
+        }
+        applyTeamsFilters();
+      } else {
+        showToast(`Error al ${actionName} equipo: ${res.error || 'Error'}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Error de conexión: ${err.message}`, 'error');
+    }
+  }
 });

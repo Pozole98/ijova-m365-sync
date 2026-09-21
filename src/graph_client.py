@@ -737,3 +737,199 @@ class GraphClient:
             "successes": successes,
             "failures": failures
         }
+
+    # ==========================================
+    # MÓDULO DE MICROSOFT TEAMS & CLASES
+    # ==========================================
+
+    def get_all_teams(self) -> List[Dict[str, Any]]:
+        """
+        Consulta todos los grupos de Microsoft 365 con capacidades de Team activas
+        (resourceProvisioningOptions eq 'Team') mediante paginación exhaustiva.
+        """
+        url = (
+            "https://graph.microsoft.com/v1.0/groups"
+            "?$filter=resourceProvisioningOptions/Any(x:x eq 'Team')"
+            "&$select=id,displayName,description,createdDateTime,mail,mailNickname,creationOptions,visibility,renewedDateTime"
+            "&$top=999"
+        )
+        teams: List[Dict[str, Any]] = []
+        while url:
+            data = self._request_with_retry(url)
+            teams.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+        return teams
+
+    def get_team_details(self, team_id: str) -> Dict[str, Any]:
+        """Consulta los detalles nativos de Teams (/v1.0/teams/{id}) como archivado y resumen."""
+        url = f"https://graph.microsoft.com/v1.0/teams/{team_id}"
+        try:
+            return self._request_with_retry(url)
+        except Exception as e:
+            return {"error": str(e), "isArchived": False}
+
+    def get_team_owners(self, team_id: str) -> List[Dict[str, Any]]:
+        """Consulta los propietarios (docentes/administradores) de un equipo."""
+        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/owners?$select=id,displayName,userPrincipalName,mail,jobTitle"
+        owners: List[Dict[str, Any]] = []
+        while url:
+            data = self._request_with_retry(url)
+            owners.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+        return owners
+
+    def get_team_members(self, team_id: str) -> List[Dict[str, Any]]:
+        """Consulta los miembros (alumnos y docentes) de un equipo."""
+        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/members?$select=id,displayName,userPrincipalName,mail,jobTitle"
+        members: List[Dict[str, Any]] = []
+        while url:
+            data = self._request_with_retry(url)
+            members.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+        return members
+
+    def update_team_info(self, team_id: str, display_name: str, description: Optional[str] = None) -> bool:
+        """Renombra un equipo y actualiza su descripción en Entra ID / Teams."""
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        body: Dict[str, Any] = {"displayName": display_name.strip()}
+        if description is not None:
+            body["description"] = description.strip()
+
+        resp = requests.patch(url, headers=headers, json=body, timeout=30)
+        if resp.status_code in [200, 204]:
+            return True
+        raise GraphClientError(f"Error al renombrar equipo {team_id}: {resp.status_code} - {resp.text}")
+
+    def archive_team(self, team_id: str, set_spo_readonly: bool = True) -> bool:
+        """Archiva un equipo en Microsoft Teams (pone en modo solo lectura para miembros)."""
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+        url = f"https://graph.microsoft.com/v1.0/teams/{team_id}/archive"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        body = {"shouldSetSpoSiteReadOnlyForMembers": set_spo_readonly}
+        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        if resp.status_code in [200, 202, 204]:
+            return True
+        raise GraphClientError(f"Error al archivar equipo {team_id}: {resp.status_code} - {resp.text}")
+
+    def unarchive_team(self, team_id: str) -> bool:
+        """Desarchiva un equipo en Microsoft Teams."""
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+        url = f"https://graph.microsoft.com/v1.0/teams/{team_id}/unarchive"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        resp = requests.post(url, headers=headers, json={}, timeout=30)
+        if resp.status_code in [200, 202, 204]:
+            return True
+        raise GraphClientError(f"Error al desarchivar equipo {team_id}: {resp.status_code} - {resp.text}")
+
+    def add_team_member(self, team_id: str, user_id: str, is_owner: bool = False) -> bool:
+        """Agrega un miembro o propietario a un equipo."""
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+        endpoint = "owners" if is_owner else "members"
+        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/{endpoint}/$ref"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        body = {"@odata.id": f"https://graph.microsoft.com/v1.0/directoryObjects/{user_id}"}
+        resp = requests.post(url, headers=headers, json=body, timeout=30)
+        if resp.status_code in [200, 204]:
+            return True
+        if resp.status_code == 400 and "already exist" in resp.text.lower():
+            return True
+        raise GraphClientError(f"Error al agregar usuario {user_id} a equipo {team_id}: {resp.status_code} - {resp.text}")
+
+    def remove_team_member(self, team_id: str, user_id: str) -> bool:
+        """Remueve un usuario de un equipo."""
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/members/{user_id}/$ref"
+        headers = {"Authorization": f"Bearer {self.access_token}"}
+        resp = requests.delete(url, headers=headers, timeout=30)
+        return resp.status_code in [200, 204]
+
+    def create_education_class_team(
+        self,
+        display_name: str,
+        description: str,
+        teacher_user_id: str,
+        student_user_ids: List[str]
+    ) -> Dict[str, Any]:
+        """
+        Crea un equipo de clase educativa (educationClass) con Tareas y OneNote integrados.
+        Asigna al docente como Owner y a los alumnos como Members.
+        """
+        if not self.access_token:
+            raise GraphClientError("No hay token de acceso disponible.")
+
+        members = [
+            {
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "roles": ["owner"],
+                "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{teacher_user_id}')"
+            }
+        ]
+        for s_id in student_user_ids:
+            members.append({
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "roles": [],
+                "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{s_id}')"
+            })
+
+        body = {
+            "template@odata.bind": "https://graph.microsoft.com/v1.0/teamsTemplates('educationClass')",
+            "displayName": display_name.strip(),
+            "description": description.strip() if description else f"Clase {display_name.strip()} - Ciclo 2026-2027",
+            "members": members
+        }
+
+        url = "https://graph.microsoft.com/v1.0/teams"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
+        resp = requests.post(url, headers=headers, json=body, timeout=60)
+        if resp.status_code in [200, 201, 202]:
+            location = resp.headers.get("Location", "")
+            return {
+                "status": "success",
+                "status_code": resp.status_code,
+                "location": location,
+                "display_name": display_name,
+                "members_count": len(members)
+            }
+        else:
+            raise GraphClientError(f"Error al crear clase educativa en Teams: {resp.status_code} - {resp.text}")
+
+    def get_all_teachers(self) -> List[Dict[str, Any]]:
+        """Recupera la lista de docentes y personal staff del tenant (no alumnos)."""
+        from src.validator import is_valid_matricula_format
+        all_users = self.get_all_users()
+        teachers = []
+        for u in all_users:
+            prefix = u.user_principal_name.split("@")[0]
+            if not is_valid_matricula_format(prefix) and u.account_enabled is not False:
+                teachers.append({
+                    "id": u.id,
+                    "display_name": u.display_name or u.user_principal_name,
+                    "user_principal_name": u.user_principal_name,
+                    "mail": u.mail or u.user_principal_name
+                })
+        teachers.sort(key=lambda x: x["display_name"])
+        return teachers
+

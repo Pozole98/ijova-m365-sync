@@ -51,6 +51,10 @@ Herramienta profesional en Python 3 para Linux diseñada para la validación, au
    - ✅ `User.ReadWrite.All` (Creación, licenciamiento y eliminación de usuarios)
    - ✅ `Domain.Read.All` (Verificación de estado del dominio institucional)
    - ✅ `LicenseAssignment.Read.All` (Consulta de licencias y SKUs A1)
+   - ✅ `Group.ReadWrite.All` (Creación y gestión de grupos M365 y clases de Teams)
+   - ✅ `TeamSettings.ReadWrite.All` (Renombrado y configuración institucional de equipos)
+   - ✅ `TeamMember.ReadWrite.All` (Matriculación asistida de alumnos y docentes)
+   - ✅ `Team.ReadBasic.All` (Auditoría de inventario básico de equipos en Teams)
    - Haz clic en **Grant admin consent for [Tu Organización]**.
 6. Copia el **Application (client) ID** y el **Directory (tenant) ID** desde la página de información general (*Overview*).
 
@@ -96,7 +100,11 @@ Edita `config.json` con tus identificadores de Entra ID:
   "graph_scopes": [
     "User.ReadWrite.All",
     "Domain.Read.All",
-    "LicenseAssignment.Read.All"
+    "LicenseAssignment.Read.All",
+    "Group.ReadWrite.All",
+    "TeamSettings.ReadWrite.All",
+    "TeamMember.ReadWrite.All",
+    "Team.ReadBasic.All"
   ],
   "reports_dir": "reports",
   "backups_dir": "backups",
@@ -115,6 +123,15 @@ Para acceder a todas las funciones mediante un menú guiado paso a paso con expl
 python3 main.py
 ```
 *(También puedes iniciarlo con `python3 main.py menu`)*.
+
+El menú interactivo organiza todas las operaciones en bloques temáticos accesibles mediante una tecla:
+- `[1]` a `[3]`: Validación offline, simulación `dry-run` y aprovisionamiento masivo `apply`.
+- `[4]`: Alta rápida extemporánea de alumno nuevo (`enroll`).
+- `[5]` y `[6]`: Reseteo guiado de contraseñas y generación de fichas PDF con código QR.
+- **`[T]`**: **Auditoría y Gestión de Equipos / Clases en Teams** (auditoría en tiempo real, libro Excel de 4 hojas, renombrado y creación asistida de clases con matriculación automática de alumnos por nivel y grado).
+- `[7]` y `[8]`: Bajas seguras anti-admin y restauración desde papelera de Entra ID.
+- `[9]` a `[12]`: Monitoreo de salud del tenant, snapshots preventivos y auditoría con galería de fotos.
+- **`[G]`**: **Lanzar la Interfaz Gráfica Web Local (Dashboard)** en el navegador.
 
 ---
 
@@ -164,7 +181,7 @@ python3 main.py export-pdf -f secrets/credenciales_alumnos_XXXX.csv -o reports/f
 ```
 
 ### 🔹 Comando `gui` (Interfaz Gráfica Web Local / Dashboard Completo)
-Inicia un panel web moderno, responsivo e intuitivo en tu navegador (`http://127.0.0.1:5000`) con **7 módulos especializados**:
+Inicia un panel web moderno, responsivo e intuitivo en tu navegador (`http://127.0.0.1:5000`) con **8 módulos especializados**:
 
 1. **🔑 Restablecer Contraseña**:
    - **Buscador predictivo**: Búsqueda en tiempo real por matrícula o por nombre completo.
@@ -181,19 +198,34 @@ Inicia un panel web moderno, responsivo e intuitivo en tu navegador (`http://127
    - Listado interactivo de alumnos eliminados en los últimos 30 días en Microsoft Entra ID.
    - Restauración en un solo clic con recuperación intacta de buzón de correo, archivos de OneDrive y equipos de Teams.
 
-4. **🖼️ Auditoría de Fotos de Perfil**:
+4. **👥 Auditoría y Administración de Microsoft Teams**:
+   - **Métricas Ejecutivas en Tiempo Real**: Tarjetas con conteo total de equipos, clases activas ciclo 2026-2027, clases históricas 2025-2026, equipos docentes/staff, equipos huérfanos (0 propietarios) y equipos creados por alumnos.
+   - **Regla Estricta de Ciclos Escolares**: Detección automática por fecha de creación (`>= 2026-08-01` -> Ciclo 2026-2027; `< 2026-08-01` -> Ciclo Histórico 2025-2026).
+   - **Filtros Rápidos Multicriterio (Pills)**:
+     - *Ciclo:* Todos, 2026-2027, 2025-2026.
+     - *Nivel/Sección:* Todos, Preparatoria, Secundaria, Primaria, Preescolar, Otros / Staff.
+     - *Tipo / Dueño:* Todos, Clase Educativa, Personal / Staff, Huérfano (0 Dueños), Creado por Alumno.
+   - **Tabla Interactiva**: Búsqueda en vivo por nombre, ID o profesor, badges visuales de ciclo, tipo de equipo, propietarios (destacando alertas si fue creado por alumno o si es huérfano), conteo de miembros/estudiantes y menú de acciones.
+   - **🎓 Asistente de Creación de Nueva Clase**:
+     - Formulario interactivo donde el administrador introduce la materia, selecciona el nivel educativo y grado escolar.
+     - **Matriculación automática de alumnos**: El sistema cruza en tiempo real el grado seleccionado con la base escolar, muestra exactamente cuántos alumnos serán matriculados y los enrola automáticamente al crear el equipo.
+     - **Selección de Docente Responsable**: Desplegable cargado directamente desde el catálogo de profesores y personal en Entra ID para asignarlo como propietario del equipo.
+   - **✏️ Renombrado Institucional y Archivado**: Modales interactivos para renombrar equipos al instante en Microsoft Teams o archivarlos para fin de ciclo.
+   - **📊 Exportación Oficial a Excel (4 Hojas)**: Descarga directa con un solo clic del libro de auditoría consolidado (`Inventario Consolidado`, `Clases 2026-2027`, `Clases Históricas 2025-2026` y `Auditoría y Huérfanos`).
+
+5. **🖼️ Auditoría de Fotos de Perfil**:
    - **Métricas ejecutivas**: Indicadores de total auditado, porcentaje con foto y cuentas pendientes de subir fotografía institucional.
    - **Mosaico visual interactivo**: Galería filtrable en tiempo real (*Todos*, *Con Foto*, *Sin Foto*) con avatares descargados y preview de credencial.
    - **Escaneo concurrente**: Botón para disparar auditoría en segundo plano contra Microsoft Graph.
 
-5. **📋 Historial de Fichas**:
+6. **📋 Historial de Fichas**:
    - Bitácora de las contraseñas restablecidas durante la sesión.
    - Accesos directos para descargar o imprimir el comprobante PDF oficial generado para cada alumno.
 
-6. **📈 Salud del Tenant**:
+7. **📈 Salud del Tenant**:
    - Diagnóstico en tiempo real del dominio institucional (`ijova.com`), Tenant ID, cuentas activas y enlaces a portales de administración.
 
-7. **💻 Terminal & Guía CLI**:
+8. **💻 Terminal & Guía CLI**:
    - Pestaña integrada que cataloga todas las operaciones masivas y avanzadas disponibles desde la línea de comandos (aprovisionamiento masivo, validación offline, simulación `dry-run`, reseteo grupal por Excel, reportes ejecutivos).
    - Botones de copiado en 1 clic para cada comando.
 
@@ -205,6 +237,28 @@ python3 main.py gui
 python3 main.py gui --port 8080 --no-browser
 ```
 > **Nota:** También puedes iniciar la interfaz gráfica desde el **Menú Interactivo en Terminal** (`python3 main.py` o `python3 main.py menu`) seleccionando la opción **`[G]`**.
+
+### 🔹 Comando `teams` (Auditoría, Creación Asistida y Administración de Microsoft Teams)
+Permite auditar el estado completo de todos los equipos del tenant en tiempo real, exportar reportes ejecutivos en Excel con 4 hojas formateadas, renombrar equipos y crear nuevas clases educativas con enrolamiento automático de alumnos:
+
+```bash
+# 1. Auditoría en tiempo real en consola (Conteo de equipos, ciclos, dueños y huérfanos)
+python3 main.py teams audit
+
+# 2. Generar y exportar libro Excel de auditoría consolidada (4 hojas de trabajo)
+python3 main.py teams export
+python3 main.py teams audit --export -o reports/Auditoria_Teams_Oficial.xlsx
+
+# 3. Renombrar un equipo o clase en Microsoft Teams
+python3 main.py teams rename --id "0bf824c9-c3d3-469b-83e9-74e68e4bf96f" --name "3er Semestre - Lengua y Comunicación"
+
+# 4. Crear nueva clase educativa y enrolar alumnos automáticamente según base escolar
+python3 main.py teams create \
+  --subject "Lengua y Comunicación" \
+  --nivel "Preparatoria" \
+  --grado "3er Semestre" \
+  --teacher "docente@ijova.com"
+```
 
 ### 🔹 Comando `reset` (Reseteo Individual o Masivo de Contraseñas)
 Restablece la contraseña de uno, varios o **todos los alumnos activos** para inicio de semestre, generando automáticamente nuevas contraseñas temporales y las fichas PDF con código QR listas para imprimir.
@@ -273,6 +327,7 @@ ijovausers/
 ├── requirements.txt                # Dependencias tipadas (msal, requests, openpyxl, reportlab, qrcode, flask)
 ├── config.example.json             # Plantilla de configuración limpia
 ├── main.py                         # CLI principal con subcomandos
+├── export_students_m365.py         # Extractor y generador de reporte consolidado de estudiantes
 ├── src/
 │   ├── config.py                   # Carga de configuración y permisos 0700
 │   ├── models.py                   # Modelos Pydantic y enums
@@ -281,7 +336,7 @@ ijovausers/
 │   ├── normalizer.py               # Estandarizador de atributos de identidad
 │   ├── password_generator.py       # Generador de contraseñas criptográficas seguras
 │   ├── pdf_generator.py            # Generador de fichas y tarjetas PDF con código QR
-│   ├── graph_client.py             # Cliente Microsoft Graph (Device Code, paginación, retries)
+│   ├── graph_client.py             # Cliente Microsoft Graph (Device Code, paginación, retries, Teams)
 │   ├── sync_engine.py              # Motor de cruce estricto por UPN
 │   ├── provisioner.py              # Motor de creación y licenciamiento A1
 │   ├── enroll_engine.py            # Motor de alta interactiva extemporánea
@@ -292,15 +347,17 @@ ijovausers/
 │   ├── status_engine.py            # Monitor ejecutivo de salud y licencias
 │   ├── auditor.py                  # Generador de snapshots atómicos
 │   ├── photo_auditor.py            # Auditoría y descarga concurrente de fotos de perfil
+│   ├── teams_engine.py             # Auditoría concurrente, tipificación, Excel y creación de Teams
 │   ├── report_generator.py         # Exportador de reportes CSV y resúmenes Markdown
 │   └── gui/                        # Interfaz Gráfica Web Local (Dashboard)
 │       ├── app.py                  # Servidor web local Flask y API REST
 │       ├── templates/
-│       │   └── index.html          # Panel web interactivo con buscador y ficha
+│       │   └── index.html          # Panel web interactivo con buscador, fichas y Teams
 │       └── static/
 │           ├── css/style.css       # Estilos institucionales IJOVA y modo oscuro/claro
-│           └── js/app.js           # Lógica cliente para verificación y confirmación
+│           └── js/app.js           # Lógica cliente para verificación, confirmación y Teams
 ├── tests/
+│   ├── test_teams_engine.py        # Suite de pruebas de auditoría y creación de Teams
 │   ├── test_graph_client.py        # Suite de pruebas de Graph, reseteo y paginación
 │   ├── test_photo_auditor.py       # Pruebas de auditoría de fotografías
 │   └── test_reset_verification_and_gui.py # Pruebas de verificación previa y GUI
@@ -313,6 +370,8 @@ ijovausers/
 ---
 
 ## 🧪 6. Ejecución de Pruebas Unitarias
+
+La suite de pruebas automatizadas incluye **46 pruebas unitarias integrales** que validan la lógica de Graph API, paginación, reseteo seguro, auditoría de fotografías, escudo web contra ataques cibernéticos (DNS rebinding, CSRF, host header), y el motor de auditoría y matriculación de Microsoft Teams:
 
 ```bash
 source .venv/bin/activate
