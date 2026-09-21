@@ -117,6 +117,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Soporte para deep-linking vía hash (#tab-teams, #tab-photos, etc.)
+  if (window.location.hash) {
+    const targetHash = window.location.hash.substring(1);
+    if (tabTitles[targetHash]) {
+      switchTab(targetHash);
+    }
+  }
+
   // ==========================================
   // TEMA VISUAL (CLARO / OSCURO)
   // ==========================================
