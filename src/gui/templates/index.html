@@ -773,7 +773,11 @@
               </button>
               <button type="button" id="btn-export-teams-excel" class="btn btn-secondary-saas">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
-                <span>Descargar Excel</span>
+                <span>Inventario Equipos</span>
+              </button>
+              <button type="button" id="btn-export-assignments-excel" class="btn btn-secondary-saas" title="Reporte oficial de tareas para dirección">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
+                <span>Reporte de Tareas Excel</span>
               </button>
               <button type="button" id="btn-refresh-teams" class="btn btn-secondary-saas" title="Auditar en vivo">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -1375,6 +1379,54 @@
 
       <div class="modal-footer-saas">
         <button type="button" class="btn btn-secondary-saas" id="btn-close-members-modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 4: EXPLORADOR DE TAREAS ESCOLARES (ASSIGNMENTS) -->
+  <div class="modal-overlay" id="modal-team-assignments" style="display: none;">
+    <div class="modal-dialog-saas modal-lg">
+      <div class="modal-header-saas">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge bg-blue-soft">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
+          </div>
+          <div>
+            <h3 id="assignments-modal-team-name">Tareas de la Clase</h3>
+            <p id="assignments-modal-team-meta">Actividades académicas, fechas de entrega y cumplimiento estudiantil.</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-modal-assignments">&times;</button>
+      </div>
+
+      <div class="modal-body-saas">
+        <div class="table-section-header">
+          <h4>Tareas Asignadas (<span id="assignments-count-badge">0</span>)</h4>
+          <span class="badge badge-outline" id="assignments-turnin-summary">0 entregas registradas</span>
+        </div>
+
+        <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+          <table class="saas-table table-compact" id="assignments-table">
+            <thead>
+              <tr>
+                <th>Título de la Tarea</th>
+                <th>Fecha Límite (Due Date)</th>
+                <th class="text-center">Estado</th>
+                <th class="text-center">Puntos</th>
+                <th>Entregas / Cumplimiento</th>
+              </tr>
+            </thead>
+            <tbody id="assignments-tbody">
+              <tr>
+                <td colspan="5" class="table-empty-row">Cargando tareas escolares...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="modal-footer-saas">
+        <button type="button" class="btn btn-secondary-saas" id="btn-close-assignments-modal-footer">Cerrar</button>
       </div>
     </div>
   </div>

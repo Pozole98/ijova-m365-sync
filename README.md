@@ -55,16 +55,22 @@ Herramienta institucional desarrollada en Python 3 para entornos Linux, diseñad
    - **Supported account types:** `Accounts in this organizational directory only (Single tenant)`
    - **Redirect URI:** Seleccione la plataforma `Public client/native (mobile & desktop)` e ingrese `https://login.microsoftonline.com/common/oauth2/nativeclient`.
 4. En **Authentication > Advanced settings > Allow public client flows**, seleccione **Yes** y confirme los cambios.
-5. En **API permissions > Add a permission > Microsoft Graph > Delegated permissions**, agregue los siguientes alcances:
-   - `User.ReadWrite.All`: Administración del ciclo de vida y licencias de usuarios.
-   - `Domain.Read.All`: Validación del estado del dominio institucional.
-   - `LicenseAssignment.Read.All`: Consulta de catálogo de licencias y SKUs.
-   - `Group.ReadWrite.All`: Creación y gestión de grupos M365 y clases escolares.
-   - `TeamSettings.ReadWrite.All`: Configuración y renombrado institucional de equipos.
-   - `TeamMember.ReadWrite.All`: Matriculación asistida de estudiantes y docentes.
-   - `Team.ReadBasic.All`: Consulta de inventario básico de equipos de Microsoft Teams.
+5. En **API permissions > Add a permission > Microsoft Graph**:
+   - **Delegated permissions**:
+     - `User.ReadWrite.All`: Administración del ciclo de vida y licencias de usuarios.
+     - `Domain.Read.All`: Validación del estado del dominio institucional.
+     - `LicenseAssignment.Read.All`: Consulta de catálogo de licencias y SKUs.
+     - `Group.ReadWrite.All`: Creación y gestión de grupos M365 y clases escolares.
+     - `TeamSettings.ReadWrite.All`: Configuración y renombrado institucional de equipos.
+     - `TeamMember.ReadWrite.All`: Matriculación asistida de estudiantes y docentes.
+     - `Team.ReadBasic.All`: Consulta de inventario básico de equipos de Microsoft Teams.
+   - **Application permissions** (requeridos para el módulo de auditoría de tareas y cumplimiento pedagógico):
+     - `EduAssignments.Read.All`: Lectura de tareas escolares y entregas en todas las clases del tenant.
+     - `EduAssignments.ReadBasic.All`: Lectura básica de tareas y ponderaciones.
+     - `EduRoster.Read.All`: Consulta de nómina de clases y miembros educativos.
    - Haga clic en **Grant admin consent for [Nombre de la Institución]**.
-6. Tome nota del **Application (client) ID** y del **Directory (tenant) ID** disponibles en la sección general (*Overview*).
+6. En **Certificates & secrets > Client secrets > New client secret**, genere un secreto de aplicación institucional. Copie el campo **Value** para registrarlo en el archivo de configuración `config.json` (`client_secret`).
+7. Tome nota del **Application (client) ID** y del **Directory (tenant) ID** disponibles en la sección general (*Overview*).
 
 ---
 
@@ -101,6 +107,7 @@ Edite los parámetros en `config.json` con los identificadores correspondientes 
 {
   "tenant_id": "TU_TENANT_ID_GUID",
   "client_id": "TU_CLIENT_ID_GUID",
+  "client_secret": "TU_CLIENT_SECRET_VALOR",
   "domain": "ijova.com",
   "excel_path": "Listado de Alumnos Inscritos.xlsx",
   "sheet_name": "Listado Global Matriculado",
@@ -138,7 +145,7 @@ El menú organiza las operaciones del sistema en secciones temáticas:
 - `[1]` a `[3]`: Validación local, simulación `dry-run` y aprovisionamiento masivo `apply`.
 - `[4]`: Alta rápida extemporánea de alumnos de nuevo ingreso (`enroll`).
 - `[5]` y `[6]`: Restablecimiento de contraseñas y emisión de fichas PDF institucionales.
-- `[T]`: Módulo de Auditoría y Gestión de Microsoft Teams (escaneo en vivo, libro Excel de 4 hojas, renombrado y creación asistida de clases).
+- `[T]`: Módulo de Auditoría y Gestión de Microsoft Teams (escaneo en vivo, libro Excel de 4 hojas, renombrado institucional, creación asistida de clases y auditoría de tareas con semáforo docente).
 - `[7]` y `[8]`: Desaprovisionamiento seguro con validación de matrícula y restauración desde papelera.
 - `[9]` a `[12]`: Diagnóstico de salud del tenant, generación de respaldos y auditoría de fotos.
 - `[G]`: Lanzamiento de la interfaz gráfica web local.
@@ -201,7 +208,8 @@ Inicia el servidor web local (`http://127.0.0.1:5000`) estructurado en 8 módulo
    - Filtros dinámicos por ciclo, nivel educativo y tipo de creador.
    - Asistente de creación de clases con enrolamiento automático de alumnos matriculados por grado.
    - Renombrado y archivado institucional en línea.
-   - Exportación de auditoría completa a libro Excel de 4 hojas de trabajo.
+   - Explorador de tareas escolares por clase (botón *Tareas*): consulta de actividades, fechas límite, ponderaciones y entregas estudiantiles en tiempo real.
+   - Exportación de informes oficiales: libro de auditoría de inventario (4 hojas) y reporte ejecutivo de tareas escolares para dirección (3 hojas).
 5. **Auditoría de Fotografías de Perfil:** Indicadores de cobertura fotográfica, galería interactiva y escaneo concurrente contra la API de Graph.
 6. **Historial de Fichas Emitidas:** Registro cronológico de restablecimientos realizados durante la sesión de trabajo.
 7. **Diagnóstico y Salud del Tenant:** Monitor de conectividad del dominio, Tenant ID y estado de licencias.
@@ -215,14 +223,14 @@ python3 main.py gui
 python3 main.py gui --port 8080 --no-browser
 ```
 
-#### Comando `teams` (Auditoría, Creación Asistida y Gestión de Microsoft Teams)
-Permite auditar el estado de los equipos del tenant, exportar informes ejecutivos a Excel, renombrar materias y crear clases educativas:
+#### Comando `teams` (Auditoría, Creación Asistida, Gestión y Supervisión de Tareas en Microsoft Teams)
+Permite auditar el estado de los equipos del tenant, exportar informes ejecutivos a Excel, renombrar materias, crear clases educativas y auditar el cumplimiento pedagógico de tareas escolares:
 
 ```bash
-# 1. Auditoría en tiempo real en consola
+# 1. Auditoría de inventario de equipos en tiempo real en consola
 python3 main.py teams audit
 
-# 2. Exportación a libro Excel consolidado (4 hojas de trabajo)
+# 2. Exportación de auditoría de equipos a libro Excel consolidado (4 hojas de trabajo)
 python3 main.py teams export
 python3 main.py teams audit --export -o reports/Auditoria_Teams_Oficial.xlsx
 
@@ -235,7 +243,21 @@ python3 main.py teams create \
   --nivel "Preparatoria" \
   --grado "3er Semestre" \
   --teacher "docente@ijova.com"
+
+# 5. Auditoría de tareas escolares y cumplimiento docente por ciclo
+python3 main.py teams assignments --cycle 2026-2027
+
+# 6. Generación del reporte ejecutivo oficial de tareas en Excel para dirección (3 hojas de trabajo)
+python3 main.py teams assignments --cycle 2026-2027 --export -o reports/Reporte_Tareas_Docentes_2026-2027.xlsx
 ```
+
+##### Estructura del Reporte Ejecutivo de Tareas (`Reporte_Tareas_Docentes_[Ciclo].xlsx`):
+1. **Hoja 1: Resumen Ejecutivo Tareas:** Metadatos institucionales, indicadores clave de desempeño (KPIs) de adopción digital, número de clases activas, clases sin tareas, entregas de estudiantes y desglose global de cumplimiento docente.
+2. **Hoja 2: Semaforo Cumplimiento Docente:** Nómina de profesores titulares con métricas de materias asignadas, total de tareas publicadas, promedio por materia y clasificación institucional por colores:
+   - **Activo (Uso Frecuente - Verde):** 4 o más tareas publicadas.
+   - **Moderado (Actividad Básica - Amarillo):** 1 a 3 tareas publicadas.
+   - **Inactivo (Sin Tareas - Rojo):** 0 tareas publicadas.
+3. **Hoja 3: Bitacora Detallada de Tareas:** Registro pormenorizado de cada actividad escolar: materia, ciclo, nivel, profesor titular, título, fecha de asignación, fecha límite de entrega, estado, puntos, alumnos asignados, entregadas, pendientes y porcentaje de cumplimiento.
 
 #### Comando `reset` (Restablecimiento Individual o Masivo de Contraseñas)
 Regenera credenciales temporales emitiendo fichas de acceso en PDF con código QR:
@@ -366,6 +388,7 @@ ijovausers/
 │           ├── css/style.css       # Hojas de estilo institucionales
 │           └── js/app.js           # Lógica del cliente y navegación por pestañas
 ├── tests/
+│   ├── test_assignments_engine.py # Pruebas del motor de tareas, entregas y semáforo docente
 │   ├── test_teams_engine.py        # Pruebas del módulo de Microsoft Teams
 │   ├── test_graph_client.py        # Pruebas de cliente Graph y paginación
 │   ├── test_photo_auditor.py       # Pruebas del motor de fotos
@@ -380,7 +403,7 @@ ijovausers/
 
 ## 7. Pruebas Automatizadas
 
-El proyecto cuenta con una suite de **46 pruebas unitarias e integrales** que validan la interacción con Microsoft Graph API, manejo de paginación, reseteo seguro de credenciales, auditoría de fotografías, blindaje perimetral HTTP (mitigación de DNS rebinding, CSRF y validación de Host) y los componentes de gestión de Microsoft Teams:
+El proyecto cuenta con una suite de **49 pruebas unitarias e integrales** que validan la interacción con Microsoft Graph API, manejo de paginación, reseteo seguro de credenciales, auditoría de fotografías, blindaje perimetral HTTP (mitigación de DNS rebinding, CSRF y validación de Host) y los componentes de gestión de Microsoft Teams (incluyendo auditoría de tareas y generación de reportes ejecutivos):
 
 ```bash
 source .venv/bin/activate

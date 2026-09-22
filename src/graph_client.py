@@ -6,7 +6,7 @@ import os
 import time
 import requests
 from typing import List, Dict, Any, Optional
-from msal import PublicClientApplication, SerializableTokenCache
+from msal import PublicClientApplication, ConfidentialClientApplication, SerializableTokenCache
 from src.models import EntraUser, DomainStatus
 
 
@@ -21,10 +21,12 @@ class GraphClient:
         tenant_id: str,
         client_id: str,
         scopes: List[str],
-        cache_path: Optional[str] = "secrets/token_cache.bin"
+        cache_path: Optional[str] = "secrets/token_cache.bin",
+        client_secret: Optional[str] = None
     ):
         self.tenant_id = tenant_id
         self.client_id = client_id
+        self.client_secret = client_secret
         self.scopes = scopes
         self.authority = f"https://login.microsoftonline.com/{tenant_id}"
         self.cache_path = cache_path
@@ -44,7 +46,15 @@ class GraphClient:
             authority=self.authority,
             token_cache=self.cache
         )
+        self.confidential_app: Optional[ConfidentialClientApplication] = None
+        if self.client_secret:
+            self.confidential_app = ConfidentialClientApplication(
+                client_id=self.client_id,
+                authority=self.authority,
+                client_credential=self.client_secret
+            )
         self.access_token: Optional[str] = None
+        self.app_token: Optional[str] = None
         self.admin_upn: Optional[str] = None
 
     def _save_cache(self):
@@ -932,4 +942,91 @@ class GraphClient:
                 })
         teachers.sort(key=lambda x: x["display_name"])
         return teachers
+
+    def get_app_token(self) -> str:
+        """Adquiere un token de aplicación mediante Client Secret para permisos globales (ej. EduAssignments.Read.All)."""
+        if not self.confidential_app:
+            raise GraphClientError("No se ha configurado client_secret para autenticación de aplicación.")
+        res = self.confidential_app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+        if "access_token" in res:
+            self.app_token = res["access_token"]
+            return self.app_token
+        raise GraphClientError(f"Error al adquirir token de aplicación: {res.get('error_description') or res.get('error')}")
+
+    def _get_active_auth_token(self) -> str:
+        """Retorna el token de aplicación si está configurado el secreto, o el token delegado en su defecto."""
+        if self.confidential_app:
+            try:
+                return self.get_app_token()
+            except Exception:
+                pass
+        if self.access_token:
+            return self.access_token
+        return self.authenticate_device_code()
+
+    def _get_json_with_retry(self, url: str, token: str, max_retries: int = 4) -> Optional[Dict[str, Any]]:
+        """Petición GET con reintentos para 429/5xx, retorna dict JSON o None si 404/403."""
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        for attempt in range(1, max_retries + 1):
+            try:
+                resp = requests.get(url, headers=headers, timeout=30)
+                if resp.status_code in [404, 403]:
+                    return None
+                if resp.status_code == 429:
+                    retry_after = int(resp.headers.get("Retry-After", attempt * 2))
+                    time.sleep(retry_after)
+                    continue
+                if 500 <= resp.status_code < 600:
+                    time.sleep(attempt * 2)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except requests.exceptions.RequestException:
+                if attempt == max_retries:
+                    return None
+                time.sleep(attempt * 2)
+        return None
+
+    def get_education_classes(self) -> List[Dict[str, Any]]:
+        """Recupera la lista de clases educativas registradas en /education/classes."""
+        token = self._get_active_auth_token()
+        url = "https://graph.microsoft.com/v1.0/education/classes?$select=id,displayName,description,mailNickname,createdDateTime&$top=999"
+        classes = []
+        while url:
+            data = self._get_json_with_retry(url, token)
+            if not data:
+                break
+            classes.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+        return classes
+
+    def get_class_assignments(self, class_id: str) -> List[Dict[str, Any]]:
+        """Recupera la lista de tareas escolares asignadas en una clase educativa de Teams."""
+        token = self._get_active_auth_token()
+        url = f"https://graph.microsoft.com/v1.0/education/classes/{class_id}/assignments"
+        assignments = []
+        while url:
+            data = self._get_json_with_retry(url, token)
+            if not data:
+                break
+            assignments.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+        return assignments
+
+    def get_assignment_submissions(self, class_id: str, assignment_id: str) -> List[Dict[str, Any]]:
+        """Recupera el listado de entregas de estudiantes para una tarea específica."""
+        token = self._get_active_auth_token()
+        url = f"https://graph.microsoft.com/v1.0/education/classes/{class_id}/assignments/{assignment_id}/submissions"
+        submissions = []
+        while url:
+            data = self._get_json_with_retry(url, token)
+            if not data:
+                break
+            submissions.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
+        return submissions
+
 

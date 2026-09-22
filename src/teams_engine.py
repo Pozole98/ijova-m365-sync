@@ -672,3 +672,571 @@ def create_class_assisted(
     res["display_name"] = display_name
     return res
 
+
+def audit_class_assignments(
+    graph: GraphClient,
+    class_id: str,
+    include_submissions: bool = True
+) -> Dict[str, Any]:
+    """
+    Audita las tareas de una clase específica, recuperando detalles, fechas y métricas de entrega.
+    """
+    raw_assignments = graph.get_class_assignments(class_id)
+    assignments = []
+
+    for a in raw_assignments:
+        aid = a.get("id", "")
+        title = (a.get("displayName") or "Sin título").strip()
+        instructions_obj = a.get("instructions")
+        desc = ""
+        if isinstance(instructions_obj, dict):
+            desc = instructions_obj.get("content", "")
+        elif isinstance(instructions_obj, str):
+            desc = instructions_obj
+
+        assigned_dt = a.get("assignedDateTime")
+        due_dt = a.get("dueDateTime")
+        status = a.get("status", "desconocido")
+        allow_late = a.get("allowLateSubmissions", False)
+
+        grading = a.get("grading", {})
+        max_points = grading.get("maxPoints", 0) if isinstance(grading, dict) else 0
+
+        total_assigned = 0
+        submitted_count = 0
+        working_count = 0
+        returned_count = 0
+        turn_in_rate = 0.0
+
+        if include_submissions and aid:
+            try:
+                subs = graph.get_assignment_submissions(class_id, aid)
+                total_assigned = len(subs)
+                for s in subs:
+                    st = s.get("status", "")
+                    if st in ["submitted", "turnedIn", "resubmitted"]:
+                        submitted_count += 1
+                    elif st in ["returned"]:
+                        returned_count += 1
+                    else:
+                        working_count += 1
+
+                effective_turned = submitted_count + returned_count
+                if total_assigned > 0:
+                    turn_in_rate = round((effective_turned / total_assigned) * 100, 1)
+            except Exception:
+                pass
+
+        effective_turned = submitted_count + returned_count
+        assignments.append({
+            "id": aid,
+            "title": title,
+            "instructions": desc,
+            "assigned_date": assigned_dt,
+            "due_date": due_dt,
+            "status": status,
+            "allow_late": allow_late,
+            "max_points": max_points,
+            "points": max_points,
+            "total_assigned": total_assigned,
+            "submissions_count": total_assigned,
+            "submitted_count": submitted_count,
+            "returned_count": returned_count,
+            "turned_in_count": effective_turned,
+            "working_count": working_count,
+            "pending_count": working_count,
+            "turn_in_rate": turn_in_rate
+        })
+
+    total_assigned_subs = sum(a.get("total_assigned", 0) for a in assignments)
+    total_turned_in = sum(a.get("turned_in_count", 0) for a in assignments)
+    overall_rate = round((total_turned_in / total_assigned_subs) * 100, 1) if total_assigned_subs > 0 else 0.0
+
+    return {
+        "class_id": class_id,
+        "total_assignments": len(assignments),
+        "assigned_count": sum(1 for a in assignments if a.get("status") == "assigned"),
+        "draft_count": sum(1 for a in assignments if a.get("status") == "draft"),
+        "total_submissions": total_assigned_subs,
+        "total_turned_in": total_turned_in,
+        "turn_in_rate": overall_rate,
+        "assignments": assignments
+    }
+
+
+def audit_all_assignments(
+    graph: GraphClient,
+    cycle_filter: Optional[str] = "2026-2027",
+    include_submissions: bool = True,
+    teams_data: Optional[Dict[str, Any]] = None,
+    target_cycle: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Realiza una auditoría concurrente de tareas en todas las clases del ciclo seleccionado.
+    Genera métricas consolidadas, semáforo docente y bitácora detallada.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    actual_cycle = target_cycle if target_cycle is not None else cycle_filter
+
+    if teams_data is None:
+        teams_data = audit_all_teams(graph)
+    all_teams = teams_data.get("teams", [])
+
+    candidate_classes = []
+    for t in all_teams:
+        t_type = t.get("team_type") or t.get("tipo")
+        t_cycle = t.get("academic_cycle") or t.get("cycle") or t.get("ciclo")
+        if t_type == "CLASE":
+            if not actual_cycle or actual_cycle == "TODOS" or t_cycle == actual_cycle:
+                candidate_classes.append(t)
+
+    results_by_id = {}
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        future_to_team = {
+            executor.submit(audit_class_assignments, graph, t["id"], include_submissions): t
+            for t in candidate_classes
+        }
+        for future in as_completed(future_to_team):
+            team = future_to_team[future]
+            try:
+                res = future.result()
+                results_by_id[team["id"]] = res
+            except Exception as e:
+                results_by_id[team["id"]] = {
+                    "class_id": team["id"],
+                    "total_assignments": 0,
+                    "assigned_count": 0,
+                    "draft_count": 0,
+                    "assignments": [],
+                    "error": str(e)
+                }
+
+    classes_with_tasks = 0
+    classes_without_tasks = 0
+    total_assignments_count = 0
+    total_students_assigned = 0
+    total_students_submitted = 0
+
+    teachers_dict = {}
+    flat_assignments = []
+
+    for t in candidate_classes:
+        cid = t["id"]
+        audit_res = results_by_id.get(cid, {})
+        assignments = audit_res.get("assignments", [])
+        num_tasks = len(assignments)
+
+        t["total_assignments"] = num_tasks
+        t["assignments_data"] = audit_res
+
+        if num_tasks > 0:
+            classes_with_tasks += 1
+        else:
+            classes_without_tasks += 1
+
+        total_assignments_count += num_tasks
+
+        t_name = t.get("name") or t.get("nombre") or t.get("displayName") or "Clase"
+        t_cycle = t.get("cycle") or t.get("ciclo") or "2026-2027"
+
+        owners = t.get("owners", [])
+        teacher_names = [o.get("displayName") or o.get("name") or o.get("userPrincipalName", "") for o in owners]
+        teacher_display = ", ".join(teacher_names) if teacher_names else "Sin Profesor Asignado"
+
+        for o in owners:
+            t_upn = (o.get("userPrincipalName") or o.get("upn") or "").lower()
+            t_doc_name = o.get("displayName") or o.get("name") or t_upn
+            if t_upn and not is_valid_matricula_format(t_upn.split("@")[0]):
+                if t_upn not in teachers_dict:
+                    teachers_dict[t_upn] = {
+                        "name": t_doc_name,
+                        "upn": t_upn,
+                        "classes": [],
+                        "total_assignments": 0,
+                        "total_students_assigned": 0,
+                        "total_students_submitted": 0
+                    }
+                teachers_dict[t_upn]["classes"].append(t_name)
+                teachers_dict[t_upn]["total_assignments"] += num_tasks
+
+        for a in assignments:
+            total_students_assigned += a["total_assigned"]
+            total_students_submitted += (a["submitted_count"] + a["returned_count"])
+            flat_assignments.append({
+                "materia": t_name,
+                "ciclo": t_cycle,
+                "nivel": t.get("nivel", "General"),
+                "profesor": teacher_display,
+                "titulo": a["title"],
+                "fecha_asignacion": a["assigned_date"],
+                "fecha_entrega": a["due_date"],
+                "estado": a["status"],
+                "puntos": a["max_points"],
+                "alumnos_asignados": a["total_assigned"],
+                "entregadas": a["submitted_count"] + a["returned_count"],
+                "pendientes": a["working_count"],
+                "tasa_entrega": a["turn_in_rate"]
+            })
+
+    teachers_compliance = []
+    for t_upn, td in teachers_dict.items():
+        n_classes = len(td["classes"])
+        n_tasks = td["total_assignments"]
+        avg_tasks = round(n_tasks / n_classes, 1) if n_classes > 0 else 0
+
+        if n_tasks >= 4:
+            status = "ACTIVO"
+            status_label = "Uso Frecuente"
+        elif n_tasks >= 1:
+            status = "MODERADO"
+            status_label = "Actividad Básica"
+        else:
+            status = "INACTIVO"
+            status_label = "Sin Tareas Registradas"
+
+        teachers_compliance.append({
+            "name": td["name"],
+            "upn": td["upn"],
+            "classes_count": n_classes,
+            "total_classes": n_classes,
+            "classes_list": ", ".join(td["classes"]),
+            "total_assignments": n_tasks,
+            "avg_per_class": avg_tasks,
+            "status": status,
+            "status_label": status_label,
+            "status_tag": f"{status.capitalize()} ({status_label})",
+            "total_submissions": td.get("total_students_assigned", 0),
+            "total_turned_in": td.get("total_students_submitted", 0),
+            "turn_in_rate": round((td.get("total_students_submitted", 0) / td.get("total_students_assigned", 1)) * 100, 1) if td.get("total_students_assigned", 0) > 0 else 0.0
+        })
+
+    teachers_compliance.sort(key=lambda x: (x["total_assignments"], x["classes_count"]), reverse=True)
+
+    overall_turn_in_pct = 0.0
+    if total_students_assigned > 0:
+        overall_turn_in_pct = round((total_students_submitted / total_students_assigned) * 100, 1)
+
+    summary = {
+        "cycle": actual_cycle or "Todos",
+        "cycle_evaluated": actual_cycle or "Todos",
+        "total_classes": len(candidate_classes),
+        "total_classes_audited": len(candidate_classes),
+        "classes_with_assignments": classes_with_tasks,
+        "classes_without_assignments": classes_without_tasks,
+        "total_assignments": total_assignments_count,
+        "total_assignments_published": total_assignments_count,
+        "total_submissions": total_students_assigned,
+        "total_students_assigned": total_students_assigned,
+        "total_turned_in": total_students_submitted,
+        "total_students_submitted": total_students_submitted,
+        "overall_turn_in_rate": overall_turn_in_pct,
+        "overall_turn_in_pct": overall_turn_in_pct,
+        "docentes_activos": sum(1 for t in teachers_compliance if t["status"] == "ACTIVO"),
+        "teachers_active_count": sum(1 for t in teachers_compliance if t["status"] == "ACTIVO"),
+        "docentes_moderados": sum(1 for t in teachers_compliance if t["status"] == "MODERADO"),
+        "teachers_moderate_count": sum(1 for t in teachers_compliance if t["status"] == "MODERADO"),
+        "docentes_inactivos": sum(1 for t in teachers_compliance if t["status"] == "INACTIVO"),
+        "teachers_inactive_count": sum(1 for t in teachers_compliance if t["status"] == "INACTIVO")
+    }
+
+    return {
+        "summary": summary,
+        "classes": candidate_classes,
+        "teachers_compliance": teachers_compliance,
+        "docentes": teachers_compliance,
+        "flat_assignments": flat_assignments
+    }
+
+
+def export_assignments_report_excel(assignments_data: Dict[str, Any], output_path: str) -> str:
+    """
+    Genera un informe en Excel (.xlsx) con 3 hojas estructuradas para dirección y administración escolar:
+    - Hoja 1: Resumen Ejecutivo y Adopción
+    - Hoja 2: Semáforo de Cumplimiento Docente
+    - Hoja 3: Bitácora Detallada de Tareas
+    """
+    wb = openpyxl.Workbook()
+
+    navy_primary = "1B365D"
+    navy_secondary = "2B6CB0"
+    header_fill = PatternFill(start_color=navy_primary, end_color=navy_primary, fill_type="solid")
+    sub_header_fill = PatternFill(start_color=navy_secondary, end_color=navy_secondary, fill_type="solid")
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    data_font = Font(name="Segoe UI", size=10)
+    data_font_bold = Font(name="Segoe UI", size=10, bold=True)
+    thin_border = Border(
+        left=Side(style="thin", color="D2D6DC"),
+        right=Side(style="thin", color="D2D6DC"),
+        top=Side(style="thin", color="D2D6DC"),
+        bottom=Side(style="thin", color="D2D6DC")
+    )
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+
+    green_fill = PatternFill(start_color="E6F4EA", end_color="E6F4EA", fill_type="solid")
+    green_font = Font(name="Segoe UI", size=10, bold=True, color="137333")
+    amber_fill = PatternFill(start_color="FEF7E0", end_color="FEF7E0", fill_type="solid")
+    amber_font = Font(name="Segoe UI", size=10, bold=True, color="B06000")
+    red_fill = PatternFill(start_color="FCE8E6", end_color="FCE8E6", fill_type="solid")
+    red_font = Font(name="Segoe UI", size=10, bold=True, color="C5221F")
+
+    summary = assignments_data.get("summary", {})
+    teachers_compliance = assignments_data.get("teachers_compliance") or assignments_data.get("docentes", [])
+    flat_assignments = assignments_data.get("flat_assignments", [])
+
+    if not flat_assignments:
+        for c in assignments_data.get("classes", []):
+            c_name = c.get("name") or c.get("displayName") or ""
+            c_cycle = c.get("academic_cycle") or c.get("cycle") or ""
+            c_nivel = c.get("nivel", "General")
+            c_prof = c.get("teacher_name") or c.get("teacher_upn") or ""
+            for a in c.get("assignments", []):
+                flat_assignments.append({
+                    "materia": c_name,
+                    "ciclo": c_cycle,
+                    "nivel": c_nivel,
+                    "profesor": c_prof,
+                    "titulo": a.get("title", ""),
+                    "fecha_asignacion": a.get("assigned_date", ""),
+                    "fecha_entrega": a.get("due_date", ""),
+                    "estado": a.get("status", ""),
+                    "puntos": a.get("points") or a.get("max_points", 0),
+                    "alumnos_asignados": a.get("submissions_count") or a.get("total_assigned", 0),
+                    "entregadas": a.get("turned_in_count") or a.get("submitted_count", 0),
+                    "pendientes": a.get("pending_count") or a.get("working_count", 0),
+                    "tasa_entrega": a.get("turn_in_rate", 0.0)
+                })
+
+    # ==========================================
+    # HOJA 1: RESUMEN EJECUTIVO Y ADOPCIÓN
+    # ==========================================
+    ws1 = wb.active
+    ws1.title = "Resumen Ejecutivo Tareas"
+    ws1.sheet_properties.tabColor = navy_primary
+
+    ws1.merge_cells("A1:E1")
+    t1 = ws1["A1"]
+    t1.value = "INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSÉ VASCONCELOS (IJOVA)"
+    t1.font = Font(name="Segoe UI", size=14, bold=True, color="FFFFFF")
+    t1.fill = header_fill
+    t1.alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[1].height = 32
+
+    ws1.merge_cells("A2:E2")
+    t2 = ws1["A2"]
+    t2.value = f"INFORME OFICIAL DE AUDITORÍA DE TAREAS ESCOLARES EN MICROSOFT TEAMS (CICLO {summary.get('cycle_evaluated', '2026-2027')})"
+    t2.font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    t2.fill = sub_header_fill
+    t2.alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[2].height = 24
+
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    meta = [
+        ("Fecha de Auditoría:", now_str),
+        ("Ciclo Escolar Evaluado:", str(summary.get("cycle_evaluated", "2026-2027"))),
+        ("Plataforma Evaluada:", "Microsoft Teams Education (Assignments & Submissions)"),
+        ("Tipo de Autenticación:", "Microsoft Graph Education API (Application Client Secret)")
+    ]
+    for idx, (label, val) in enumerate(meta, start=4):
+        ws1.cell(row=idx, column=1, value=label).font = data_font_bold
+        ws1.cell(row=idx, column=2, value=val).font = data_font
+        ws1.row_dimensions[idx].height = 20
+
+    start_m = 9
+    ws1.cell(row=start_m, column=1, value="MÉTRICAS GLOBALES DE CUMPLIMIENTO ACADÉMICO").font = Font(name="Segoe UI", size=11, bold=True, color=navy_primary)
+    m_headers = ["Indicador Institucional", "Total", "Porcentaje", "Estado Operativo"]
+    for c_idx, h in enumerate(m_headers, start=1):
+        c = ws1.cell(row=start_m + 1, column=c_idx, value=h)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = thin_border
+    ws1.row_dimensions[start_m + 1].height = 25
+
+    total_classes = summary.get("total_classes_audited", 0)
+    classes_with_t = summary.get("classes_with_assignments", 0)
+    classes_no_t = summary.get("classes_without_assignments", 0)
+    pct_adop = f"{(classes_with_t / total_classes * 100):.1f}%" if total_classes > 0 else "0.0%"
+
+    metrics_rows = [
+        ("Total de Clases / Materias Auditadas", total_classes, "100.0%", "Clases Activas en Tenant"),
+        ("Materias con Tareas Registradas", classes_with_t, pct_adop, "Uso Activo de Teams"),
+        ("Materias sin Tareas Registradas", classes_no_t, f"{(classes_no_t / total_classes * 100):.1f}%" if total_classes > 0 else "0.0%", "Sin Actividad en Plataforma"),
+        ("Total de Tareas Publicadas en el Ciclo", summary.get("total_assignments_published", 0), "-", "Actividades Escolares"),
+        ("Entregas de Alumnos Recibidas", summary.get("total_students_submitted", 0), f"{summary.get('overall_turn_in_pct', 0)}%", "Cumplimiento Estudiantil"),
+        ("Docentes con Uso Frecuente (>= 4 tareas)", summary.get("teachers_active_count", 0), "-", "Nivel Alto"),
+        ("Docentes con Actividad Básica (1 a 3 tareas)", summary.get("teachers_moderate_count", 0), "-", "Nivel Moderado"),
+        ("Docentes sin Tareas Registradas", summary.get("teachers_inactive_count", 0), "-", "Atención Requerida")
+    ]
+
+    for idx, (label, val, pct, note) in enumerate(metrics_rows, start=start_m + 2):
+        ws1.row_dimensions[idx].height = 20
+        c1 = ws1.cell(row=idx, column=1, value=label)
+        c2 = ws1.cell(row=idx, column=2, value=val)
+        c3 = ws1.cell(row=idx, column=3, value=pct)
+        c4 = ws1.cell(row=idx, column=4, value=note)
+        row_fill = zebra_fill if idx % 2 == 0 else white_fill
+        for c in [c1, c2, c3, c4]:
+            c.border = thin_border
+            c.font = data_font
+            c.fill = row_fill
+        c2.alignment = Alignment(horizontal="center")
+        c3.alignment = Alignment(horizontal="center")
+
+    ws1.column_dimensions["A"].width = 44
+    ws1.column_dimensions["B"].width = 18
+    ws1.column_dimensions["C"].width = 16
+    ws1.column_dimensions["D"].width = 30
+    ws1.column_dimensions["E"].width = 15
+
+    # ==========================================
+    # HOJA 2: SEMÁFORO DE CUMPLIMIENTO DOCENTE
+    # ==========================================
+    ws2 = wb.create_sheet(title="Semaforo Cumplimiento Docente")
+    ws2.sheet_properties.tabColor = "2E7D32"
+
+    h2 = ["Docente Titular", "Correo Institucional", "Materias Asignadas", "Tareas Publicadas", "Promedio / Materia", "Estatus de Cumplimiento", "Materias"]
+    ws2.append(h2)
+    for col_num in range(1, len(h2) + 1):
+        c = ws2.cell(row=1, column=col_num)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = thin_border
+    ws2.row_dimensions[1].height = 28
+
+    for idx, t in enumerate(teachers_compliance, start=2):
+        ws2.row_dimensions[idx].height = 20
+        status_val = t.get("status_label") or t.get("status_tag") or t.get("status", "")
+        row_data = [
+            t.get("name", ""),
+            t.get("upn", ""),
+            t.get("classes_count") or t.get("total_classes", 0),
+            t.get("total_assignments", 0),
+            t.get("avg_per_class", 0),
+            status_val,
+            t.get("classes_list") or ", ".join(t.get("classes", []))
+        ]
+        ws2.append(row_data)
+        row_fill = zebra_fill if idx % 2 == 0 else white_fill
+        for col_num in range(1, len(row_data) + 1):
+            cell = ws2.cell(row=idx, column=col_num)
+            cell.border = thin_border
+            cell.font = data_font
+            cell.fill = row_fill
+            if col_num in [3, 4, 5, 6]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+            if col_num == 6:
+                st_code = t.get("status", "")
+                if st_code == "ACTIVO" or "Activo" in status_val or "Frecuente" in status_val:
+                    cell.fill = green_fill
+                    cell.font = green_font
+                elif st_code == "MODERADO" or "Moderado" in status_val or "Básica" in status_val:
+                    cell.fill = amber_fill
+                    cell.font = amber_font
+                else:
+                    cell.fill = red_fill
+                    cell.font = red_font
+
+    ws2.freeze_panes = "A2"
+    ws2.auto_filter.ref = f"A1:{get_column_letter(len(h2))}{len(teachers_compliance) + 1}"
+    for col in ws2.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws2.column_dimensions[col_letter].width = min(max(max_len + 4, 14), 50)
+
+    # ==========================================
+    # HOJA 3: BITÁCORA DETALLADA DE TAREAS
+    # ==========================================
+    ws3 = wb.create_sheet(title="Bitacora Detallada de Tareas")
+    ws3.sheet_properties.tabColor = "0288D1"
+
+    h3 = [
+        "Materia / Clase Teams",
+        "Ciclo",
+        "Nivel",
+        "Profesor(es) Titular(es)",
+        "Título de la Tarea",
+        "Fecha de Asignación",
+        "Fecha Límite de Entrega",
+        "Estado",
+        "Puntos Máx.",
+        "Alumnos Asignados",
+        "Entregadas",
+        "Pendientes",
+        "% Cumplimiento"
+    ]
+    ws3.append(h3)
+    for col_num in range(1, len(h3) + 1):
+        c = ws3.cell(row=1, column=col_num)
+        c.fill = header_fill
+        c.font = header_font
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        c.border = thin_border
+    ws3.row_dimensions[1].height = 28
+
+    for idx, a in enumerate(flat_assignments, start=2):
+        ws3.row_dimensions[idx].height = 20
+        # Formatear fechas ISO para Excel
+        def fmt_dt(dt_str):
+            if not dt_str:
+                return ""
+            try:
+                return dt_str.replace("T", " ").replace("Z", "")[:19]
+            except Exception:
+                return str(dt_str)
+
+        row_data = [
+            a["materia"],
+            a["ciclo"],
+            a["nivel"],
+            a["profesor"],
+            a["titulo"],
+            fmt_dt(a["fecha_asignacion"]),
+            fmt_dt(a["fecha_entrega"]),
+            a["estado"].capitalize() if a["estado"] else "",
+            a["puntos"],
+            a["alumnos_asignados"],
+            a["entregadas"],
+            a["pendientes"],
+            f"{a['tasa_entrega']}%"
+        ]
+        ws3.append(row_data)
+        row_fill = zebra_fill if idx % 2 == 0 else white_fill
+        for col_num, val in enumerate(row_data, start=1):
+            cell = ws3.cell(row=idx, column=col_num)
+            cell.border = thin_border
+            cell.font = data_font
+            cell.fill = row_fill
+            if col_num in [2, 3, 6, 7, 8, 9, 10, 11, 12, 13]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(horizontal="left", vertical="center")
+
+            if col_num == 13:
+                if a["tasa_entrega"] >= 70:
+                    cell.fill = green_fill
+                    cell.font = green_font
+                elif a["tasa_entrega"] >= 40:
+                    cell.fill = amber_fill
+                    cell.font = amber_font
+                elif a["alumnos_asignados"] > 0:
+                    cell.fill = red_fill
+                    cell.font = red_font
+
+    ws3.freeze_panes = "A2"
+    ws3.auto_filter.ref = f"A1:{get_column_letter(len(h3))}{len(flat_assignments) + 1}"
+    for col in ws3.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws3.column_dimensions[col_letter].width = min(max(max_len + 4, 14), 45)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    wb.save(output_path)
+    return output_path
+
+

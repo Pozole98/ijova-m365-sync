@@ -1200,6 +1200,10 @@ document.addEventListener('DOMContentLoaded', () => {
         <td class="mono" style="font-size: 0.78rem;">${createdDate}</td>
         <td class="text-right">
           <div class="team-actions-cell">
+            <button type="button" class="btn-action-sm btn-assignments" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Ver tareas y actividades académicas">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              <span>Tareas</span>
+            </button>
             <button type="button" class="btn-action-sm btn-rename" data-id="${t.id}" title="Renombrar equipo">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               <span>Renombrar</span>
@@ -1219,6 +1223,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Wire action buttons
+    teamsTableTbody.querySelectorAll('.btn-assignments').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.getAttribute('data-id');
+        const teamName = btn.getAttribute('data-name');
+        openAssignmentsModal(teamId, teamName);
+      });
+    });
+
     teamsTableTbody.querySelectorAll('.btn-rename').forEach(btn => {
       btn.addEventListener('click', () => {
         const teamId = btn.getAttribute('data-id');
@@ -1772,4 +1784,153 @@ document.addEventListener('DOMContentLoaded', () => {
       showToast(`Error de conexión: ${err.message}`, 'error');
     }
   }
+
+  // ==========================================
+  // MODAL 4: EXPLORADOR DE TAREAS ESCOLARES (ASSIGNMENTS)
+  // ==========================================
+  const modalTeamAssignments = document.getElementById('modal-team-assignments');
+  const btnCloseModalAssignments = document.getElementById('btn-close-modal-assignments');
+  const btnCloseAssignmentsModalFooter = document.getElementById('btn-close-assignments-modal-footer');
+  const assignmentsModalTeamName = document.getElementById('assignments-modal-team-name');
+  const assignmentsModalTeamMeta = document.getElementById('assignments-modal-team-meta');
+  const assignmentsCountBadge = document.getElementById('assignments-count-badge');
+  const assignmentsTurninSummary = document.getElementById('assignments-turnin-summary');
+  const assignmentsTbody = document.getElementById('assignments-tbody');
+  const btnExportAssignmentsExcel = document.getElementById('btn-export-assignments-excel');
+
+  function closeAssignmentsModal() {
+    if (modalTeamAssignments) modalTeamAssignments.style.display = 'none';
+  }
+
+  if (btnCloseModalAssignments) btnCloseModalAssignments.addEventListener('click', closeAssignmentsModal);
+  if (btnCloseAssignmentsModalFooter) btnCloseAssignmentsModalFooter.addEventListener('click', closeAssignmentsModal);
+  if (modalTeamAssignments) {
+    modalTeamAssignments.addEventListener('click', (e) => {
+      if (e.target === modalTeamAssignments) closeAssignmentsModal();
+    });
+  }
+
+  async function openAssignmentsModal(teamId, teamName) {
+    const team = teamsCacheList.find(t => t.id === teamId);
+    const titleName = team ? team.name : (teamName || 'Equipo');
+
+    if (assignmentsModalTeamName) assignmentsModalTeamName.textContent = `Tareas: ${titleName}`;
+    if (assignmentsModalTeamMeta) {
+      assignmentsModalTeamMeta.textContent = `ID de Clase: ${teamId} • Consultando actividades en Microsoft Graph...`;
+    }
+    if (assignmentsCountBadge) assignmentsCountBadge.textContent = '...';
+    if (assignmentsTurninSummary) assignmentsTurninSummary.textContent = 'Consultando...';
+    if (assignmentsTbody) {
+      assignmentsTbody.innerHTML = '<tr><td colspan="5" class="table-empty-row">Consultando tareas y entregas en Microsoft Graph...</td></tr>';
+    }
+
+    if (modalTeamAssignments) modalTeamAssignments.style.display = 'flex';
+
+    try {
+      const resp = await fetch(`/api/teams/${teamId}/assignments`);
+      const res = await resp.json();
+
+      if (res.success && res.data) {
+        const d = res.data;
+        if (assignmentsModalTeamMeta) {
+          assignmentsModalTeamMeta.textContent = `ID de Clase: ${teamId} • Total actividades: ${d.total_assignments} • Tasa de entrega: ${d.turn_in_rate}%`;
+        }
+        if (assignmentsCountBadge) assignmentsCountBadge.textContent = d.total_assignments;
+        if (assignmentsTurninSummary) {
+          assignmentsTurninSummary.textContent = `${d.total_turned_in} de ${d.total_submissions} entregas registradas (${d.turn_in_rate}%)`;
+        }
+
+        renderAssignmentsTable(d.assignments || []);
+      } else {
+        if (assignmentsTbody) {
+          assignmentsTbody.innerHTML = `<tr><td colspan="5" class="table-empty-row" style="color: var(--color-danger);">Error al consultar tareas: ${escapeHtml(res.error || 'No disponible')}</td></tr>`;
+        }
+      }
+    } catch (err) {
+      if (assignmentsTbody) {
+        assignmentsTbody.innerHTML = `<tr><td colspan="5" class="table-empty-row" style="color: var(--color-danger);">Error de conexión: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    }
+  }
+
+  function renderAssignmentsTable(assignments) {
+    if (!assignmentsTbody) return;
+
+    if (!assignments || assignments.length === 0) {
+      assignmentsTbody.innerHTML = '<tr><td colspan="5" class="table-empty-row">No se encontraron tareas publicadas en esta clase.</td></tr>';
+      return;
+    }
+
+    assignmentsTbody.innerHTML = '';
+    assignments.forEach(a => {
+      const tr = document.createElement('tr');
+
+      // Due date
+      let dueDateFormatted = 'Sin fecha límite';
+      if (a.due_date) {
+        try {
+          const dt = new Date(a.due_date);
+          dueDateFormatted = dt.toLocaleString('es-MX', {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: '2-digit', minute: '2-digit'
+          });
+        } catch (e) {
+          dueDateFormatted = a.due_date;
+        }
+      }
+
+      // Status badge
+      let statusBadge = '<span class="badge badge-gray">Borrador</span>';
+      if (a.status === 'published' || a.status === 'assigned') {
+        statusBadge = '<span class="badge badge-green">Asignada</span>';
+      } else if (a.status === 'completed') {
+        statusBadge = '<span class="badge badge-blue">Completada</span>';
+      }
+
+      // Points
+      const pointsText = (a.points !== null && a.points !== undefined) ? `${a.points} pts` : '<span style="color: var(--text-muted); font-size: 0.8rem;">Sin ponderar</span>';
+
+      // Turn in progress
+      const subTotal = a.submissions_count || 0;
+      const turnedIn = a.turned_in_count || 0;
+      const rate = a.turn_in_rate || 0;
+      const progressBadgeClass = rate >= 70 ? 'badge-green' : (rate >= 40 ? 'badge-amber' : 'badge-gray');
+
+      let instructionSnippet = '';
+      if (a.instructions) {
+        const cleanText = a.instructions.replace(/<[^>]*>?/gm, '').trim();
+        if (cleanText) {
+          const short = cleanText.length > 80 ? cleanText.substring(0, 80) + '...' : cleanText;
+          instructionSnippet = `<div style="font-size: 0.76rem; color: var(--text-muted); margin-top: 3px;" title="${escapeHtml(cleanText)}">${escapeHtml(short)}</div>`;
+        }
+      }
+
+      tr.innerHTML = `
+        <td>
+          <strong style="color: var(--text-primary); font-size: 0.88rem;">${escapeHtml(a.title || 'Sin título')}</strong>
+          ${instructionSnippet}
+        </td>
+        <td class="mono" style="font-size: 0.8rem;">${dueDateFormatted}</td>
+        <td class="text-center">${statusBadge}</td>
+        <td class="text-center mono" style="font-size: 0.82rem;">${pointsText}</td>
+        <td>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span class="badge ${progressBadgeClass}" style="min-width: 55px; text-align: center;">${turnedIn}/${subTotal}</span>
+            <span style="font-size: 0.78rem; color: var(--text-muted);">${rate}%</span>
+          </div>
+        </td>
+      `;
+      assignmentsTbody.appendChild(tr);
+    });
+  }
+
+  // Exportar reporte de tareas a Excel
+  if (btnExportAssignmentsExcel) {
+    btnExportAssignmentsExcel.addEventListener('click', () => {
+      const cycle = (filterCycle && filterCycle !== 'all') ? filterCycle : '2026-2027';
+      showToast('Generando reporte ejecutivo de tareas escolares en Excel...', 'info');
+      window.location.href = `/api/teams/assignments/export?cycle=${encodeURIComponent(cycle)}`;
+    });
+  }
 });
+

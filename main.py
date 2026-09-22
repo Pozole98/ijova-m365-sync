@@ -601,7 +601,7 @@ def cmd_teams(args):
     renombrado de equipos y clases en Microsoft Teams.
     """
     config = load_config(args.config)
-    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes)
+    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes, client_secret=config.client_secret)
     graph.authenticate_device_code()
 
     from src.teams_engine import (
@@ -713,6 +713,38 @@ def cmd_teams(args):
         print(f"  • Nivel / Grado:     {nivel} - {grado}")
         print(f"  • Alumnos Inscritos: {res['students_enrolled_count']}")
         print("=" * 80 + "\n")
+
+    elif subaction == "assignments":
+        cycle = getattr(args, "cycle", None) or "2026-2027"
+        print(f"\nAuditando tareas escolares y cumplimiento docente para el ciclo {cycle}...")
+        from src.teams_engine import audit_all_assignments, export_assignments_report_excel
+        data = audit_all_assignments(graph, target_cycle=cycle)
+        summary = data["summary"]
+        print("\n" + "=" * 80)
+        print(f"RESUMEN EJECUTIVO DE TAREAS ESCOLARES (CICLO {cycle})")
+        print("=" * 80)
+        print(f"  • Clases Auditadas:                {summary['total_classes']}")
+        print(f"  • Clases con Tareas Publicadas:    {summary['classes_with_assignments']}")
+        print(f"  • Clases sin Tareas (0 Tareas):    {summary['classes_without_assignments']}")
+        print(f"  • Tareas Publicadas Totales:       {summary['total_assignments']}")
+        print(f"  • Entregas Totales de Alumnos:     {summary['total_submissions']}")
+        print(f"  • Entregadas en Tiempo y Forma:    {summary['total_turned_in']}")
+        print(f"  • Tasa Global de Cumplimiento:     {summary['overall_turn_in_rate']}%")
+        print(f"  • Semáforo Docente - Activos:      {summary['docentes_activos']}")
+        print(f"  • Semáforo Docente - Moderados:    {summary['docentes_moderados']}")
+        print(f"  • Semáforo Docente - Inactivos:    {summary['docentes_inactivos']}")
+        print("=" * 80)
+
+        if getattr(args, "export", False) or getattr(args, "output", None):
+            out_file = args.output or os.path.join(
+                config.reports_dir,
+                f"Reporte_Tareas_Docentes_{cycle}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            export_assignments_report_excel(data, out_file)
+            print(f"Reporte ejecutivo Excel guardado en: {out_file}\n")
+        else:
+            print("Para generar el libro Excel de 3 hojas para dirección ejecuta:")
+            print(f"   python3 main.py teams assignments --cycle {cycle} --export\n")
 
 
 def cmd_gui(args):
@@ -855,11 +887,12 @@ def main():
         "action",
         nargs="?",
         default="audit",
-        choices=["audit", "export", "rename", "create"],
-        help="Acción a realizar: audit (por defecto), export, rename, create"
+        choices=["audit", "export", "rename", "create", "assignments"],
+        help="Acción a realizar: audit (por defecto), export, rename, create, assignments"
     )
     p_teams.add_argument("-o", "--output", help="Ruta de salida del archivo Excel de auditoría")
     p_teams.add_argument("--export", action="store_true", help="Exporta a Excel automáticamente tras auditar")
+    p_teams.add_argument("--cycle", help="Ciclo académico para auditoría de tareas (por defecto: 2026-2027)")
     p_teams.add_argument("--id", help="ID del equipo a modificar (para acción rename)")
     p_teams.add_argument("--name", help="Nuevo nombre del equipo (para acción rename)")
     p_teams.add_argument("--desc", help="Descripción opcional del equipo")

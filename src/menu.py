@@ -592,14 +592,15 @@ def menu_teams(config: AppConfig):
     print("   [2] 📊 Generar y Descargar Libro Excel de Auditoría Oficial (.xlsx)")
     print("   [3] ✏️ Renombrar Equipo o Clase en Microsoft Teams")
     print("   [4] 🎓 Crear Nueva Clase Educativa (Matriculación Automática por Nivel/Grado)")
+    print("   [5] 📋 Auditoría de Tareas Escolares y Cumplimiento Docente (Consola y Excel)")
     print("   [0] 🔙 Volver al Menú Principal")
     print("-" * 80)
 
-    sub_choice = input("👉 Selecciona una sub-opción (1-4 o 0): ").strip()
+    sub_choice = input("👉 Selecciona una sub-opción (1-5 o 0): ").strip()
     if sub_choice == "0" or not sub_choice:
         return
 
-    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes)
+    graph = GraphClient(config.tenant_id, config.client_id, config.graph_scopes, client_secret=config.client_secret)
     graph.authenticate_device_code()
 
     from src.teams_engine import (
@@ -699,6 +700,36 @@ def menu_teams(config: AppConfig):
         print(f"  • ID de Equipo:      {res['team_id']}")
         print(f"  • Alumnos Inscritos: {res['students_enrolled_count']}")
         print("=" * 80)
+
+    elif sub_choice == "5":
+        cycle_in = input("👉 Ciclo escolar a auditar (Enter para '2026-2027'): ").strip()
+        target_cycle = cycle_in or "2026-2027"
+        print(f"\n📋 Auditando tareas y actividades escolares para el ciclo {target_cycle}...")
+        from src.teams_engine import audit_all_assignments, export_assignments_report_excel
+        data = audit_all_assignments(graph, target_cycle=target_cycle)
+        s = data["summary"]
+        print("\n" + "=" * 80)
+        print(f"📊 RESUMEN AUDITORÍA DE TAREAS Y CUMPLIMIENTO DOCENTE (CICLO {target_cycle})")
+        print("=" * 80)
+        print(f"  • Total Clases Auditadas:          {s['total_classes']}")
+        print(f"  • Clases con Tareas Publicadas:    {s['classes_with_assignments']}")
+        print(f"  • Clases Inactivas (0 Tareas):     {s['classes_without_assignments']}")
+        print(f"  • Tareas Asignadas Totales:        {s['total_assignments']}")
+        print(f"  • Entregas Totales Registradas:    {s['total_submissions']}")
+        print(f"  • Entregadas en Tiempo y Forma:    {s['total_turned_in']}")
+        print(f"  • Tasa Global de Entrega:          {s['overall_turn_in_rate']}%")
+        print(f"  • Docentes Activos (>= 4 tareas):  {s['docentes_activos']}")
+        print(f"  • Docentes Moderados (1-3 tareas): {s['docentes_moderados']}")
+        print(f"  • Docentes Inactivos (0 tareas):   {s['docentes_inactivos']}")
+        print("=" * 80)
+
+        out_file = os.path.join(
+            config.reports_dir,
+            f"Reporte_Tareas_Docentes_{target_cycle}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        )
+        export_assignments_report_excel(data, out_file)
+        print(f"✅ Reporte ejecutivo de 3 hojas guardado en:")
+        print(f"   \033[1;32m{out_file}\033[0m")
 
     pause()
 

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 class AppConfig(BaseModel):
     tenant_id: str = Field(default="", description="ID del Tenant de Microsoft Entra")
     client_id: str = Field(default="", description="ID de Aplicación (Client ID) de App Registration")
+    client_secret: Optional[str] = Field(default=None, description="Secreto de cliente para permisos de aplicación")
     domain: str = Field(default="ijova.com", description="Dominio oficial para cuentas M365")
     excel_path: str = Field(default="Listado de Alumnos Inscritos.xlsx", description="Ruta al archivo Excel")
     sheet_name: str = Field(default="Listado Global Matriculado", description="Nombre de la hoja a procesar")
@@ -47,6 +48,8 @@ def load_config(config_path: Optional[str] = None) -> AppConfig:
             config_dict["tenant_id"] = os.environ["M365_TENANT_ID"]
         if "M365_CLIENT_ID" in os.environ:
             config_dict["client_id"] = os.environ["M365_CLIENT_ID"]
+        if "M365_CLIENT_SECRET" in os.environ:
+            config_dict["client_secret"] = os.environ["M365_CLIENT_SECRET"]
         if "M365_DOMAIN" in os.environ:
             config_dict["domain"] = os.environ["M365_DOMAIN"]
         if "M365_RETENTION_DAYS" in os.environ:

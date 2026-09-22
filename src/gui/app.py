@@ -99,7 +99,7 @@ def create_app(config_path: str = "config.json") -> Flask:
         with _graph_lock:
             if _graph_instance is None:
                 write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
-                client = GraphClient(config.tenant_id, config.client_id, write_scopes)
+                client = GraphClient(config.tenant_id, config.client_id, write_scopes, client_secret=config.client_secret)
                 client.authenticate_device_code()
                 _graph_instance = client
             return _graph_instance
@@ -730,6 +730,39 @@ def create_app(config_path: str = "config.json") -> Flask:
             audit_data = audit_all_teams(graph)
             out_file = os.path.join(config.reports_dir, f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
             export_teams_audit_excel(audit_data, out_file)
+            return send_file(
+                out_file,
+                as_attachment=True,
+                download_name=os.path.basename(out_file),
+                mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/<team_id>/assignments")
+    def api_team_assignments(team_id: str):
+        """Retorna las tareas escolares y estadísticas de entrega de una clase en Teams."""
+        try:
+            from src.teams_engine import audit_class_assignments
+            graph = get_graph()
+            data = audit_class_assignments(graph, team_id, include_submissions=True)
+            return jsonify({"success": True, "data": data})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/assignments/export")
+    def api_teams_assignments_export():
+        """Genera y descarga el libro Excel oficial de auditoría de tareas para dirección."""
+        try:
+            from src.teams_engine import audit_all_assignments, export_assignments_report_excel
+            cycle = request.args.get("cycle", "2026-2027")
+            graph = get_graph()
+            data = audit_all_assignments(graph, cycle_filter=cycle, include_submissions=True)
+            out_file = os.path.join(
+                config.reports_dir,
+                f"Reporte_Cumplimiento_Tareas_Teams_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            )
+            export_assignments_report_excel(data, out_file)
             return send_file(
                 out_file,
                 as_attachment=True,
