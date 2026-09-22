@@ -658,7 +658,20 @@ def create_class_assisted(
     4. Invoca la creación mediante Graph API con la plantilla educationClass.
     """
     cycle_tag = "26-27"
-    display_name = f"{subject_name.strip()} ({grado} {nivel}) - {cycle_tag}".strip()
+    clean_grado = grado.strip()
+    clean_nivel = nivel.strip()
+    clean_subj = subject_name.strip()
+
+    if clean_nivel.lower() in clean_grado.lower():
+        grade_label = clean_grado
+    else:
+        grade_label = f"{clean_grado} {clean_nivel}".strip()
+
+    # Si el usuario ya ingresó el formato completo con el ciclo 26-27, respetarlo sin duplicar
+    if cycle_tag in clean_subj:
+        display_name = clean_subj
+    else:
+        display_name = f"{clean_subj} ({grade_label}) - {cycle_tag}".strip()
     
     students = get_students_for_grade(school_db, nivel, grado)
     if not students:
