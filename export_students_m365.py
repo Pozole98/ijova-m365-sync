@@ -243,8 +243,8 @@ def build_school_db():
             ]
 
             manual_corrections = {
-                "ROBLES CRUZ VICTOR AZIEL": "260032_PENDING",
-                "VARCENAS LOPEZ DE NAVA LUIS MANUEL": "260033_PENDING",
+                "ROBLES CRUZ VICTOR AZIEL": "260032",
+                "VARCENAS LOPEZ DE NAVA LUIS MANUEL": "260033",
                 "BARRIENTOS ALONSO SAID JARED": "PENDING_BAJA",
                 "JUAREZ RAMOS MELANIE": "250052",
                 "VAZQUEZ HERNANDEZ VALENTINA": "260016",
