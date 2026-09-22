@@ -255,6 +255,94 @@ class TestAssignmentsEngine(unittest.TestCase):
         self.assertEqual(ws_tasks["A2"].value, "Matemáticas 3er Semestre")
         self.assertEqual(ws_tasks["E2"].value, "Álgebra Lineal")
 
+    def test_export_assignments_report_pdf(self):
+        """Verifica la generación del informe institucional en PDF para dirección."""
+        from src.teams_pdf_generator import export_assignments_report_pdf
+
+        mock_data = {
+            "summary": {
+                "cycle": "2026-2027",
+                "total_classes": 2,
+                "classes_with_assignments": 1,
+                "classes_without_assignments": 1,
+                "total_assignments": 2,
+                "total_submissions": 10,
+                "total_turned_in": 7,
+                "overall_turn_in_rate": 70.0,
+                "docentes_activos": 0,
+                "docentes_moderados": 1,
+                "docentes_inactivos": 1,
+            },
+            "docentes": [
+                {
+                    "name": "Profesor Gómez",
+                    "upn": "jgomez@ijova.com",
+                    "total_classes": 1,
+                    "classes_with_tasks": 1,
+                    "total_assignments": 2,
+                    "total_submissions": 10,
+                    "total_turned_in": 7,
+                    "turn_in_rate": 70.0,
+                    "status_label": "Moderado (1-3 tareas)",
+                    "classes_list": "Matemáticas 3er Semestre",
+                },
+                {
+                    "name": "Profesora Morales",
+                    "upn": "lmorales@ijova.com",
+                    "total_classes": 1,
+                    "classes_with_tasks": 0,
+                    "total_assignments": 0,
+                    "total_submissions": 0,
+                    "total_turned_in": 0,
+                    "turn_in_rate": 0.0,
+                    "status_label": "Sin Tareas Registradas",
+                    "classes_list": "Historia 1° Secundaria",
+                }
+            ],
+            "classes": [
+                {
+                    "id": "c1",
+                    "name": "Matemáticas 3er Semestre",
+                    "academic_cycle": "2026-2027",
+                    "teacher_name": "Profesor Gómez",
+                    "teacher_upn": "jgomez@ijova.com",
+                    "assignments": [
+                        {
+                            "id": "t1",
+                            "title": "Álgebra Lineal",
+                            "status": "assigned",
+                            "due_date": "2026-09-30T18:00:00Z",
+                            "points": 100,
+                            "submissions_count": 5,
+                            "turned_in_count": 4,
+                            "turn_in_rate": 80.0,
+                        },
+                        {
+                            "id": "t2",
+                            "title": "Matrices y Determinantes",
+                            "status": "assigned",
+                            "due_date": "2026-10-02T18:00:00Z",
+                            "points": 50,
+                            "submissions_count": 5,
+                            "turned_in_count": 3,
+                            "turn_in_rate": 60.0,
+                        }
+                    ]
+                }
+            ]
+        }
+
+        pdf_path = os.path.join(self.temp_dir, "Informe_Direccion_Test.pdf")
+        export_assignments_report_pdf(mock_data, pdf_path)
+
+        self.assertTrue(os.path.exists(pdf_path))
+        self.assertGreater(os.path.getsize(pdf_path), 10000)
+
+        # Validar cabecera mágica de archivo PDF
+        with open(pdf_path, "rb") as f:
+            header = f.read(5)
+            self.assertEqual(header, b"%PDF-")
+
 
 if __name__ == "__main__":
     unittest.main()

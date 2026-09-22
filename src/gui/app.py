@@ -12,6 +12,7 @@ import threading
 import webbrowser
 import re
 from typing import Optional, Dict, Any, List
+from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_file, abort
 
 from src.config import load_config, AppConfig
@@ -728,7 +729,8 @@ def create_app(config_path: str = "config.json") -> Flask:
             from src.teams_engine import audit_all_teams, export_teams_audit_excel
             graph = get_graph()
             audit_data = audit_all_teams(graph)
-            out_file = os.path.join(config.reports_dir, f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx")
+            os.makedirs(config.reports_dir, exist_ok=True)
+            out_file = os.path.abspath(os.path.join(config.reports_dir, f"Auditoria_Teams_Clases_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"))
             export_teams_audit_excel(audit_data, out_file)
             return send_file(
                 out_file,
@@ -758,16 +760,40 @@ def create_app(config_path: str = "config.json") -> Flask:
             cycle = request.args.get("cycle", "2026-2027")
             graph = get_graph()
             data = audit_all_assignments(graph, cycle_filter=cycle, include_submissions=True)
-            out_file = os.path.join(
+            os.makedirs(config.reports_dir, exist_ok=True)
+            out_file = os.path.abspath(os.path.join(
                 config.reports_dir,
                 f"Reporte_Cumplimiento_Tareas_Teams_IJOVA_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            )
+            ))
             export_assignments_report_excel(data, out_file)
             return send_file(
                 out_file,
                 as_attachment=True,
                 download_name=os.path.basename(out_file),
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/assignments/export-pdf")
+    def api_teams_assignments_export_pdf():
+        """Genera y descarga el informe institucional oficial en PDF de auditoría de tareas para dirección."""
+        try:
+            from src.teams_engine import audit_all_assignments, export_assignments_report_pdf
+            cycle = request.args.get("cycle", "2026-2027")
+            graph = get_graph()
+            data = audit_all_assignments(graph, cycle_filter=cycle, include_submissions=True)
+            os.makedirs(config.reports_dir, exist_ok=True)
+            out_file = os.path.abspath(os.path.join(
+                config.reports_dir,
+                f"Informe_Oficial_Tareas_Teams_IJOVA_{cycle}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            ))
+            export_assignments_report_pdf(data, out_file)
+            return send_file(
+                out_file,
+                as_attachment=True,
+                download_name=os.path.basename(out_file),
+                mimetype="application/pdf"
             )
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500

@@ -209,7 +209,7 @@ Inicia el servidor web local (`http://127.0.0.1:5000`) estructurado en 8 módulo
    - Asistente de creación de clases con enrolamiento automático de alumnos matriculados por grado.
    - Renombrado y archivado institucional en línea.
    - Explorador de tareas escolares por clase (botón *Tareas*): consulta de actividades, fechas límite, ponderaciones y entregas estudiantiles en tiempo real.
-   - Exportación de informes oficiales: libro de auditoría de inventario (4 hojas) y reporte ejecutivo de tareas escolares para dirección (3 hojas).
+   - Exportación de informes oficiales: libro de auditoría de inventario (4 hojas), reporte ejecutivo de tareas en Excel (3 hojas) y reporte institucional de tareas en PDF formal para dirección general.
 5. **Auditoría de Fotografías de Perfil:** Indicadores de cobertura fotográfica, galería interactiva y escaneo concurrente contra la API de Graph.
 6. **Historial de Fichas Emitidas:** Registro cronológico de restablecimientos realizados durante la sesión de trabajo.
 7. **Diagnóstico y Salud del Tenant:** Monitor de conectividad del dominio, Tenant ID y estado de licencias.
@@ -249,15 +249,26 @@ python3 main.py teams assignments --cycle 2026-2027
 
 # 6. Generación del reporte ejecutivo oficial de tareas en Excel para dirección (3 hojas de trabajo)
 python3 main.py teams assignments --cycle 2026-2027 --export -o reports/Reporte_Tareas_Docentes_2026-2027.xlsx
+
+# 7. Generación del informe institucional ejecutivo de tareas en PDF de alta resolución
+python3 main.py teams assignments --cycle 2026-2027 --pdf -o reports/Reporte_Tareas_Docentes_2026-2027.pdf
 ```
 
-##### Estructura del Reporte Ejecutivo de Tareas (`Reporte_Tareas_Docentes_[Ciclo].xlsx`):
-1. **Hoja 1: Resumen Ejecutivo Tareas:** Metadatos institucionales, indicadores clave de desempeño (KPIs) de adopción digital, número de clases activas, clases sin tareas, entregas de estudiantes y desglose global de cumplimiento docente.
-2. **Hoja 2: Semaforo Cumplimiento Docente:** Nómina de profesores titulares con métricas de materias asignadas, total de tareas publicadas, promedio por materia y clasificación institucional por colores:
-   - **Activo (Uso Frecuente - Verde):** 4 o más tareas publicadas.
-   - **Moderado (Actividad Básica - Amarillo):** 1 a 3 tareas publicadas.
-   - **Inactivo (Sin Tareas - Rojo):** 0 tareas publicadas.
-3. **Hoja 3: Bitacora Detallada de Tareas:** Registro pormenorizado de cada actividad escolar: materia, ciclo, nivel, profesor titular, título, fecha de asignación, fecha límite de entrega, estado, puntos, alumnos asignados, entregadas, pendientes y porcentaje de cumplimiento.
+##### Formatos del Reporte Ejecutivo de Tareas Escolares:
+
+1. **Informe Institucional en PDF (`Reporte_Tareas_Docentes_[Ciclo].pdf`):**
+   - **Formato y Diseño:** Hoja Carta en orientación apaisada (*Landscape Letter*), paleta de colores institucional IJOVA (`#1B365D`), logotipo en alta definición y pie de página con paginación dinámica "Página X de Y".
+   - **Resumen Ejecutivo:** Panel en cuadrícula con 7 indicadores clave de desempeño (clases activas, tareas publicadas, docentes activos, tasa de cumplimiento y adopción digital).
+   - **Semáforo Docente:** Tabla de supervisión por profesor con materias asignadas, volumen de tareas publicadas y categorización visual oficial (Verde / Amarillo / Salmón).
+   - **Bitácora Detallada:** Registro cronológico de actividades con cabeceras repetidas en cada página (`repeatRows=1`) y distribución milimétrica de columnas sin truncamiento de texto.
+
+2. **Libro de Trabajo en Excel (`Reporte_Tareas_Docentes_[Ciclo].xlsx`):**
+   - **Hoja 1 (Resumen Ejecutivo Tareas):** Metadatos institucionales, indicadores clave de desempeño (KPIs) de adopción digital y desglose de cumplimiento docente.
+   - **Hoja 2 (Semáforo Cumplimiento Docente):** Nómina de profesores titulares con métricas de materias asignadas, total de tareas publicadas, promedio por materia y clasificación institucional por colores:
+     - **Activo (Uso Frecuente - Verde):** 4 o más tareas publicadas.
+     - **Moderado (Actividad Básica - Amarillo):** 1 a 3 tareas publicadas.
+     - **Inactivo (Sin Tareas - Rojo):** 0 tareas publicadas.
+   - **Hoja 3 (Bitácora Detallada de Tareas):** Registro pormenorizado de cada actividad escolar con filtros automáticos: materia, ciclo, nivel, profesor titular, título, fecha de asignación, fecha límite de entrega, estado, puntos, alumnos asignados, entregadas, pendientes y porcentaje de cumplimiento.
 
 #### Comando `reset` (Restablecimiento Individual o Masivo de Contraseñas)
 Regenera credenciales temporales emitiendo fichas de acceso en PDF con código QR:

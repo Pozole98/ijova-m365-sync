@@ -723,13 +723,27 @@ def menu_teams(config: AppConfig):
         print(f"  • Docentes Inactivos (0 tareas):   {s['docentes_inactivos']}")
         print("=" * 80)
 
-        out_file = os.path.join(
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        os.makedirs(config.reports_dir, exist_ok=True)
+
+        from src.teams_pdf_generator import export_assignments_report_pdf
+        pdf_file = os.path.join(
             config.reports_dir,
-            f"Reporte_Tareas_Docentes_{target_cycle}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            f"Informe_Oficial_Tareas_Docentes_{target_cycle}_{ts}.pdf"
         )
-        export_assignments_report_excel(data, out_file)
-        print(f"✅ Reporte ejecutivo de 3 hojas guardado en:")
-        print(f"   \033[1;32m{out_file}\033[0m")
+        export_assignments_report_pdf(data, pdf_file)
+
+        excel_file = os.path.join(
+            config.reports_dir,
+            f"Reporte_Tareas_Docentes_{target_cycle}_{ts}.xlsx"
+        )
+        export_assignments_report_excel(data, excel_file)
+
+        print(f"\nArchivos generados exitosamente para entrega:")
+        print(f"  • Informe Institucional PDF (para Dirección General):")
+        print(f"     \033[1;32m{pdf_file}\033[0m")
+        print(f"  • Libro Detallado Excel (3 Hojas de Trabajo):")
+        print(f"     \033[1;34m{excel_file}\033[0m")
 
     pause()
 

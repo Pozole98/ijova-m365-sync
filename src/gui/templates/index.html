@@ -775,9 +775,13 @@
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                 <span>Inventario Equipos</span>
               </button>
-              <button type="button" id="btn-export-assignments-excel" class="btn btn-secondary-saas" title="Reporte oficial de tareas para dirección">
+              <button type="button" id="btn-export-assignments-pdf" class="btn btn-primary-saas" style="background: var(--brand-navy, #1B365D);" title="Informe ejecutivo oficial en PDF institucional para dirección">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+                <span>Reporte de Tareas PDF</span>
+              </button>
+              <button type="button" id="btn-export-assignments-excel" class="btn btn-secondary-saas" title="Libro consolidado en Excel">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
-                <span>Reporte de Tareas Excel</span>
+                <span>Reporte Excel</span>
               </button>
               <button type="button" id="btn-refresh-teams" class="btn btn-secondary-saas" title="Auditar en vivo">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -1425,7 +1429,11 @@
         </div>
       </div>
 
-      <div class="modal-footer-saas">
+      <div class="modal-footer-saas" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn btn-primary-saas btn-sm" id="btn-modal-export-assignments-pdf" style="background: var(--brand-navy, #1B365D);" title="Descargar informe oficial en PDF para dirección">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="9" y1="15" x2="15" y2="15"></line></svg>
+          <span>Descargar Informe PDF</span>
+        </button>
         <button type="button" class="btn btn-secondary-saas" id="btn-close-assignments-modal-footer">Cerrar</button>
       </div>
     </div>

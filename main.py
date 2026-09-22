@@ -735,15 +735,32 @@ def cmd_teams(args):
         print(f"  • Semáforo Docente - Inactivos:    {summary['docentes_inactivos']}")
         print("=" * 80)
 
-        if getattr(args, "export", False) or getattr(args, "output", None):
-            out_file = args.output or os.path.join(
-                config.reports_dir,
-                f"Reporte_Tareas_Docentes_{cycle}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            )
-            export_assignments_report_excel(data, out_file)
-            print(f"Reporte ejecutivo Excel guardado en: {out_file}\n")
+        is_pdf = getattr(args, "pdf", False)
+        is_export = getattr(args, "export", False) or getattr(args, "output", None)
+
+        if is_pdf or is_export:
+            ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+            os.makedirs(config.reports_dir, exist_ok=True)
+            if is_pdf:
+                from src.teams_pdf_generator import export_assignments_report_pdf
+                pdf_file = os.path.join(
+                    config.reports_dir,
+                    f"Informe_Oficial_Tareas_Docentes_{cycle}_{ts}.pdf"
+                )
+                export_assignments_report_pdf(data, pdf_file)
+                print(f"Informe oficial en PDF generado en: {pdf_file}")
+
+            if is_export:
+                out_file = args.output or os.path.join(
+                    config.reports_dir,
+                    f"Reporte_Tareas_Docentes_{cycle}_{ts}.xlsx"
+                )
+                export_assignments_report_excel(data, out_file)
+                print(f"Reporte ejecutivo Excel guardado en: {out_file}")
+            print()
         else:
-            print("Para generar el libro Excel de 3 hojas para dirección ejecuta:")
+            print("Para generar los informes oficiales para dirección ejecuta:")
+            print(f"   python3 main.py teams assignments --cycle {cycle} --pdf")
             print(f"   python3 main.py teams assignments --cycle {cycle} --export\n")
 
 
@@ -892,6 +909,7 @@ def main():
     )
     p_teams.add_argument("-o", "--output", help="Ruta de salida del archivo Excel de auditoría")
     p_teams.add_argument("--export", action="store_true", help="Exporta a Excel automáticamente tras auditar")
+    p_teams.add_argument("--pdf", action="store_true", help="Exporta el informe oficial a formato PDF institucional (para dirección)")
     p_teams.add_argument("--cycle", help="Ciclo académico para auditoría de tareas (por defecto: 2026-2027)")
     p_teams.add_argument("--id", help="ID del equipo a modificar (para acción rename)")
     p_teams.add_argument("--name", help="Nuevo nombre del equipo (para acción rename)")

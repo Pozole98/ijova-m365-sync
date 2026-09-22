@@ -1240,3 +1240,8 @@ def export_assignments_report_excel(assignments_data: Dict[str, Any], output_pat
     return output_path
 
 
+# Re-exportar generador institucional de informe en PDF
+from src.teams_pdf_generator import export_assignments_report_pdf
+
+
+

@@ -1924,11 +1924,29 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Exportar informe oficial de tareas a PDF
+  const btnExportAssignmentsPdf = document.getElementById('btn-export-assignments-pdf');
+  const btnModalExportAssignmentsPdf = document.getElementById('btn-modal-export-assignments-pdf');
+
+  function triggerAssignmentsPdfExport() {
+    const cycle = (filterCycle && filterCycle !== 'all') ? filterCycle : '2026-2027';
+    showToast('Generando informe ejecutivo institucional en PDF para dirección...', 'info');
+    window.location.href = `/api/teams/assignments/export-pdf?cycle=${encodeURIComponent(cycle)}`;
+  }
+
+  if (btnExportAssignmentsPdf) {
+    btnExportAssignmentsPdf.addEventListener('click', triggerAssignmentsPdfExport);
+  }
+
+  if (btnModalExportAssignmentsPdf) {
+    btnModalExportAssignmentsPdf.addEventListener('click', triggerAssignmentsPdfExport);
+  }
+
   // Exportar reporte de tareas a Excel
   if (btnExportAssignmentsExcel) {
     btnExportAssignmentsExcel.addEventListener('click', () => {
       const cycle = (filterCycle && filterCycle !== 'all') ? filterCycle : '2026-2027';
-      showToast('Generando reporte ejecutivo de tareas escolares en Excel...', 'info');
+      showToast('Generando reporte de tareas escolares en Excel...', 'info');
       window.location.href = `/api/teams/assignments/export?cycle=${encodeURIComponent(cycle)}`;
     });
   }
