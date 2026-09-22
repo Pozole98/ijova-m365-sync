@@ -828,10 +828,168 @@ def create_app(config_path: str = "config.json") -> Flask:
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route("/api/licenses/status", methods=["GET"])
+    def api_licenses_status():
+        """Retorna el estado de salud predictivo de las licencias M365."""
+        try:
+            from src.status_engine import get_licenses_health_summary
+            graph = get_graph()
+            summary = get_licenses_health_summary(graph)
+            return jsonify(summary)
+        except Exception as e:
+            return jsonify({
+                "status": "error",
+                "error": str(e),
+                "level": "warning",
+                "badge_color": "warning",
+                "student_available": 0,
+                "message": "Error al consultar licencias."
+            }), 500
+
+    @app.route("/api/students/search", methods=["GET"])
+    def api_students_search():
+        """Búsqueda rápida unificada para el Omnibar (Ctrl+K) por matrícula, nombre o correo."""
+        q = request.args.get("q", "").strip()
+        if not q or len(q) < 2:
+            return jsonify({"success": True, "results": [], "count": 0})
+
+        try:
+            from export_students_m365 import build_school_db
+            school_db = build_school_db()
+            graph = get_graph()
+            all_users = graph.get_all_users()
+            upn_map = {u.user_principal_name.lower(): u for u in all_users}
+
+            results = []
+            q_lower = q.lower()
+            q_clean = q.replace(".", "").strip()
+
+            for mat, s in school_db.items():
+                s_name = s.get("display_name", "")
+                s_mat = str(mat)
+                s_upn = s.get("upn") or f"{s_mat}@{config.domain}"
+
+                if q_clean in s_mat or q_lower in s_name.lower() or q_lower in s_upn.lower():
+                    entra_user = upn_map.get(s_upn.lower())
+                    account_enabled = entra_user.account_enabled if entra_user else None
+                    u_id = entra_user.id if entra_user else None
+
+                    photo_path = os.path.join(config.data_dir, "fotos_perfil", f"{s_mat}.jpg")
+                    photo_url = f"/api/photos/thumbnail/{s_mat}" if os.path.exists(photo_path) else None
+
+                    results.append({
+                        "matricula": s_mat,
+                        "display_name": s_name,
+                        "name": s_name,
+                        "upn": s_upn,
+                        "user_id": u_id,
+                        "nivel": s.get("nivel", "General"),
+                        "grado": s.get("grado", "General"),
+                        "account_enabled": account_enabled,
+                        "in_entra": entra_user is not None,
+                        "photo_url": photo_url
+                    })
+
+                if len(results) >= 15:
+                    break
+
+            return jsonify({"success": True, "results": results, "count": len(results)})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e), "results": []}), 500
+
+    @app.route("/api/teams/<team_id>/roster/audit", methods=["GET"])
+    def api_teams_roster_audit(team_id: str):
+        """Audita el roster de una clase educativa contra la base de datos escolar."""
+        nivel = request.args.get("nivel")
+        grado = request.args.get("grado")
+        try:
+            from export_students_m365 import build_school_db
+            from src.teams_engine import audit_class_roster
+            graph = get_graph()
+            school_db = build_school_db()
+            audit_res = audit_class_roster(
+                graph=graph,
+                team_id=team_id,
+                nivel=nivel,
+                grado=grado,
+                school_db=school_db
+            )
+            return jsonify({"success": True, "roster": audit_res})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/<team_id>/roster/sync", methods=["POST"])
+    def api_teams_roster_sync(team_id: str):
+        """Ejecuta la sincronización/regularización de miembros de una clase en Teams."""
+        data = request.get_json() or {}
+        add_missing = data.get("add_missing", True)
+        remove_unexpected = data.get("remove_unexpected", False)
+        missing_user_ids = data.get("missing_user_ids")
+        remove_user_ids = data.get("remove_user_ids")
+        nivel = data.get("nivel")
+        grado = data.get("grado")
+
+        try:
+            from export_students_m365 import build_school_db
+            from src.teams_engine import audit_class_roster, sync_class_roster
+            graph = get_graph()
+            school_db = build_school_db()
+
+            audit_info = None
+            if not missing_user_ids and not remove_user_ids:
+                audit_info = audit_class_roster(graph, team_id, nivel, grado, school_db)
+
+            res = sync_class_roster(
+                graph=graph,
+                team_id=team_id,
+                add_missing=add_missing,
+                remove_unexpected=remove_unexpected,
+                missing_user_ids=missing_user_ids,
+                remove_user_ids=remove_user_ids,
+                audit_info=audit_info
+            )
+            nonlocal _teams_cache
+            _teams_cache = None
+            return jsonify({"success": True, "result": res})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/roster/export-excel", methods=["GET"])
+    def api_teams_roster_export_excel():
+        """Genera y descarga el libro Excel de auditoría de roster de clases."""
+        cycle = request.args.get("cycle", "2026-2027")
+        try:
+            from src.teams_engine import audit_all_rosters, export_roster_audit_excel
+            graph = get_graph()
+            roster_data = audit_all_rosters(graph, cycle_filter=cycle)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Auditoria_Roster_Teams_{ts}.xlsx"
+            out_path = os.path.join(config.reports_dir, filename)
+            export_roster_audit_excel(roster_data, out_path)
+            return send_file(out_path, as_attachment=True, download_name=filename)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/roster/export-pdf", methods=["GET"])
+    def api_teams_roster_export_pdf():
+        """Genera y descarga el informe oficial en PDF para dirección de auditoría de roster."""
+        cycle = request.args.get("cycle", "2026-2027")
+        try:
+            from src.teams_engine import audit_all_rosters, export_roster_report_pdf
+            graph = get_graph()
+            roster_data = audit_all_rosters(graph, cycle_filter=cycle)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Informe_Roster_Teams_{ts}.pdf"
+            out_path = os.path.join(config.reports_dir, filename)
+            export_roster_report_pdf(roster_data, out_path)
+            return send_file(out_path, as_attachment=True, download_name=filename)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     return app
 
 
-def start_gui(config_path: str = "config.json", host: str = "127.0.0.1", port: int = 5000, open_browser: bool = True):
+def start_gui(config_path: str = "config.json", host: str = "127.0.0.1", port: int = 5055, open_browser: bool = True):
     """Inicia el servidor local de la interfaz gráfica y abre el navegador automáticamente."""
     app = create_app(config_path)
     url = f"http://{host}:{port}"

@@ -175,6 +175,17 @@
         </div>
 
         <div class="header-actions">
+          <div class="license-status-badge" id="license-status-pill" title="Consultando inventario de licencias M365...">
+            <span class="pulse-dot" id="license-dot"></span>
+            <span id="license-header-text">Licencias A1: ...</span>
+          </div>
+
+          <button type="button" class="omnibar-trigger-btn" id="btn-open-omnibar" title="Búsqueda rápida unificada de alumnos (Ctrl + K)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <span>Buscar alumno...</span>
+            <kbd>Ctrl K</kbd>
+          </button>
+
           <div class="quick-status-chip">
             <span class="pulse-dot"></span>
             <span class="quick-status-text">Entra ID Sync: Listo</span>
@@ -781,7 +792,15 @@
               </button>
               <button type="button" id="btn-export-assignments-excel" class="btn btn-secondary-saas" title="Libro consolidado en Excel">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M9 14l2 2 4-4"></path></svg>
-                <span>Reporte Excel</span>
+                <span>Tareas Excel</span>
+              </button>
+              <button type="button" id="btn-export-roster-pdf" class="btn btn-primary-saas" style="background: var(--brand-navy, #1B365D);" title="Auditoría institucional de Roster y Matrícula en PDF para dirección">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                <span>Roster PDF</span>
+              </button>
+              <button type="button" id="btn-export-roster-excel" class="btn btn-secondary-saas" title="Libro Excel con detalle de discrepancias de alumnos">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                <span>Roster Excel</span>
               </button>
               <button type="button" id="btn-refresh-teams" class="btn btn-secondary-saas" title="Auditar en vivo">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
@@ -1435,6 +1454,111 @@
           <span>Descargar Informe PDF</span>
         </button>
         <button type="button" class="btn btn-secondary-saas" id="btn-close-assignments-modal-footer">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 5: BUSCADOR GLOBAL OMNIBAR (Ctrl + K) -->
+  <div class="modal-overlay" id="modal-omnibar" style="display: none;">
+    <div class="modal-dialog-saas modal-omnibar-dialog">
+      <div class="omnibar-search-header">
+        <svg class="omnibar-search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="text" id="omnibar-search-input" class="omnibar-search-field" placeholder="Buscar alumno por matrícula, nombre o correo..." autocomplete="off">
+        <kbd class="kbd-esc" id="btn-close-omnibar">ESC</kbd>
+      </div>
+      <div class="omnibar-results-container" id="omnibar-results">
+        <div class="omnibar-placeholder">
+          <p>Escribe al menos 2 letras o dígitos para buscar instantáneamente...</p>
+          <div class="omnibar-shortcuts-hint">
+            <span><kbd>↑</kbd> <kbd>↓</kbd> Navegar</span>
+            <span><kbd>ENTER</kbd> Ficha</span>
+            <span><kbd>ESC</kbd> Cerrar</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 6: SINCRONIZACIÓN Y AUDITORÍA DE ROSTER DE CLASE -->
+  <div class="modal-overlay" id="modal-roster-sync" style="display: none;">
+    <div class="modal-dialog-saas modal-lg">
+      <div class="modal-header-saas">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge bg-green-soft">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+          </div>
+          <div>
+            <h3 id="roster-modal-class-name">Sincronización de Roster</h3>
+            <p id="roster-modal-class-meta">Alineación de nómina de alumnos inscritos en Microsoft Teams vs. Control Escolar.</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-modal-roster">&times;</button>
+      </div>
+
+      <div class="modal-body-saas">
+        <!-- Barra de métricas de roster -->
+        <div class="roster-kpi-bar" id="roster-kpi-bar">
+          <div class="r-kpi-item">
+            <span class="r-kpi-lbl">Nómina Oficial:</span>
+            <span class="r-kpi-val" id="r-kpi-official">0</span>
+          </div>
+          <div class="r-kpi-item">
+            <span class="r-kpi-lbl">En Teams:</span>
+            <span class="r-kpi-val" id="r-kpi-team">0</span>
+          </div>
+          <div class="r-kpi-item">
+            <span class="r-kpi-lbl">Sincronizados:</span>
+            <span class="r-kpi-val text-success" id="r-kpi-synced">0</span>
+          </div>
+          <div class="r-kpi-item">
+            <span class="r-kpi-lbl">Faltantes:</span>
+            <span class="r-kpi-val text-warning" id="r-kpi-missing">0</span>
+          </div>
+          <div class="r-kpi-item">
+            <span class="r-kpi-lbl">Bajas / Inesperados:</span>
+            <span class="r-kpi-val text-danger" id="r-kpi-unexpected">0</span>
+          </div>
+          <div class="r-kpi-item">
+            <span class="r-kpi-lbl">Alineación:</span>
+            <span class="r-kpi-val text-primary" id="r-kpi-percent">0%</span>
+          </div>
+        </div>
+
+        <div id="roster-alert-banner" class="saas-alert-banner" style="display: none; margin-top: 10px;"></div>
+
+        <!-- Seccion 1: Alumnos Faltantes (por agregar) -->
+        <div class="roster-section-box" id="roster-missing-box">
+          <div class="roster-section-header">
+            <span class="badge badge-amber" id="roster-missing-badge">0 Alumnos Faltantes</span>
+            <span class="roster-section-desc">Alumnos matriculados oficialmente en el grado que no están en el equipo de Teams.</span>
+          </div>
+          <div class="students-chips-list" id="roster-missing-chips"></div>
+        </div>
+
+        <!-- Seccion 2: Alumnos Inesperados / Bajas (por remover o desvincular) -->
+        <div class="roster-section-box" id="roster-unexpected-box" style="margin-top: 15px;">
+          <div class="roster-section-header">
+            <span class="badge badge-danger" id="roster-unexpected-badge">0 Bajas / No pertenecen</span>
+            <span class="roster-section-desc">Cuentas presentes en el equipo pero que ya causaron baja o no pertenecen a este grado.</span>
+          </div>
+          <div class="students-chips-list" id="roster-unexpected-chips"></div>
+        </div>
+
+        <!-- Seccion 3: Alumnos Sincronizados -->
+        <div class="roster-section-box" id="roster-synced-box" style="margin-top: 15px;">
+          <div class="roster-section-header">
+            <span class="badge badge-green" id="roster-synced-badge">0 Alumnos Sincronizados</span>
+            <span class="roster-section-desc">Alumnos activos con membresía confirmada.</span>
+          </div>
+          <div class="students-chips-list" id="roster-synced-chips"></div>
+        </div>
+      </div>
+
+      <div class="modal-footer-saas" style="display: flex; justify-content: space-between; align-items: center;">
+        <button type="button" class="btn btn-secondary-saas" id="btn-close-roster-modal">Cerrar</button>
+        <button type="button" class="btn btn-primary-saas" id="btn-execute-roster-sync">
+          <span>Sincronizar y Regularizar Alumnos</span>
+        </button>
       </div>
     </div>
   </div>

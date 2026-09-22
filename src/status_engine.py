@@ -111,3 +111,79 @@ def execute_tenant_status_check(
         "total_licenses": total_licenses,
         "total_consumed": total_consumed
     }
+
+
+def get_licenses_health_summary(graph: GraphClient) -> Dict[str, Any]:
+    """
+    Retorna un resumen estructurado del inventario de licencias con cálculo de salud y alertas predictivas.
+    """
+    try:
+        skus = graph.get_subscribed_skus()
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "student_available": 0,
+            "faculty_available": 0,
+            "total_available": 0,
+            "level": "warning",
+            "badge_color": "warning",
+            "message": "No se pudo consultar el estado de licencias en Microsoft Graph."
+        }
+
+    student_sku = None
+    faculty_sku = None
+    other_skus = []
+
+    for s in skus:
+        part_num = s.get("skuPartNumber", "")
+        prepaid = s.get("prepaidUnits", {}).get("enabled", 0)
+        consumed = s.get("consumedUnits", 0)
+        available = max(0, prepaid - consumed)
+
+        info = {
+            "sku_id": s.get("skuId"),
+            "sku_part_number": part_num,
+            "total": prepaid,
+            "consumed": consumed,
+            "available": available,
+            "percent_used": round((consumed / prepaid * 100), 1) if prepaid > 0 else 0.0
+        }
+
+        if "STUDENT" in part_num.upper():
+            student_sku = info
+        elif "FACULTY" in part_num.upper():
+            faculty_sku = info
+        else:
+            other_skus.append(info)
+
+    total_avail = sum(max(0, s.get("prepaidUnits", {}).get("enabled", 0) - s.get("consumedUnits", 0)) for s in skus)
+    student_avail = student_sku["available"] if student_sku else total_avail
+
+    # Determinar nivel de salud predictivo
+    if student_avail >= 15:
+        level = "normal"
+        badge_color = "success"
+        message = f"{student_avail} licencias A1 disponibles"
+    elif 5 <= student_avail < 15:
+        level = "warning"
+        badge_color = "warning"
+        message = f"Atención: {student_avail} licencias A1 libres"
+    else:
+        level = "critical"
+        badge_color = "danger"
+        message = f"Crítico: solo {student_avail} licencias A1 libres"
+
+    return {
+        "status": "success",
+        "level": level,
+        "badge_color": badge_color,
+        "message": message,
+        "student_available": student_avail,
+        "student_sku": student_sku,
+        "faculty_sku": faculty_sku,
+        "other_skus": other_skus,
+        "total_available": total_avail,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+

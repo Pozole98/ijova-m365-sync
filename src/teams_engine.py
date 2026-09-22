@@ -4,7 +4,7 @@ Motor de Auditoría, Creación y Administración de Equipos y Clases en Microsof
 import os
 import re
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -1271,8 +1271,542 @@ def export_assignments_report_excel(assignments_data: Dict[str, Any], output_pat
     return output_path
 
 
-# Re-exportar generador institucional de informe en PDF
+# Re-exportar generador institucional de informe de tareas en PDF
 from src.teams_pdf_generator import export_assignments_report_pdf
+# Re-exportar generador institucional de informe de roster en PDF
+from src.teams_roster_pdf_generator import export_roster_report_pdf
+
+
+def detect_grade_and_nivel_from_text(name: str, desc: str = "") -> Tuple[Optional[str], Optional[str]]:
+    """
+    Infiere el nivel educativo y grado escolar a partir del nombre o descripcion de la clase.
+    """
+    text = f"{name or ''} {desc or ''}".lower()
+
+    # Semestres de Preparatoria
+    sem_patterns = [
+        (r"1\s*(?:er|°|ro)?\s*semestre", "1er Semestre", "Preparatoria"),
+        (r"2\s*(?:do|°)?\s*semestre", "2do Semestre", "Preparatoria"),
+        (r"3\s*(?:er|°|ro)?\s*semestre", "3er Semestre", "Preparatoria"),
+        (r"4\s*(?:to|°)?\s*semestre", "4to Semestre", "Preparatoria"),
+        (r"5\s*(?:to|°)?\s*semestre", "5to Semestre", "Preparatoria"),
+        (r"6\s*(?:to|°)?\s*semestre", "6to Semestre", "Preparatoria"),
+    ]
+    for pattern, grado, nivel in sem_patterns:
+        if re.search(pattern, text):
+            return nivel, grado
+
+    # Grados de Secundaria
+    sec_patterns = [
+        (r"1\s*(?:er|°|ero|ro)?\s*(?:de\s*)?secundaria", "1° Secundaria", "Secundaria"),
+        (r"2\s*(?:do|°)?\s*(?:de\s*)?secundaria", "2° Secundaria", "Secundaria"),
+        (r"3\s*(?:er|°|ero|ro)?\s*(?:de\s*)?secundaria", "3° Secundaria", "Secundaria"),
+    ]
+    for pattern, grado, nivel in sec_patterns:
+        if re.search(pattern, text):
+            return nivel, grado
+
+    # Grados de Primaria
+    prim_patterns = [
+        (r"1\s*(?:er|°|ero|ro)?\s*(?:de\s*)?primaria", "1° Primaria", "Primaria"),
+        (r"2\s*(?:do|°)?\s*(?:de\s*)?primaria", "2° Primaria", "Primaria"),
+        (r"3\s*(?:er|°|ero|ro)?\s*(?:de\s*)?primaria", "3° Primaria", "Primaria"),
+        (r"4\s*(?:to|°)?\s*(?:de\s*)?primaria", "4° Primaria", "Primaria"),
+        (r"5\s*(?:to|°)?\s*(?:de\s*)?primaria", "5° Primaria", "Primaria"),
+        (r"6\s*(?:to|°)?\s*(?:de\s*)?primaria", "6° Primaria", "Primaria"),
+    ]
+    for pattern, grado, nivel in prim_patterns:
+        if re.search(pattern, text):
+            return nivel, grado
+
+    # Grados de Preescolar
+    pre_patterns = [
+        (r"1\s*(?:er|°|ero|ro)?\s*(?:de\s*)?preescolar", "1° Preescolar", "Preescolar"),
+        (r"2\s*(?:do|°)?\s*(?:de\s*)?preescolar", "2° Preescolar", "Preescolar"),
+        (r"3\s*(?:er|°|ero|ro)?\s*(?:de\s*)?preescolar", "3° Preescolar", "Preescolar"),
+    ]
+    for pattern, grado, nivel in pre_patterns:
+        if re.search(pattern, text):
+            return nivel, grado
+
+    # Solo nivel si no se especifica grado
+    if "preparatoria" in text or "prepa" in text:
+        return "Preparatoria", None
+    if "secundaria" in text:
+        return "Secundaria", None
+    if "primaria" in text:
+        return "Primaria", None
+    if "preescolar" in text or "kinder" in text:
+        return "Preescolar", None
+
+    return None, None
+
+
+def audit_class_roster(
+    graph: GraphClient,
+    team_id: str,
+    nivel: Optional[str] = None,
+    grado: Optional[str] = None,
+    school_db: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Audita los miembros de una clase educativa en Teams comparandolos contra la base de datos oficial del grado.
+    Identifica:
+      - Alumnos sincronizados (presentes en ambos)
+      - Alumnos faltantes (matriculados oficialmente pero ausentes en el equipo)
+      - Alumnos inesperados / bajas (en el equipo pero que no corresponden a la nomina oficial del grado)
+    """
+    if school_db is None:
+        from export_students_m365 import build_school_db
+        school_db = build_school_db()
+
+    # Obtener detalle del equipo
+    team_detail = get_team_members_detailed(graph, team_id)
+    team_students = team_detail.get("students", [])
+    team_teachers = team_detail.get("teachers", [])
+
+    # Obtener nombre del equipo
+    team_name = ""
+    team_desc = ""
+    try:
+        raw_teams = graph.get_all_teams()
+        for rt in raw_teams:
+            if rt.get("id") == team_id:
+                team_name = rt.get("displayName", "")
+                team_desc = rt.get("description", "")
+                break
+    except Exception:
+        pass
+
+    # Inferir nivel y grado si no fueron proporcionados
+    if not nivel or not grado:
+        inf_nivel, inf_grado = detect_grade_and_nivel_from_text(team_name, team_desc)
+        nivel = nivel or inf_nivel or "Desconocido"
+        grado = grado or inf_grado or "Desconocido"
+
+    # Obtener alumnos oficiales del grado
+    official_students = get_students_for_grade(school_db, nivel, grado) if (nivel != "Desconocido" and grado != "Desconocido") else []
+
+    official_by_mat = {s["matricula"]: s for s in official_students}
+    team_by_mat = {s["matricula"]: s for s in team_students if s.get("matricula")}
+
+    # Resolver user_ids de Entra ID para alumnos faltantes
+    all_users = graph.get_all_users()
+    upn_to_id = {u.user_principal_name.lower(): u.id for u in all_users}
+
+    synced_students = []
+    missing_students = []
+    unexpected_students = []
+
+    for mat, off_s in official_by_mat.items():
+        if mat in team_by_mat:
+            synced_students.append({
+                "matricula": mat,
+                "name": off_s.get("display_name", ""),
+                "upn": off_s.get("upn", ""),
+                "user_id": team_by_mat[mat].get("id") or upn_to_id.get(off_s.get("upn", "").lower()),
+                "status": "SINCRONIZADO"
+            })
+        else:
+            u_id = upn_to_id.get(off_s.get("upn", "").lower(), "")
+            missing_students.append({
+                "matricula": mat,
+                "name": off_s.get("display_name", ""),
+                "upn": off_s.get("upn", ""),
+                "user_id": u_id,
+                "status": "FALTANTE EN TEAMS"
+            })
+
+    for mat, tm_s in team_by_mat.items():
+        if mat not in official_by_mat:
+            unexpected_students.append({
+                "matricula": mat,
+                "name": tm_s.get("name") or tm_s.get("display_name", ""),
+                "upn": tm_s.get("upn", ""),
+                "user_id": tm_s.get("id", ""),
+                "status": "BAJA / NO PERTENECE"
+            })
+
+    total_official = len(official_students)
+    synced_count = len(synced_students)
+    sync_pct = round((synced_count / total_official * 100), 1) if total_official > 0 else (100.0 if not team_students else 0.0)
+    teacher_display = team_teachers[0]["display_name"] if team_teachers else "Sin asignar"
+
+    return {
+        "team_id": team_id,
+        "team_name": team_name,
+        "displayName": team_name,
+        "nivel": nivel,
+        "grado": grado,
+        "teacher_name": teacher_display,
+        "teachers": team_teachers,
+        "official_count": total_official,
+        "team_count": len(team_students),
+        "synced_count": synced_count,
+        "missing_count": len(missing_students),
+        "unexpected_count": len(unexpected_students),
+        "sync_percentage": sync_pct,
+        "is_synced": (len(missing_students) == 0 and len(unexpected_students) == 0),
+        "synced_students": synced_students,
+        "missing_students": missing_students,
+        "unexpected_students": unexpected_students,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+def sync_class_roster(
+    graph: GraphClient,
+    team_id: str,
+    add_missing: bool = True,
+    remove_unexpected: bool = False,
+    missing_user_ids: Optional[List[str]] = None,
+    remove_user_ids: Optional[List[str]] = None,
+    audit_info: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Ejecuta la regularizacion de la nomina de una clase:
+    - Agrega los alumnos faltantes
+    - Opcionalmente remueve a los alumnos inesperados / bajas
+    """
+    added_count = 0
+    removed_count = 0
+    errors = []
+
+    to_add = list(missing_user_ids or [])
+    if not to_add and audit_info and add_missing:
+        to_add = [s["user_id"] for s in audit_info.get("missing_students", []) if s.get("user_id")]
+
+    if to_add and add_missing:
+        add_url = f"https://graph.microsoft.com/v1.0/teams/{team_id}/members/add"
+        headers = {
+            "Authorization": f"Bearer {graph.access_token}",
+            "Content-Type": "application/json"
+        }
+        members_values = [
+            {
+                "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                "roles": [],
+                "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{u_id}')"
+            }
+            for u_id in to_add
+        ]
+        try:
+            import requests
+            resp = requests.post(add_url, headers=headers, json={"values": members_values}, timeout=30)
+            if resp.status_code in [200, 202, 207]:
+                added_count = len(to_add)
+            else:
+                for u_id in to_add:
+                    try:
+                        if graph.add_team_member(team_id, u_id, is_owner=False):
+                            added_count += 1
+                    except Exception as ex:
+                        errors.append(f"Error al agregar {u_id}: {str(ex)}")
+        except Exception:
+            for u_id in to_add:
+                try:
+                    if graph.add_team_member(team_id, u_id, is_owner=False):
+                        added_count += 1
+                except Exception as ex:
+                    errors.append(f"Error al agregar {u_id}: {str(ex)}")
+
+    to_remove = list(remove_user_ids or [])
+    if not to_remove and audit_info and remove_unexpected:
+        to_remove = [s["user_id"] for s in audit_info.get("unexpected_students", []) if s.get("user_id")]
+
+    if to_remove and remove_unexpected:
+        for u_id in to_remove:
+            try:
+                if graph.remove_team_member(team_id, u_id):
+                    removed_count += 1
+            except Exception as ex:
+                errors.append(f"Error al remover {u_id}: {str(ex)}")
+
+    return {
+        "status": "success" if not errors else "partial",
+        "team_id": team_id,
+        "added_count": added_count,
+        "removed_count": removed_count,
+        "errors": errors,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+def audit_all_rosters(
+    graph: GraphClient,
+    school_db: Optional[Dict[str, Any]] = None,
+    cycle_filter: str = "2026-2027"
+) -> Dict[str, Any]:
+    """
+    Audita los rosters de todas las clases del ciclo indicado y genera el balance institucional.
+    """
+    if school_db is None:
+        from export_students_m365 import build_school_db
+        school_db = build_school_db()
+
+    inv = audit_teams_inventory(graph)
+    teams = inv.get("teams", [])
+
+    classes_to_audit = [
+        t for t in teams
+        if t.get("team_type") == "CLASE" and (not cycle_filter or t.get("cycle") == cycle_filter)
+    ]
+
+    audited_classes = []
+    total_missing = 0
+    total_unexpected = 0
+    synced_classes = 0
+    all_discrepancies = []
+
+    for c in classes_to_audit:
+        t_id = c["id"]
+        audit_res = audit_class_roster(
+            graph=graph,
+            team_id=t_id,
+            nivel=c.get("nivel"),
+            grado=c.get("grado"),
+            school_db=school_db
+        )
+        # Si el nombre no venia en audit_res, tomar el de inventario
+        if not audit_res.get("team_name"):
+            audit_res["team_name"] = c.get("name", "")
+            audit_res["displayName"] = c.get("name", "")
+
+        total_missing += audit_res["missing_count"]
+        total_unexpected += audit_res["unexpected_count"]
+        if audit_res["is_synced"]:
+            synced_classes += 1
+
+        for ms in audit_res["missing_students"]:
+            all_discrepancies.append({
+                "clase": audit_res["team_name"],
+                "team_id": t_id,
+                "matricula": ms["matricula"],
+                "nombre": ms["name"],
+                "upn": ms["upn"],
+                "tipo": "FALTANTE EN TEAMS",
+                "nivel": audit_res["nivel"],
+                "grado": audit_res["grado"]
+            })
+
+        for un in audit_res["unexpected_students"]:
+            all_discrepancies.append({
+                "clase": audit_res["team_name"],
+                "team_id": t_id,
+                "matricula": un["matricula"],
+                "nombre": un["name"],
+                "upn": un["upn"],
+                "tipo": "BAJA / NO PERTENECE",
+                "nivel": audit_res["nivel"],
+                "grado": audit_res["grado"]
+            })
+
+        audited_classes.append(audit_res)
+
+    total_classes = len(classes_to_audit)
+    discrepant = total_classes - synced_classes
+    total_official_slots = sum(c["official_count"] for c in audited_classes)
+    total_synced_slots = sum(c["synced_count"] for c in audited_classes)
+    global_rate = round((total_synced_slots / total_official_slots * 100), 1) if total_official_slots > 0 else 100.0
+
+    return {
+        "cycle": cycle_filter,
+        "total_classes": total_classes,
+        "synced_classes": synced_classes,
+        "discrepant_classes": discrepant,
+        "total_missing": total_missing,
+        "total_unexpected": total_unexpected,
+        "global_sync_rate": global_rate,
+        "classes": audited_classes,
+        "discrepancies": all_discrepancies,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+
+def export_roster_audit_excel(roster_data: Dict[str, Any], output_path: str) -> str:
+    """
+    Genera un libro oficial en Excel con 3 hojas de trabajo:
+    1. Resumen Ejecutivo (KPIs de matricula y cobertura)
+    2. Estado por Clase (Semaforo de cobertura)
+    3. Detalle Discrepancias (Registro nominal)
+    """
+    wb = openpyxl.Workbook()
+    ws_kpi = wb.active
+    ws_kpi.title = "Resumen Ejecutivo"
+
+    # Paleta institucional
+    navy_fill = PatternFill(start_color="1B365D", end_color="1B365D", fill_type="solid")
+    navy_light_fill = PatternFill(start_color="2B6CB0", end_color="2B6CB0", fill_type="solid")
+    kpi_bg = PatternFill(start_color="F1F5F9", end_color="F1F5F9", fill_type="solid")
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+    green_fill = PatternFill(start_color="E6F4EA", end_color="E6F4EA", fill_type="solid")
+    amber_fill = PatternFill(start_color="FEF7E0", end_color="FEF7E0", fill_type="solid")
+    red_fill = PatternFill(start_color="FCE8E6", end_color="FCE8E6", fill_type="solid")
+
+    white_title = Font(name="Segoe UI", size=14, bold=True, color="FFFFFF")
+    white_bold = Font(name="Segoe UI", size=10, bold=True, color="FFFFFF")
+    kpi_label_font = Font(name="Segoe UI", size=9, color="475569")
+    kpi_val_font = Font(name="Segoe UI", size=16, bold=True, color="1B365D")
+    data_font = Font(name="Segoe UI", size=9)
+    green_font = Font(name="Segoe UI", size=9, bold=True, color="137333")
+    amber_font = Font(name="Segoe UI", size=9, bold=True, color="B06000")
+    red_font = Font(name="Segoe UI", size=9, bold=True, color="C5221F")
+
+    thin_border = Border(
+        left=Side(style="thin", color="CBD5E1"),
+        right=Side(style="thin", color="CBD5E1"),
+        top=Side(style="thin", color="CBD5E1"),
+        bottom=Side(style="thin", color="CBD5E1")
+    )
+
+    # HOJA 1: RESUMEN EJECUTIVO
+    ws_kpi.merge_cells("A1:G1")
+    t_cell = ws_kpi["A1"]
+    t_cell.value = "INSTITUTO DE DESARROLLO INTEGRAL LIC. JOSE VASCONCELOS"
+    t_cell.font = white_title
+    t_cell.fill = navy_fill
+    t_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws_kpi.row_dimensions[1].height = 36
+
+    ws_kpi.merge_cells("A2:G2")
+    st_cell = ws_kpi["A2"]
+    st_cell.value = f"INFORME EJECUTIVO DE AUDITORIA Y SINCRONIZACION DE ROSTER EN TEAMS • CICLO {roster_data.get('cycle', '2026-2027')}"
+    st_cell.font = white_bold
+    st_cell.fill = navy_light_fill
+    st_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws_kpi.row_dimensions[2].height = 24
+
+    ws_kpi["A4"] = f"Fecha de Emisión: {roster_data.get('timestamp', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))}"
+    ws_kpi["A4"].font = Font(name="Segoe UI", size=9, italic=True, color="64748B")
+
+    kpis = [
+        ("Total Clases Auditadas", roster_data.get("total_classes", 0)),
+        ("Clases 100% Sincronizadas", roster_data.get("synced_classes", 0)),
+        ("Clases con Discrepancia", roster_data.get("discrepant_classes", 0)),
+        ("Alumnos Faltantes en Equipos", roster_data.get("total_missing", 0)),
+        ("Bajas / No Pertenecen", roster_data.get("total_unexpected", 0)),
+        ("Tasa Global de Alineación", f"{roster_data.get('global_sync_rate', 100.0):.1f}%"),
+    ]
+
+    for idx, (label, val) in enumerate(kpis, start=6):
+        ws_kpi.cell(row=idx, column=1, value=label).font = Font(name="Segoe UI", size=10, bold=True, color="1B365D")
+        ws_kpi.cell(row=idx, column=1).fill = kpi_bg
+        ws_kpi.cell(row=idx, column=1).border = thin_border
+        
+        v_cell = ws_kpi.cell(row=idx, column=2, value=val)
+        v_cell.font = Font(name="Segoe UI", size=10, bold=True)
+        v_cell.alignment = Alignment(horizontal="center")
+        v_cell.fill = white_fill
+        v_cell.border = thin_border
+
+    ws_kpi.column_dimensions["A"].width = 32
+    ws_kpi.column_dimensions["B"].width = 20
+
+    # HOJA 2: ESTADO POR CLASE
+    ws_cl = wb.create_sheet(title="Estado por Clase")
+    h2 = ["Equipo / Clase", "Nivel", "Grado", "Docente Titular", "Nómina Oficial", "En Teams", "Sincronizados", "Faltantes", "Bajas", "% Sincronización", "Semáforo"]
+    ws_cl.append(h2)
+    ws_cl.row_dimensions[1].height = 26
+    for col_num in range(1, len(h2) + 1):
+        c = ws_cl.cell(row=1, column=col_num)
+        c.fill = navy_fill
+        c.font = white_bold
+        c.alignment = Alignment(horizontal="center", vertical="center")
+
+    classes_list = roster_data.get("classes", [])
+    for idx, cl in enumerate(classes_list, start=2):
+        missing = cl.get("missing_count", 0)
+        unexpected = cl.get("unexpected_count", 0)
+        semaforo = "ÓPTIMO" if missing == 0 and unexpected == 0 else "DESALINEADO"
+        row_data = [
+            cl.get("team_name", ""),
+            cl.get("nivel", ""),
+            cl.get("grado", ""),
+            cl.get("teacher_name", ""),
+            cl.get("official_count", 0),
+            cl.get("team_count", 0),
+            cl.get("synced_count", 0),
+            missing,
+            unexpected,
+            f"{cl.get('sync_percentage', 0.0):.1f}%",
+            semaforo
+        ]
+        ws_cl.append(row_data)
+        r_fill = zebra_fill if idx % 2 == 0 else white_fill
+        for c_idx in range(1, len(row_data) + 1):
+            cell = ws_cl.cell(row=idx, column=c_idx)
+            cell.font = data_font
+            cell.fill = r_fill
+            cell.border = thin_border
+            if c_idx in [5, 6, 7, 8, 9, 10, 11]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            if c_idx == 11:
+                if semaforo == "ÓPTIMO":
+                    cell.fill = green_fill
+                    cell.font = green_font
+                else:
+                    cell.fill = red_fill
+                    cell.font = red_font
+
+    ws_cl.freeze_panes = "A2"
+    for col in ws_cl.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws_cl.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 40)
+
+    # HOJA 3: DETALLE DISCREPANCIAS
+    ws_disc = wb.create_sheet(title="Detalle Discrepancias")
+    h3 = ["Clase / Materia", "Nivel", "Grado", "Matrícula", "Nombre del Alumno", "UPN Institucional", "Tipo de Discrepancia", "Acción Recomendada"]
+    ws_disc.append(h3)
+    ws_disc.row_dimensions[1].height = 26
+    for col_num in range(1, len(h3) + 1):
+        c = ws_disc.cell(row=1, column=col_num)
+        c.fill = navy_light_fill
+        c.font = white_bold
+        c.alignment = Alignment(horizontal="center", vertical="center")
+
+    discrepancies = roster_data.get("discrepancies", [])
+    for idx, d in enumerate(discrepancies, start=2):
+        d_type = d.get("tipo", "FALTANTE EN TEAMS")
+        action = "Inscribir al equipo en Teams" if "FALTANTE" in d_type else "Desvincular del equipo"
+        row_data = [
+            d.get("clase", ""),
+            d.get("nivel", ""),
+            d.get("grado", ""),
+            d.get("matricula", ""),
+            d.get("nombre", ""),
+            d.get("upn", ""),
+            d_type,
+            action
+        ]
+        ws_disc.append(row_data)
+        r_fill = zebra_fill if idx % 2 == 0 else white_fill
+        for c_idx in range(1, len(row_data) + 1):
+            cell = ws_disc.cell(row=idx, column=c_idx)
+            cell.font = data_font
+            cell.fill = r_fill
+            cell.border = thin_border
+            if c_idx in [4, 7]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            if c_idx == 7:
+                if "FALTANTE" in d_type:
+                    cell.fill = amber_fill
+                    cell.font = amber_font
+                else:
+                    cell.fill = red_fill
+                    cell.font = red_font
+
+    ws_disc.freeze_panes = "A2"
+    for col in ws_disc.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws_disc.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 40)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    wb.save(output_path)
+    return output_path
+
 
 
 

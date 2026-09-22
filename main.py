@@ -763,6 +763,33 @@ def cmd_teams(args):
             print(f"   python3 main.py teams assignments --cycle {cycle} --pdf")
             print(f"   python3 main.py teams assignments --cycle {cycle} --export\n")
 
+    elif subaction in ["roster", "sync-roster"]:
+        print("\n🔍 Ejecutando auditoría institucional de Roster y Matrícula en Teams...")
+        from src.teams_engine import audit_all_rosters, export_roster_audit_excel, export_roster_report_pdf
+        cycle = getattr(args, "cycle", None) or "2026-2027"
+        roster_data = audit_all_rosters(graph, cycle_filter=cycle)
+        print("\n" + "=" * 80)
+        print(f"📊 BALANCE DE ROSTER Y MATRÍCULA EN TEAMS • CICLO {roster_data['cycle']}")
+        print("=" * 80)
+        print(f"  • Total Clases Auditadas:        {roster_data['total_classes']}")
+        print(f"  • Clases 100% Sincronizadas:     {roster_data['synced_classes']}")
+        print(f"  • Clases con Discrepancias:      {roster_data['discrepant_classes']}")
+        print(f"  • Alumnos Faltantes en Equipos:  {roster_data['total_missing']}")
+        print(f"  • Bajas / No Pertenecen:         {roster_data['total_unexpected']}")
+        print(f"  • Tasa Global de Alineación:     {roster_data['global_sync_rate']:.1f}%")
+        print("=" * 80)
+
+        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if getattr(args, "pdf", False):
+            pdf_path = args.output or os.path.join(config.reports_dir, f"Auditoria_Roster_Teams_{cycle}_{ts}.pdf")
+            export_roster_report_pdf(roster_data, pdf_path)
+            print(f"📄 Informe formal en PDF generado en: {pdf_path}")
+
+        if getattr(args, "export", False) or not getattr(args, "pdf", False):
+            excel_path = args.output or os.path.join(config.reports_dir, f"Auditoria_Roster_Teams_{cycle}_{ts}.xlsx")
+            export_roster_audit_excel(roster_data, excel_path)
+            print(f"💾 Libro de auditoría en Excel guardado en: {excel_path}\n")
+
 
 def cmd_gui(args):
     """
@@ -773,7 +800,7 @@ def cmd_gui(args):
     start_gui(
         config_path=args.config,
         host=getattr(args, "host", "127.0.0.1"),
-        port=getattr(args, "port", 5000),
+        port=getattr(args, "port", 5055),
         open_browser=not getattr(args, "no_browser", False)
     )
 
@@ -904,13 +931,13 @@ def main():
         "action",
         nargs="?",
         default="audit",
-        choices=["audit", "export", "rename", "create", "assignments"],
-        help="Acción a realizar: audit (por defecto), export, rename, create, assignments"
+        choices=["audit", "export", "rename", "create", "assignments", "roster"],
+        help="Acción a realizar: audit (por defecto), export, rename, create, assignments, roster"
     )
     p_teams.add_argument("-o", "--output", help="Ruta de salida del archivo Excel de auditoría")
     p_teams.add_argument("--export", action="store_true", help="Exporta a Excel automáticamente tras auditar")
     p_teams.add_argument("--pdf", action="store_true", help="Exporta el informe oficial a formato PDF institucional (para dirección)")
-    p_teams.add_argument("--cycle", help="Ciclo académico para auditoría de tareas (por defecto: 2026-2027)")
+    p_teams.add_argument("--cycle", help="Ciclo académico para auditoría de tareas o roster (por defecto: 2026-2027)")
     p_teams.add_argument("--id", help="ID del equipo a modificar (para acción rename)")
     p_teams.add_argument("--name", help="Nuevo nombre del equipo (para acción rename)")
     p_teams.add_argument("--desc", help="Descripción opcional del equipo")
@@ -939,7 +966,7 @@ def main():
     # gui command
     p_gui = subparsers.add_parser("gui", help="Inicia la Interfaz Gráfica Web Local (Dashboard)")
     p_gui.add_argument("--host", default="127.0.0.1", help="Dirección host (por defecto: 127.0.0.1)")
-    p_gui.add_argument("--port", type=int, default=5000, help="Puerto del servidor (por defecto: 5000)")
+    p_gui.add_argument("--port", type=int, default=5055, help="Puerto del servidor (por defecto: 5055)")
     p_gui.add_argument("--no-browser", action="store_true", help="No abrir el navegador automáticamente")
 
     args = parser.parse_args()

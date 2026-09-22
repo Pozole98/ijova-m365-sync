@@ -1204,6 +1204,10 @@ document.addEventListener('DOMContentLoaded', () => {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
               <span>Tareas</span>
             </button>
+            <button type="button" class="btn-action-sm btn-roster" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Sincronizar y auditar alumnos de la nómina escolar">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+              <span>Roster</span>
+            </button>
             <button type="button" class="btn-action-sm btn-rename" data-id="${t.id}" title="Renombrar equipo">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               <span>Renombrar</span>
@@ -1228,6 +1232,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const teamId = btn.getAttribute('data-id');
         const teamName = btn.getAttribute('data-name');
         openAssignmentsModal(teamId, teamName);
+      });
+    });
+
+    teamsTableTbody.querySelectorAll('.btn-roster').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.getAttribute('data-id');
+        const teamName = btn.getAttribute('data-name');
+        openRosterModal(teamId, teamName);
       });
     });
 
@@ -1954,6 +1966,398 @@ document.addEventListener('DOMContentLoaded', () => {
       const cycle = (filterCycle && filterCycle !== 'all') ? filterCycle : '2026-2027';
       showToast('Generando reporte de tareas escolares en Excel...', 'info');
       window.location.href = `/api/teams/assignments/export?cycle=${encodeURIComponent(cycle)}`;
+    });
+  }
+
+  // ========================================================================
+  // FASE 1: MONITOR PREDICTIVO DE LICENCIAS EN HEADER
+  // ========================================================================
+  const licensePill = document.getElementById('license-status-pill');
+  const licenseDot = document.getElementById('license-dot');
+  const licenseText = document.getElementById('license-header-text');
+
+  async function loadLicenseStatus() {
+    if (!licensePill || !licenseText) return;
+    try {
+      const resp = await fetch('/api/licenses/status');
+      const data = await resp.json();
+      if (data.status === 'success') {
+        licensePill.className = `license-status-badge ${data.level}`;
+        licenseText.textContent = `Licencias A1: ${data.student_available} libres`;
+        licensePill.title = `${data.message} • Total libres: ${data.total_available}`;
+      }
+    } catch (e) {
+      licenseText.textContent = 'Licencias A1: N/D';
+    }
+  }
+  loadLicenseStatus();
+  setInterval(loadLicenseStatus, 60000);
+
+  // ========================================================================
+  // FASE 1: BUSCADOR GLOBAL OMNIBAR (Ctrl + K)
+  // ========================================================================
+  const modalOmnibar = document.getElementById('modal-omnibar');
+  const btnOpenOmnibar = document.getElementById('btn-open-omnibar');
+  const btnCloseOmnibar = document.getElementById('btn-close-omnibar');
+  const inputOmnibar = document.getElementById('omnibar-search-input');
+  const containerOmnibar = document.getElementById('omnibar-results');
+  let omnibarDebounceTimer = null;
+
+  function openOmnibar() {
+    if (!modalOmnibar) return;
+    modalOmnibar.style.display = 'flex';
+    if (inputOmnibar) {
+      inputOmnibar.value = '';
+      inputOmnibar.focus();
+    }
+    renderOmnibarPlaceholder();
+  }
+
+  function closeOmnibar() {
+    if (!modalOmnibar) return;
+    modalOmnibar.style.display = 'none';
+  }
+
+  if (btnOpenOmnibar) btnOpenOmnibar.addEventListener('click', openOmnibar);
+  if (btnCloseOmnibar) btnCloseOmnibar.addEventListener('click', closeOmnibar);
+  if (modalOmnibar) {
+    modalOmnibar.addEventListener('click', (e) => {
+      if (e.target === modalOmnibar) closeOmnibar();
+    });
+  }
+
+  // Atajo de teclado global: Ctrl + K o Cmd + K, y Escape
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      if (modalOmnibar && modalOmnibar.style.display === 'flex') {
+        closeOmnibar();
+      } else {
+        openOmnibar();
+      }
+    } else if (e.key === 'Escape' && modalOmnibar && modalOmnibar.style.display === 'flex') {
+      closeOmnibar();
+    }
+  });
+
+  function renderOmnibarPlaceholder(msg = 'Escribe al menos 2 letras o dígitos para buscar en tiempo real...') {
+    if (!containerOmnibar) return;
+    containerOmnibar.innerHTML = `
+      <div class="omnibar-placeholder">
+        <p>${escapeHtml(msg)}</p>
+        <div class="omnibar-shortcuts-hint">
+          <span><kbd>↑</kbd> <kbd>↓</kbd> Navegar</span>
+          <span><kbd>ENTER</kbd> Ficha</span>
+          <span><kbd>ESC</kbd> Cerrar</span>
+        </div>
+      </div>
+    `;
+  }
+
+  if (inputOmnibar) {
+    inputOmnibar.addEventListener('input', () => {
+      clearTimeout(omnibarDebounceTimer);
+      const query = inputOmnibar.value.trim();
+      if (query.length < 2) {
+        renderOmnibarPlaceholder();
+        return;
+      }
+
+      containerOmnibar.innerHTML = '<div class="omnibar-placeholder"><p>Buscando en catálogo institucional y Entra ID...</p></div>';
+
+      omnibarDebounceTimer = setTimeout(async () => {
+        try {
+          const resp = await fetch(`/api/students/search?q=${encodeURIComponent(query)}`);
+          const data = await resp.json();
+          if (data.success && data.results) {
+            renderOmnibarResults(data.results);
+          } else {
+            renderOmnibarPlaceholder('No se encontraron alumnos con ese criterio.');
+          }
+        } catch (err) {
+          renderOmnibarPlaceholder(`Error de búsqueda: ${err.message}`);
+        }
+      }, 200);
+    });
+  }
+
+  function renderOmnibarResults(results) {
+    if (!containerOmnibar) return;
+    if (results.length === 0) {
+      renderOmnibarPlaceholder('No se encontraron alumnos con ese criterio.');
+      return;
+    }
+
+    containerOmnibar.innerHTML = '';
+    results.forEach((st, idx) => {
+      const card = document.createElement('div');
+      card.className = `omnibar-result-card ${idx === 0 ? 'active' : ''}`;
+      
+      const initials = (st.name || 'AL').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+      const avatarHtml = st.photo_url
+        ? `<img src="${st.photo_url}" class="omnibar-avatar-img" alt="Foto">`
+        : initials;
+
+      const enabledBadge = st.account_enabled === false
+        ? '<span class="badge badge-danger">Deshabilitada</span>'
+        : (st.in_entra ? '<span class="badge badge-green">Activa</span>' : '<span class="badge badge-amber">Solo Lista</span>');
+
+      card.innerHTML = `
+        <div class="omnibar-result-info">
+          <div class="omnibar-avatar-circle">${avatarHtml}</div>
+          <div class="omnibar-details">
+            <div class="omnibar-name-row">
+              <span class="omnibar-student-name">${escapeHtml(st.name)}</span>
+              <span class="omnibar-mat-pill">${escapeHtml(st.matricula)}</span>
+              ${enabledBadge}
+            </div>
+            <div class="omnibar-meta-row">
+              <span>${escapeHtml(st.grado)} • ${escapeHtml(st.nivel)}</span>
+              <span> | ${escapeHtml(st.upn)}</span>
+            </div>
+          </div>
+        </div>
+        <div class="omnibar-actions">
+          <button type="button" class="btn btn-secondary-saas btn-sm btn-omnibar-reset" title="Restablecer contraseña">
+            <span>Reset Clave</span>
+          </button>
+        </div>
+      `;
+
+      card.querySelector('.btn-omnibar-reset').addEventListener('click', (e) => {
+        e.stopPropagation();
+        closeOmnibar();
+        // Cambiar a la pestaña de reseteo y precargar matrícula
+        const tabResetBtn = document.getElementById('tab-btn-reset');
+        if (tabResetBtn) tabResetBtn.click();
+        const searchInput = document.getElementById('search-matricula-input');
+        if (searchInput) {
+          searchInput.value = st.matricula;
+          const searchBtn = document.getElementById('btn-verify-matricula');
+          if (searchBtn) searchBtn.click();
+        }
+      });
+
+      card.addEventListener('click', () => {
+        closeOmnibar();
+        const tabResetBtn = document.getElementById('tab-btn-reset');
+        if (tabResetBtn) tabResetBtn.click();
+        const searchInput = document.getElementById('search-matricula-input');
+        if (searchInput) {
+          searchInput.value = st.matricula;
+          const searchBtn = document.getElementById('btn-verify-matricula');
+          if (searchBtn) searchBtn.click();
+        }
+      });
+
+      containerOmnibar.appendChild(card);
+    });
+  }
+
+  // ========================================================================
+  // FASE 1: SINCRONIZACIÓN Y AUDITORÍA DE ROSTER EN TEAMS
+  // ========================================================================
+  const modalRoster = document.getElementById('modal-roster-sync');
+  const btnCloseModalRoster = document.getElementById('btn-close-modal-roster');
+  const btnCloseRosterModal = document.getElementById('btn-close-roster-modal');
+  const btnExecuteRosterSync = document.getElementById('btn-execute-roster-sync');
+  const rosterAlertBanner = document.getElementById('roster-alert-banner');
+
+  const rosterModalClassName = document.getElementById('roster-modal-class-name');
+  const rosterModalClassMeta = document.getElementById('roster-modal-class-meta');
+
+  const rKpiOfficial = document.getElementById('r-kpi-official');
+  const rKpiTeam = document.getElementById('r-kpi-team');
+  const rKpiSynced = document.getElementById('r-kpi-synced');
+  const rKpiMissing = document.getElementById('r-kpi-missing');
+  const rKpiUnexpected = document.getElementById('r-kpi-unexpected');
+  const rKpiPercent = document.getElementById('r-kpi-percent');
+
+  const rosterMissingBadge = document.getElementById('roster-missing-badge');
+  const rosterMissingChips = document.getElementById('roster-missing-chips');
+  const rosterUnexpectedBadge = document.getElementById('roster-unexpected-badge');
+  const rosterUnexpectedChips = document.getElementById('roster-unexpected-chips');
+  const rosterSyncedBadge = document.getElementById('roster-synced-badge');
+  const rosterSyncedChips = document.getElementById('roster-synced-chips');
+
+  let currentRosterTeamId = null;
+  let currentRosterAuditData = null;
+
+  function closeRosterModal() {
+    if (!modalRoster) return;
+    modalRoster.style.display = 'none';
+    currentRosterTeamId = null;
+    currentRosterAuditData = null;
+  }
+
+  if (btnCloseModalRoster) btnCloseModalRoster.addEventListener('click', closeRosterModal);
+  if (btnCloseRosterModal) btnCloseRosterModal.addEventListener('click', closeRosterModal);
+  if (modalRoster) {
+    modalRoster.addEventListener('click', (e) => {
+      if (e.target === modalRoster) closeRosterModal();
+    });
+  }
+
+  async function openRosterModal(teamId, teamName) {
+    if (!modalRoster) return;
+    currentRosterTeamId = teamId;
+    modalRoster.style.display = 'flex';
+
+    if (rosterModalClassName) rosterModalClassName.textContent = `Roster: ${teamName}`;
+    if (rosterModalClassMeta) rosterModalClassMeta.textContent = 'Consultando miembros en Microsoft Teams y nómina escolar...';
+    if (rosterAlertBanner) rosterAlertBanner.style.display = 'none';
+
+    // Resetear KPIs
+    [rKpiOfficial, rKpiTeam, rKpiSynced, rKpiMissing, rKpiUnexpected, rKpiPercent].forEach(el => {
+      if (el) el.textContent = '...';
+    });
+
+    if (rosterMissingChips) rosterMissingChips.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Analizando alumnos...</span>';
+    if (rosterUnexpectedChips) rosterUnexpectedChips.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Analizando alumnos...</span>';
+    if (rosterSyncedChips) rosterSyncedChips.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Analizando alumnos...</span>';
+
+    try {
+      const resp = await fetch(`/api/teams/${teamId}/roster/audit`);
+      const data = await resp.json();
+      if (data.success && data.roster) {
+        currentRosterAuditData = data.roster;
+        renderRosterAudit(data.roster);
+      } else {
+        if (rosterAlertBanner) {
+          rosterAlertBanner.style.display = 'block';
+          rosterAlertBanner.className = 'saas-alert-banner alert-danger';
+          rosterAlertBanner.textContent = `Error al auditar roster: ${data.error || 'Error desconocido'}`;
+        }
+      }
+    } catch (err) {
+      if (rosterAlertBanner) {
+        rosterAlertBanner.style.display = 'block';
+        rosterAlertBanner.className = 'saas-alert-banner alert-danger';
+        rosterAlertBanner.textContent = `Error de red al consultar roster: ${err.message}`;
+      }
+    }
+  }
+
+  function renderRosterAudit(r) {
+    if (rosterModalClassMeta) {
+      rosterModalClassMeta.textContent = `${r.grado} • ${r.nivel} | Profesor Titular: ${r.teacher_name}`;
+    }
+
+    if (rKpiOfficial) rKpiOfficial.textContent = r.official_count;
+    if (rKpiTeam) rKpiTeam.textContent = r.team_count;
+    if (rKpiSynced) rKpiSynced.textContent = r.synced_count;
+    if (rKpiMissing) rKpiMissing.textContent = r.missing_count;
+    if (rKpiUnexpected) rKpiUnexpected.textContent = r.unexpected_count;
+    if (rKpiPercent) rKpiPercent.textContent = `${r.sync_percentage}%`;
+
+    // 1. Faltantes
+    if (rosterMissingBadge) rosterMissingBadge.textContent = `${r.missing_count} Alumnos Faltantes`;
+    if (rosterMissingChips) {
+      if (r.missing_students.length === 0) {
+        rosterMissingChips.innerHTML = '<span style="color: var(--color-green); font-size: 0.82rem;">Ninguno. Todos los alumnos oficiales están inscritos en el equipo.</span>';
+      } else {
+        rosterMissingChips.innerHTML = '';
+        r.missing_students.forEach(st => {
+          const chip = document.createElement('div');
+          chip.className = 'student-chip chip-amber';
+          chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.name)}</span>`;
+          rosterMissingChips.appendChild(chip);
+        });
+      }
+    }
+
+    // 2. Inesperados / Bajas
+    if (rosterUnexpectedBadge) rosterUnexpectedBadge.textContent = `${r.unexpected_count} Bajas / No pertenecen`;
+    if (rosterUnexpectedChips) {
+      if (r.unexpected_students.length === 0) {
+        rosterUnexpectedChips.innerHTML = '<span style="color: var(--color-green); font-size: 0.82rem;">Ninguno. No hay cuentas de alumnos ajenas al grado actual.</span>';
+      } else {
+        rosterUnexpectedChips.innerHTML = '';
+        r.unexpected_students.forEach(st => {
+          const chip = document.createElement('div');
+          chip.className = 'student-chip chip-red';
+          chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.name)}</span>`;
+          rosterUnexpectedChips.appendChild(chip);
+        });
+      }
+    }
+
+    // 3. Sincronizados
+    if (rosterSyncedBadge) rosterSyncedBadge.textContent = `${r.synced_count} Alumnos Sincronizados`;
+    if (rosterSyncedChips) {
+      if (r.synced_students.length === 0) {
+        rosterSyncedChips.innerHTML = '<span style="color: var(--text-muted); font-size: 0.82rem;">Sin alumnos matriculados todavía.</span>';
+      } else {
+        rosterSyncedChips.innerHTML = '';
+        r.synced_students.forEach(st => {
+          const chip = document.createElement('div');
+          chip.className = 'student-chip';
+          chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.name)}</span>`;
+          rosterSyncedChips.appendChild(chip);
+        });
+      }
+    }
+
+    if (btnExecuteRosterSync) {
+      btnExecuteRosterSync.disabled = (r.missing_count === 0 && r.unexpected_count === 0);
+      btnExecuteRosterSync.innerHTML = r.missing_count > 0
+        ? `<span>Sincronizar ${r.missing_count} Alumno(s) Faltante(s)</span>`
+        : '<span>Nómina Sincronizada al 100%</span>';
+    }
+  }
+
+  // Ejecutar sincronización de roster
+  if (btnExecuteRosterSync) {
+    btnExecuteRosterSync.addEventListener('click', async () => {
+      if (!currentRosterTeamId || !currentRosterAuditData) return;
+      btnExecuteRosterSync.disabled = true;
+      btnExecuteRosterSync.innerHTML = '<span>Sincronizando miembros en Teams...</span>';
+
+      try {
+        const resp = await fetch(`/api/teams/${currentRosterTeamId}/roster/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            add_missing: true,
+            remove_unexpected: false,
+            nivel: currentRosterAuditData.nivel,
+            grado: currentRosterAuditData.grado
+          })
+        });
+        const res = await resp.json();
+        if (res.success && res.result) {
+          showToast(`Sincronización completada: se agregaron ${res.result.added_count} alumnos al equipo.`, 'success');
+          // Re-auditar la clase en vivo para reflejar los cambios
+          openRosterModal(currentRosterTeamId, currentRosterAuditData.team_name);
+          loadTeamsData(true);
+        } else {
+          showToast(`Error al sincronizar: ${res.error || 'Error inesperado'}`, 'error');
+          btnExecuteRosterSync.disabled = false;
+        }
+      } catch (err) {
+        showToast(`Error de conexión: ${err.message}`, 'error');
+        btnExecuteRosterSync.disabled = false;
+      }
+    });
+  }
+
+  // Exportar auditoría global de Roster a PDF y Excel
+  const btnExportRosterPdf = document.getElementById('btn-export-roster-pdf');
+  const btnExportRosterExcel = document.getElementById('btn-export-roster-excel');
+
+  if (btnExportRosterPdf) {
+    btnExportRosterPdf.addEventListener('click', () => {
+      const cycle = (filterCycle && filterCycle !== 'all') ? filterCycle : '2026-2027';
+      showToast('Generando informe oficial en PDF de auditoría de roster...', 'info');
+      window.location.href = `/api/teams/roster/export-pdf?cycle=${encodeURIComponent(cycle)}`;
+    });
+  }
+
+  if (btnExportRosterExcel) {
+    btnExportRosterExcel.addEventListener('click', () => {
+      const cycle = (filterCycle && filterCycle !== 'all') ? filterCycle : '2026-2027';
+      showToast('Generando libro Excel de balance de roster de clases...', 'info');
+      window.location.href = `/api/teams/roster/export-excel?cycle=${encodeURIComponent(cycle)}`;
     });
   }
 });
