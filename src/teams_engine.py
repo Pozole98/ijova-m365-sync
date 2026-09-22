@@ -240,11 +240,17 @@ def get_team_members_detailed(graph: GraphClient, team_id: str) -> Dict[str, Any
 
     teachers = []
     for o in owners_raw:
+        d_name = o.get("displayName") or o.get("userPrincipalName") or ""
+        u_upn = o.get("userPrincipalName") or o.get("mail") or ""
         teachers.append({
             "id": o.get("id"),
-            "name": o.get("displayName") or o.get("userPrincipalName"),
-            "upn": o.get("userPrincipalName"),
-            "mail": o.get("mail") or o.get("userPrincipalName"),
+            "name": d_name,
+            "display_name": d_name,
+            "displayName": d_name,
+            "upn": u_upn,
+            "user_principal_name": u_upn,
+            "userPrincipalName": u_upn,
+            "mail": o.get("mail") or u_upn,
             "is_owner": True
         })
 
@@ -253,10 +259,15 @@ def get_team_members_detailed(graph: GraphClient, team_id: str) -> Dict[str, Any
     for m in members_raw:
         m_upn = m.get("userPrincipalName", "")
         prefix = m_upn.split("@")[0]
+        st_name = m.get("displayName") or m_upn
         rec = {
             "id": m.get("id"),
-            "name": m.get("displayName") or m_upn,
+            "name": st_name,
+            "display_name": st_name,
+            "displayName": st_name,
             "upn": m_upn,
+            "user_principal_name": m_upn,
+            "userPrincipalName": m_upn,
             "mail": m.get("mail") or m_upn,
             "is_owner": any(t["id"] == m.get("id") for t in teachers)
         }

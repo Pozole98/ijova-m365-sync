@@ -595,7 +595,20 @@ def create_app(config_path: str = "config.json") -> Flask:
         """Retorna la lista de docentes para el selector de titular."""
         try:
             graph = get_graph()
-            teachers = graph.get_all_teachers()
+            raw_teachers = graph.get_all_teachers()
+            teachers = []
+            for t in raw_teachers:
+                d_name = t.get("display_name") or t.get("displayName") or t.get("name") or ""
+                upn = t.get("user_principal_name") or t.get("userPrincipalName") or t.get("mail") or ""
+                teachers.append({
+                    "id": t.get("id"),
+                    "display_name": d_name,
+                    "displayName": d_name,
+                    "name": d_name,
+                    "user_principal_name": upn,
+                    "userPrincipalName": upn,
+                    "mail": t.get("mail") or upn
+                })
             return jsonify({"success": True, "teachers": teachers})
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500

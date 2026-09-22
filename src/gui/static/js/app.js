@@ -1348,7 +1348,9 @@ document.addEventListener('DOMContentLoaded', () => {
           teachersList.forEach(t => {
             const opt = document.createElement('option');
             opt.value = t.id;
-            opt.textContent = `${t.displayName} (${t.userPrincipalName})`;
+            const name = t.displayName || t.display_name || t.name || 'Docente';
+            const email = t.userPrincipalName || t.user_principal_name || t.mail || t.upn || '';
+            opt.textContent = email ? `${name} (${email})` : name;
             selectClassTeacher.appendChild(opt);
           });
         }
@@ -1692,7 +1694,9 @@ document.addEventListener('DOMContentLoaded', () => {
             d.teachers.forEach(tc => {
               const pill = document.createElement('div');
               pill.className = 'teacher-pill';
-              pill.innerHTML = `<span>👤 ${escapeHtml(tc.displayName || tc.userPrincipalName)}</span><span style="font-size: 0.72rem; opacity: 0.85;">(${escapeHtml(tc.userPrincipalName)})</span>`;
+              const tcName = tc.displayName || tc.display_name || tc.name || 'Profesor';
+              const tcUpn = tc.userPrincipalName || tc.user_principal_name || tc.upn || tc.mail || '';
+              pill.innerHTML = `<span>👤 ${escapeHtml(tcName)}</span>` + (tcUpn ? `<span style="font-size: 0.72rem; opacity: 0.85;">(${escapeHtml(tcUpn)})</span>` : '');
               membersTeachersRow.appendChild(pill);
             });
           }
@@ -1725,11 +1729,13 @@ document.addEventListener('DOMContentLoaded', () => {
     membersStudentsTbody.innerHTML = '';
     students.forEach(st => {
       const tr = document.createElement('tr');
-      const mat = st.matricula || (st.userPrincipalName ? st.userPrincipalName.split('@')[0] : 'N/D');
+      const mat = st.matricula || (st.userPrincipalName ? st.userPrincipalName.split('@')[0] : (st.user_principal_name ? st.user_principal_name.split('@')[0] : (st.upn ? st.upn.split('@')[0] : 'N/D')));
+      const stName = st.displayName || st.display_name || st.name || 'Sin nombre';
+      const stUpn = st.userPrincipalName || st.user_principal_name || st.upn || st.mail || '';
       tr.innerHTML = `
         <td><strong class="highlight mono">${escapeHtml(mat)}</strong></td>
-        <td>${escapeHtml(st.displayName || 'Sin nombre')}</td>
-        <td class="mono" style="font-size: 0.78rem;">${escapeHtml(st.userPrincipalName)}</td>
+        <td>${escapeHtml(stName)}</td>
+        <td class="mono" style="font-size: 0.78rem;">${escapeHtml(stUpn)}</td>
         <td class="text-center"><span class="badge badge-outline">Estudiante</span></td>
       `;
       membersStudentsTbody.appendChild(tr);
@@ -1742,8 +1748,8 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!currentMembersTeamList) return;
 
       const filtered = currentMembersTeamList.filter(st => {
-        const name = (st.displayName || '').toLowerCase();
-        const upn = (st.userPrincipalName || '').toLowerCase();
+        const name = (st.displayName || st.display_name || st.name || '').toLowerCase();
+        const upn = (st.userPrincipalName || st.user_principal_name || st.upn || st.mail || '').toLowerCase();
         const mat = (st.matricula || '').toLowerCase();
         return name.includes(q) || upn.includes(q) || mat.includes(q);
       });
