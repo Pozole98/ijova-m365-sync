@@ -301,6 +301,10 @@ def get_students_for_grade(school_db: Dict[str, Any], nivel: str, grado: str) ->
     input_num = i_num_match.group(0) if i_num_match else None
 
     for mat, d in school_db.items():
+        estatus = (d.get("estatus") or "").strip().lower()
+        if "baja" in estatus or "inactivo" in estatus or "egresado" in estatus:
+            continue
+
         s_nivel = (d.get("nivel") or "").strip().lower()
         s_grado = (d.get("grado") or "").strip().lower()
 

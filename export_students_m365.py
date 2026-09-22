@@ -229,6 +229,130 @@ def build_school_db():
     except Exception:
         pass
 
+    # 9. COLEGIATURAS 26-27 (Fuente de verdad oficial del ciclo escolar 2026-2027)
+    try:
+        col_files = glob.glob("COLEGIATURAS 26-27*.xlsx")
+        if col_files:
+            col_path = sorted(col_files)[-1]
+            wb_col = openpyxl.load_workbook(col_path, data_only=True)
+            sheets_config = [
+                ("PREESCOLAR", 2, 4, 9, "Preescolar"),
+                ("PRIMARIA", 2, 3, 8, "Primaria"),
+                ("SECUNDARIA", 2, 3, 9, "Secundaria"),
+                ("PREPARATORIA", 3, 4, 8, "Preparatoria")
+            ]
+
+            manual_corrections = {
+                "ROBLES CRUZ VICTOR AZIEL": "260032_PENDING",
+                "VARCENAS LOPEZ DE NAVA LUIS MANUEL": "260033_PENDING",
+                "BARRIENTOS ALONSO SAID JARED": "PENDING_BAJA",
+                "JUAREZ RAMOS MELANIE": "250052",
+                "VAZQUEZ HERNANDEZ VALENTINA": "260016",
+                "LOPEZ DE NAVA TENORIO RUTH MARISOL": "250101",
+                "VARCENAS LOPEZ DE NAVA ARLETH AMAYA": "250082",
+                "CAHUICH ORTIZ JOHAN ALEXANDER": "260028",
+                "CAHUICH ORTIZ DORIAN ALEXANDER": "250016",
+                "MARTINEZ CUEVAS ALEJANDRO": "260024",
+                "MARTINEZ CUEVAS ALIX LARISA": "250063",
+                "MEDINA GARCIA JONATHAN": "260029",
+                "BARRANCO URBINA THIAGO LEONARDO": "260027",
+                "CAMACHO NAVA MARCO ANTONIO": "260031",
+                "MARURI PIÑA BETBIRAI": "260030",
+                "CERON ENRIQUEZ JEIMI ZOE": "260021",
+                "CERON ENRIQUEZ ALISSON YOALI": "260025",
+                "DOMINGO PEREZ PAULINA ALEXANDRA": "260020",
+                "BUSTOS BUENO MELISSA JULIETTE": "260022",
+                "RAMIREZ HERNANDEZ ANDREA": "260019",
+                "DIAZ PINEDA LUIS ENRIQUE": "260004",
+                "CRUZ NESTOR JULIAN ELEAZAR": "260005",
+                "JIMENEZ HERNANDEZ IKER LEOPOLDO": "260006",
+                "SALAS PEREZ DANIELA SAMARA": "260003",
+                "REYES LUCIO ELIAS ISBAQ": "260009",
+                "REYES LUCIO ENRIQUE OWEN": "260010",
+                "CASTRO RAMIREZ OMAR": "260011",
+                "GUERRERO MEDINA GAEL": "260012",
+                "PASTEN JIMENEZ MARIA SOFIA": "260013",
+                "CERVANTES GARCIA ANTONIO ADAIR": "260014",
+                "SOTO CARRANZA MARIA SOFIA": "260015",
+                "MARTINEZ VALENTINEZ VALENTINA GUADALUPE": "260017",
+                "HERNANDEZ NESTOR IVAN YERAY": "260018",
+                "PEREZ HERNANDEZ LUIS ANGEL": "260023",
+                "ESTRADA MONTECINOS MAURICIO": "260026",
+                "LAMADRID ALVAREZ XIMENA OSIRIS": "260007",
+                "GOMEZ TRUJILLO OSVALDO": "260008",
+                "JUAN ESPINDOLA CAMILA": "260001",
+                "LEON ROJAS DAFNE ANAHI": "260002"
+            }
+
+            name_to_mat = {}
+            for mat, d in school_db.items():
+                fn1 = norm(f"{d.get('paterno', '')} {d.get('materno', '')} {d.get('nombres', '')}")
+                fn2 = norm(f"{d.get('paterno', '')} {d.get('nombres', '')}")
+                fn3 = norm(d.get("display_name", ""))
+                for f in [fn1, fn2, fn3]:
+                    if f and f not in name_to_mat:
+                        name_to_mat[f] = mat
+
+            active_2627_mats = set()
+
+            for sheet_name, col_g, col_n, start_r, nivel in sheets_config:
+                if sheet_name not in wb_col.sheetnames:
+                    continue
+                ws = wb_col[sheet_name]
+                cur_g = None
+                for r in range(start_r, ws.max_row + 1):
+                    g = ws.cell(row=r, column=col_g).value
+                    n = ws.cell(row=r, column=col_n).value
+                    if g is not None and str(g).strip():
+                        cur_g = str(g).strip()
+                    if n and str(n).strip():
+                        val = str(n).strip()
+                        if any(k in val.upper() for k in ["TOTAL", "SUBTOTAL", "NOMBRE", "ALUMNO", "COLEGIATURA", "BAJAS", "PROMEDIO"]):
+                            continue
+                        notes = [str(ws.cell(row=r, column=c).value or "").strip() for c in range(1, 15)]
+                        is_baja = any("BAJA" in x.upper() for x in notes)
+
+                        if nivel == "Preparatoria":
+                            sem_map = {"1": "1er Semestre", "2": "3er Semestre", "3": "5to Semestre"}
+                            grado_str = sem_map.get(str(cur_g), f"{cur_g}° Semestre")
+                        elif nivel == "Secundaria":
+                            grado_str = f"{cur_g}° Secundaria"
+                        elif nivel == "Primaria":
+                            grado_str = f"{cur_g}° Primaria"
+                        elif nivel == "Preescolar":
+                            grado_str = f"{cur_g}° Preescolar"
+                        else:
+                            grado_str = str(cur_g)
+
+                        n_norm = norm(val)
+                        target_mat = manual_corrections.get(val) or name_to_mat.get(n_norm)
+                        if not target_mat:
+                            v_toks = set(n_norm.split())
+                            for fn, m in name_to_mat.items():
+                                fn_toks = set(fn.split())
+                                if len(v_toks.intersection(fn_toks)) >= 3:
+                                    target_mat = m
+                                    break
+
+                        if target_mat and not target_mat.endswith("_PENDING") and target_mat != "PENDING_BAJA":
+                            active_2627_mats.add(target_mat)
+                            if target_mat not in school_db:
+                                school_db[target_mat] = {"matricula": target_mat}
+                            rec = school_db[target_mat]
+                            rec["nivel"] = nivel
+                            rec["grado"] = grado_str
+                            rec["estatus"] = "Baja" if is_baja else "Activo"
+                            rec["ciclo"] = "2026-2027"
+                            rec["display_name"] = rec.get("display_name") or val
+
+            # Alumnos de la base anterior no presentes en Colegiaturas 26-27 se marcan como inactivos/egresados
+            for mat, d in school_db.items():
+                if mat not in active_2627_mats:
+                    d["estatus"] = "Egresado / Ciclo Anterior"
+                    d["ciclo"] = "2025-2026"
+    except Exception as e:
+        print(f"Aviso al procesar Colegiaturas 26-27: {e}")
+
     return school_db
 
 

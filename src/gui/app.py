@@ -112,20 +112,37 @@ def create_app(config_path: str = "config.json") -> Flask:
         nonlocal _students_cache
         if _students_cache is None:
             items = []
-            if os.path.exists(config.excel_path):
-                try:
-                    records = parse_excel_students(config.excel_path, config.sheet_name)
-                    for r in records:
-                        nombre_completo = f"{r.apellido_paterno} {r.apellido_materno} {r.nombres}".strip()
-                        items.append({
-                            "matricula": r.matricula.strip(),
-                            "nombre": nombre_completo,
-                            "nivel": r.nivel or "Estudiante",
-                            "grado": r.grado_semestre or "Activo",
-                            "upn": f"{r.matricula.strip()}@{config.domain}"
-                        })
-                except Exception as e:
-                    app.logger.warning(f"No se pudo cargar el listado del Excel: {e}")
+            try:
+                from export_students_m365 import build_school_db
+                school_db = build_school_db()
+                for mat, d in sorted(school_db.items()):
+                    estatus = (d.get("estatus") or "").strip()
+                    if "egresado" in estatus.lower() or "baja" in estatus.lower():
+                        continue
+                    disp = d.get("display_name") or f"{d.get('paterno', '')} {d.get('materno', '')} {d.get('nombres', '')}".strip()
+                    items.append({
+                        "matricula": mat,
+                        "nombre": disp,
+                        "nivel": d.get("nivel") or "Estudiante",
+                        "grado": d.get("grado") or "Activo",
+                        "upn": f"{mat}@{config.domain}"
+                    })
+            except Exception as e:
+                app.logger.warning(f"No se pudo cargar el listado de build_school_db: {e}")
+                if os.path.exists(config.excel_path):
+                    try:
+                        records = parse_excel_students(config.excel_path, config.sheet_name)
+                        for r in records:
+                            nombre_completo = f"{r.apellido_paterno} {r.apellido_materno} {r.nombres}".strip()
+                            items.append({
+                                "matricula": r.matricula.strip(),
+                                "nombre": nombre_completo,
+                                "nivel": r.nivel or "Estudiante",
+                                "grado": r.grado_semestre or "Activo",
+                                "upn": f"{r.matricula.strip()}@{config.domain}"
+                            })
+                    except Exception as e2:
+                        app.logger.warning(f"Tampoco se pudo cargar del Excel base: {e2}")
             _students_cache = items
         return _students_cache
 
