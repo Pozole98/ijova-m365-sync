@@ -698,6 +698,9 @@ def create_class_assisted(
     )
     res["enrolled_students"] = enrolled_students
     res["display_name"] = display_name
+    res["team_name"] = display_name
+    if "students_enrolled_count" not in res:
+        res["students_enrolled_count"] = len(enrolled_students)
     return res
 
 

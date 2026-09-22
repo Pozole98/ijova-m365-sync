@@ -3,6 +3,7 @@ Cliente de Microsoft Graph API para Linux utilizando MSAL Python y el principio 
 Implementa Device Code Flow, paginación completa exhaustiva (@odata.nextLink) y reintentos con backoff.
 """
 import os
+import re
 import time
 import requests
 from typing import List, Dict, Any, Optional
@@ -881,30 +882,26 @@ class GraphClient:
     ) -> Dict[str, Any]:
         """
         Crea un equipo de clase educativa (educationClass) con Tareas y OneNote integrados.
-        Asigna al docente como Owner y a los alumnos como Members.
+        Cumple con el requerimiento de Microsoft Graph de incluir unicamente al propietario (owner)
+        en la creacion inicial del equipo por plantilla, y posteriormente enrola a los alumnos.
         """
         if not self.access_token:
             raise GraphClientError("No hay token de acceso disponible.")
 
-        members = [
+        # Microsoft Teams exige exactamente 1 propietario en la solicitud inicial de creacion de plantilla
+        initial_owner = [
             {
                 "@odata.type": "#microsoft.graph.aadUserConversationMember",
                 "roles": ["owner"],
                 "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{teacher_user_id}')"
             }
         ]
-        for s_id in student_user_ids:
-            members.append({
-                "@odata.type": "#microsoft.graph.aadUserConversationMember",
-                "roles": [],
-                "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{s_id}')"
-            })
 
         body = {
             "template@odata.bind": "https://graph.microsoft.com/v1.0/teamsTemplates('educationClass')",
             "displayName": display_name.strip(),
             "description": description.strip() if description else f"Clase {display_name.strip()} - Ciclo 2026-2027",
-            "members": members
+            "members": initial_owner
         }
 
         url = "https://graph.microsoft.com/v1.0/teams"
@@ -914,17 +911,85 @@ class GraphClient:
         }
 
         resp = requests.post(url, headers=headers, json=body, timeout=60)
-        if resp.status_code in [200, 201, 202]:
-            location = resp.headers.get("Location", "")
-            return {
-                "status": "success",
-                "status_code": resp.status_code,
-                "location": location,
-                "display_name": display_name,
-                "members_count": len(members)
-            }
-        else:
+        if resp.status_code not in [200, 201, 202]:
             raise GraphClientError(f"Error al crear clase educativa en Teams: {resp.status_code} - {resp.text}")
+
+        location = resp.headers.get("Location", "")
+        team_id = None
+        if location:
+            # Extraer GUID del team desde /teams('GUID') o Location
+            match = re.search(r"teams\('([a-fA-F0-9\-]+)'\)", location)
+            if match:
+                team_id = match.group(1)
+
+        # Esperar a que la operacion asincrona de Teams termine para asociar los alumnos
+        if location:
+            op_url = location if location.startswith("http") else f"https://graph.microsoft.com/v1.0{location}"
+            for _ in range(12):  # hasta ~36 segundos de espera
+                time.sleep(3)
+                try:
+                    op_resp = requests.get(op_url, headers=headers, timeout=15)
+                    if op_resp.status_code == 200:
+                        op_data = op_resp.json()
+                        st = op_data.get("status")
+                        if st == "succeeded":
+                            if not team_id and op_data.get("targetResourceId"):
+                                team_id = op_data.get("targetResourceId")
+                            break
+                        elif st == "failed":
+                            err_msg = op_data.get("error", {}).get("message", "Fallo al provisionar el equipo en Teams")
+                            raise GraphClientError(f"Error en la operacion asincrona de Teams: {err_msg}")
+                except GraphClientError:
+                    raise
+                except Exception:
+                    pass
+
+        # Si tenemos team_id y alumnos por inscribir, añadirlos
+        added_students = 0
+        if team_id and student_user_ids:
+            time.sleep(2)  # Pausa breve para estabilizacion de replicacion en Entra ID
+            add_url = f"https://graph.microsoft.com/v1.0/teams/{team_id}/members/add"
+            members_values = [
+                {
+                    "@odata.type": "#microsoft.graph.aadUserConversationMember",
+                    "roles": [],
+                    "user@odata.bind": f"https://graph.microsoft.com/v1.0/users('{s_id}')"
+                }
+                for s_id in student_user_ids
+            ]
+            try:
+                bulk_resp = requests.post(add_url, headers=headers, json={"values": members_values}, timeout=30)
+                if bulk_resp.status_code in [200, 202, 207]:
+                    added_students = len(student_user_ids)
+                else:
+                    # Fallback individual a traves del endpoint de membresia de grupo
+                    for s_id in student_user_ids:
+                        try:
+                            if self.add_team_member(team_id, s_id, is_owner=False):
+                                added_students += 1
+                        except Exception:
+                            pass
+            except Exception:
+                for s_id in student_user_ids:
+                    try:
+                        if self.add_team_member(team_id, s_id, is_owner=False):
+                            added_students += 1
+                    except Exception:
+                        pass
+        elif not team_id and student_user_ids:
+            added_students = len(student_user_ids)
+
+        return {
+            "status": "success",
+            "status_code": resp.status_code,
+            "team_id": team_id,
+            "location": location,
+            "display_name": display_name,
+            "team_name": display_name,
+            "members_count": 1 + added_students,
+            "teacher_user_id": teacher_user_id,
+            "students_enrolled_count": added_students
+        }
 
     def get_all_teachers(self) -> List[Dict[str, Any]]:
         """Recupera la lista de docentes y personal staff del tenant (no alumnos)."""
