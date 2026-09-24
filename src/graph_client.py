@@ -616,12 +616,13 @@ class GraphClient:
         Restablece la contraseña de un usuario en Microsoft Entra ID vía PATCH /v1.0/users/{user_id}.
         Por defecto exige cambio de contraseña en el próximo inicio de sesión (force_change=True).
         """
-        if not self.access_token:
+        token = self.access_token
+        if not token:
             raise GraphClientError("No hay token de acceso disponible.")
 
         url = f"https://graph.microsoft.com/v1.0/users/{user_id}"
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json"
         }
         payload = {
@@ -633,10 +634,21 @@ class GraphClient:
 
         for attempt in range(1, max_retries + 1):
             try:
+                headers["Authorization"] = f"Bearer {self.access_token}"
                 resp = requests.patch(url, headers=headers, json=payload, timeout=25)
 
                 if resp.status_code in [200, 204]:
                     return True
+
+                if resp.status_code == 401 and attempt < max_retries:
+                    try:
+                        fresh_token = self.ensure_valid_token(force_refresh=True)
+                        headers["Authorization"] = f"Bearer {fresh_token}"
+                        resp = requests.patch(url, headers=headers, json=payload, timeout=25)
+                        if resp.status_code in [200, 204]:
+                            return True
+                    except Exception:
+                        pass
 
                 if resp.status_code == 429:
                     time.sleep(int(resp.headers.get("Retry-After", 2)))
@@ -646,7 +658,15 @@ class GraphClient:
                     time.sleep(attempt * 2)
                     continue
 
-                resp.raise_for_status()
+                # Si es un error 400 Bad Request o similar de Graph, extraer el detalle exacto
+                err_detail = None
+                try:
+                    err_json = resp.json()
+                    err_detail = err_json.get("error", {}).get("message")
+                except Exception:
+                    err_detail = resp.text
+
+                raise GraphClientError(f"Directiva de Microsoft 365: {err_detail or resp.status_code}")
 
             except requests.exceptions.RequestException as e:
                 if attempt == max_retries:

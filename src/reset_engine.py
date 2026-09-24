@@ -170,26 +170,31 @@ def execute_password_reset(
         is_valid, msg = validate_password_complexity(custom_password)
         if not is_valid:
             print(f"\n⛔ CONTRASEÑA NO VÁLIDA: {msg}")
-            return None
+            raise ValueError(f"Contraseña no válida: {msg}")
+
+        # Comprobar restricciones de Microsoft Entra ID (matrícula)
+        lower_pw = custom_password.lower()
+        if matricula.lower() in lower_pw:
+            raise ValueError("La contraseña no debe contener la matrícula del alumno (rechazado por directivas de Microsoft 365).")
+
         new_password = custom_password
     else:
         new_password = generate_secure_password(length=12)
 
-    # 3. Aplicar reseteo en Microsoft Entra ID vía Graph
+    # 4. Aplicar reseteo en Microsoft Entra ID vía Graph
     print(f"⚡ Restableciendo contraseña en Microsoft 365...")
     try:
         success = graph.reset_password(user_id, new_password, force_change=force_change)
         if not success:
-            print(f"❌ No se pudo restablecer la contraseña en Graph.")
-            return None
+            raise GraphClientError("No se pudo aplicar el cambio de contraseña en Microsoft Graph.")
         print(f"✅ Contraseña restablecida con éxito en la nube.")
     except Exception as e:
         print(f"❌ Error al comunicarse con Microsoft Graph: {e}")
-        return None
+        raise
 
     timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
     
-    # 4. Guardar en bitácora protegida de reseteos en secrets/
+    # 5. Guardar en bitácora protegida de reseteos en secrets/
     os.makedirs(secrets_dir, exist_ok=True)
     os.makedirs(reports_dir, exist_ok=True)
     reset_log_file = os.path.join(secrets_dir, "historial_reseteos_contrasenas.csv")
@@ -211,7 +216,7 @@ def execute_password_reset(
     except Exception:
         pass
 
-    # 5. Generar Ficha Individual en PDF lista para imprimir
+    # 6. Generar Ficha Individual en PDF lista para imprimir
     pdf_out = os.path.join(secrets_dir, f"ficha_acceso_reset_{matricula}_{timestamp_str}.pdf")
     student_dict = {
         "matricula": matricula,
@@ -219,7 +224,8 @@ def execute_password_reset(
         "nombre_completo": student_info.get("nombre_oficial", display_name),
         "password_temporal": new_password,
         "nivel": nivel,
-        "grado_semestre": grado_semestre
+        "grado_semestre": grado_semestre,
+        "force_change": force_change
     }
     try:
         generate_pdf_cards_from_list([student_dict], pdf_out, layout_mode="cards")
@@ -227,7 +233,7 @@ def execute_password_reset(
     except Exception as e:
         print(f"⚠️ No se pudo generar el PDF individual: {e}")
 
-    # 6. Imprimir Ficha en consola
+    # 7. Imprimir Ficha en consola
     print_welcome_card(
         matricula=matricula,
         upn=upn,
@@ -253,10 +259,12 @@ def execute_password_reset(
         "display_name": display_name,
         "nombre_oficial": student_info.get("nombre_oficial", display_name),
         "password": new_password,
+        "new_password": new_password,
         "user_id": user_id,
         "pdf_path": pdf_out if os.path.exists(pdf_out) else None,
         "nivel": nivel,
-        "grado_semestre": grado_semestre
+        "grado_semestre": grado_semestre,
+        "force_change": force_change
     }
 
 

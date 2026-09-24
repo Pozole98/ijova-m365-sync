@@ -303,18 +303,27 @@ def create_app(config_path: str = "config.json") -> Flask:
                 pdf_filename = os.path.basename(result["pdf_path"])
                 pdf_url = f"/api/pdf/{pdf_filename}"
 
-            return jsonify({
+            resp_dict = {
                 "success": True,
                 "matricula": result["matricula"],
                 "upn": result["upn"],
                 "display_name": result["display_name"],
                 "nombre_oficial": result.get("nombre_oficial", result["display_name"]),
                 "password": result["password"],
+                "new_password": result["password"],
+                "force_change": force_change,
                 "pdf_filename": pdf_filename,
                 "pdf_url": pdf_url,
                 "nivel": result.get("nivel", "Estudiante"),
                 "grado_semestre": result.get("grado_semestre", "Activo")
-            })
+            }
+            # Enviar también el objeto anidado 'data' para compatibilidad total con el frontend
+            resp_dict["data"] = dict(resp_dict)
+            return jsonify(resp_dict)
+        except ValueError as ve:
+            return jsonify({"success": False, "error": str(ve)}), 400
+        except GraphClientError as ge:
+            return jsonify({"success": False, "error": str(ge)}), 400
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 

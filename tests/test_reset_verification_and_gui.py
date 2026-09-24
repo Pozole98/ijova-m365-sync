@@ -274,6 +274,69 @@ class TestResetVerificationAndGUI(unittest.TestCase):
         self.assertIn("Bajas de Alumnos", html)
         self.assertIn("Papelera & Restauración", html)
 
+    @patch("src.gui.app.execute_password_reset")
+    @patch("src.gui.app.verify_student_for_reset")
+    def test_gui_reset_password_with_custom_password(self, mock_verify, mock_execute):
+        """Verifica que /api/reset-password procese contraseñas específicas y retorne la estructura con data."""
+        mock_verify.return_value = {
+            "registered": True,
+            "matricula": "250081",
+            "upn": "250081@ijova.com",
+            "display_name": "ALUMNO PRUEBA"
+        }
+        mock_execute.return_value = {
+            "matricula": "250081",
+            "upn": "250081@ijova.com",
+            "display_name": "ALUMNO PRUEBA",
+            "nombre_oficial": "ALUMNO PRUEBA",
+            "password": "MiClaveEspecifica2026!",
+            "pdf_path": None,
+            "nivel": "Secundaria",
+            "grado_semestre": "1° Secundaria"
+        }
+
+        app = create_app()
+        client = app.test_client()
+
+        payload = {
+            "matricula": "250081",
+            "confirmed": True,
+            "password_mode": "custom",
+            "custom_password": "MiClaveEspecifica2026!",
+            "force_change": False
+        }
+        resp = client.post("/api/reset-password", json=payload)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["success"])
+        self.assertIn("data", data)
+        self.assertEqual(data["data"]["password"], "MiClaveEspecifica2026!")
+        self.assertEqual(data["data"]["new_password"], "MiClaveEspecifica2026!")
+        self.assertFalse(data["force_change"])
+
+    @patch("src.gui.app.execute_password_reset")
+    @patch("src.gui.app.verify_student_for_reset")
+    def test_gui_reset_password_handles_validation_error(self, mock_verify, mock_execute):
+        """Verifica que /api/reset-password propague los errores de complejidad o directivas al frontend."""
+        mock_verify.return_value = {"registered": True, "matricula": "250081"}
+        mock_execute.side_effect = ValueError("Contraseña no válida: La contraseña debe tener al menos 8 caracteres.")
+
+        app = create_app()
+        client = app.test_client()
+
+        payload = {
+            "matricula": "250081",
+            "confirmed": True,
+            "password_mode": "custom",
+            "custom_password": "123",
+            "force_change": False
+        }
+        resp = client.post("/api/reset-password", json=payload)
+        self.assertEqual(resp.status_code, 400)
+        data = resp.get_json()
+        self.assertFalse(data["success"])
+        self.assertIn("Contraseña no válida", data["error"])
+
 
 if __name__ == "__main__":
     unittest.main()

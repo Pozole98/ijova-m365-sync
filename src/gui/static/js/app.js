@@ -375,11 +375,14 @@ document.addEventListener('DOMContentLoaded', () => {
   if (pwModeAuto && pwModeCustom) {
     pwModeAuto.addEventListener('change', () => {
       customPwField.style.display = 'none';
+      if (forceChangeCheckbox) forceChangeCheckbox.checked = true;
     });
 
     pwModeCustom.addEventListener('change', () => {
       customPwField.style.display = 'block';
       inputCustomPassword.focus();
+      // Al asignar clave específica/personalizada, desactivar por defecto el cambio forzoso
+      if (forceChangeCheckbox) forceChangeCheckbox.checked = false;
     });
   }
 
@@ -435,7 +438,7 @@ document.addEventListener('DOMContentLoaded', () => {
           confirmed: true,
           password_mode: passwordMode,
           custom_password: customPassword,
-          force_change: forceChangeCheckbox.checked
+          force_change: forceChangeCheckbox ? forceChangeCheckbox.checked : true
         };
 
         const resp = await fetch('/api/reset-password', {
@@ -457,19 +460,32 @@ document.addEventListener('DOMContentLoaded', () => {
 
         verificationCard.style.display = 'none';
 
-        successStudentName.textContent = data.data.display_name;
-        successStudentUpn.textContent = data.data.upn;
-        successPasswordVal.textContent = data.data.new_password;
+        const resData = data.data || data;
+        const newPw = resData.password || resData.new_password;
+        const dispName = resData.display_name || resData.nombre_oficial;
 
-        ticketName.textContent = data.data.display_name;
-        ticketMatricula.textContent = data.data.matricula;
-        ticketLevel.textContent = data.data.nivel || currentStudent.nivel || 'Estudiante';
-        ticketUpn.textContent = data.data.upn;
-        ticketPassword.textContent = data.data.new_password;
+        successStudentName.textContent = dispName;
+        successStudentUpn.textContent = resData.upn;
+        successPasswordVal.textContent = newPw;
 
-        if (data.data.pdf_filename) {
-          btnPrintVoucher.href = `/api/pdf/${data.data.pdf_filename}`;
-          btnDownloadVoucher.href = `/api/pdf/${data.data.pdf_filename}`;
+        ticketName.textContent = dispName;
+        ticketMatricula.textContent = resData.matricula;
+        ticketLevel.textContent = resData.nivel || currentStudent.nivel || 'Estudiante';
+        ticketUpn.textContent = resData.upn;
+        ticketPassword.textContent = newPw;
+
+        const ticketFooterStrip = document.querySelector('.ticket-footer-strip span');
+        if (ticketFooterStrip) {
+          if (forceChangeCheckbox && forceChangeCheckbox.checked) {
+            ticketFooterStrip.textContent = 'ℹ️ El sistema te solicitará cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.';
+          } else {
+            ticketFooterStrip.textContent = '✓ Contraseña permanente asignada. No requiere cambio en el primer inicio de sesión.';
+          }
+        }
+
+        if (resData.pdf_filename) {
+          btnPrintVoucher.href = `/api/pdf/${resData.pdf_filename}`;
+          btnDownloadVoucher.href = `/api/pdf/${resData.pdf_filename}`;
           btnPrintVoucher.style.display = 'inline-flex';
           btnDownloadVoucher.style.display = 'inline-flex';
         } else {

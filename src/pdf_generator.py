@@ -138,13 +138,24 @@ def create_student_card_flowable(
     header_html = "<b>INSTITUTO DE DESARROLLO INTEGRAL<br/>LIC. JOSÉ VASCONCELOS (IJOVA)</b>"
     sub_html = f"FICHA DE ACCESO A MICROSOFT 365 • {nivel} ({grado})".upper()
 
-    instr_html = (
-        "<b>Primer Inicio de Sesión:</b><br/>"
-        "1. Escanea el QR o ingresa a: <b>portal.office.com</b><br/>"
-        "2. Escribe tu correo institucional y contraseña temporal.<br/>"
-        "3. Define tu contraseña personal segura.<br/>"
-        "4. ¡Listo! Acceso a Teams, Outlook, Word y OneDrive."
-    )
+    force_change = student.get("force_change", True)
+    if not force_change:
+        pwd_label = "CONTRASEÑA ASIGNADA:"
+        instr_html = (
+            "<b>Acceso Institucional:</b><br/>"
+            "1. Escanea el QR o ingresa a: <b>portal.office.com</b><br/>"
+            "2. Escribe tu correo institucional y contraseña asignada.<br/>"
+            "3. ¡Listo! Acceso a Teams, Outlook y OneDrive."
+        )
+    else:
+        pwd_label = "CONTRASEÑA TEMPORAL:"
+        instr_html = (
+            "<b>Primer Inicio de Sesión:</b><br/>"
+            "1. Escanea el QR o ingresa a: <b>portal.office.com</b><br/>"
+            "2. Escribe tu correo institucional y contraseña temporal.<br/>"
+            "3. Define tu contraseña personal segura.<br/>"
+            "4. ¡Listo! Acceso a Teams, Outlook, Word y OneDrive."
+        )
 
     val_pwd_style = ParagraphStyle(
         'CardValPwd',
@@ -192,7 +203,7 @@ def create_student_card_flowable(
             ""
         ],
         [
-            Paragraph(f"<b>CONTRASEÑA TEMPORAL:</b> &nbsp;<font name='Courier-Bold' size='8.5' color='#047857'>{pwd}</font>", val_pwd_style),
+            Paragraph(f"<b>{pwd_label}</b> &nbsp;<font name='Courier-Bold' size='8.5' color='#047857'>{pwd}</font>", val_pwd_style),
             ""
         ],
         [
