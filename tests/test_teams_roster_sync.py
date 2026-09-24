@@ -200,6 +200,30 @@ class TestTeamsRosterSyncAndPhase1(unittest.TestCase):
             self.assertTrue(os.path.exists(pdf_path))
             self.assertGreater(os.path.getsize(pdf_path), 2000)
 
+    @patch("src.graph_client.PublicClientApplication")
+    def test_graph_client_401_auto_token_refresh(self, mock_msal):
+        """Valida que un error HTTP 401 active la renovación automática del token y reintente con éxito."""
+        from src.graph_client import GraphClient
+
+        client = GraphClient(tenant_id="test-tenant", client_id="test-client", scopes=["User.Read.All"], cache_path=None)
+        client.access_token = "expired-token-123"
+
+        # Simular que ensure_valid_token renueva el token
+        client.ensure_valid_token = MagicMock(return_value="fresh-token-456")
+
+        mock_resp_401 = MagicMock()
+        mock_resp_401.status_code = 401
+
+        mock_resp_200 = MagicMock()
+        mock_resp_200.status_code = 200
+        mock_resp_200.json.return_value = {"value": [{"id": "teacher-1", "displayName": "Docente Test"}]}
+
+        with patch("requests.get", side_effect=[mock_resp_401, mock_resp_200]) as mock_get:
+            res = client._request_with_retry("https://graph.microsoft.com/v1.0/groups/team-123/owners")
+            self.assertEqual(res, {"value": [{"id": "teacher-1", "displayName": "Docente Test"}]})
+            self.assertEqual(mock_get.call_count, 2)
+            client.ensure_valid_token.assert_called_with(force_refresh=True)
+
 
 if __name__ == "__main__":
     unittest.main()

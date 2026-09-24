@@ -54,9 +54,68 @@ class GraphClient:
                 authority=self.authority,
                 client_credential=self.client_secret
             )
-        self.access_token: Optional[str] = None
+        self._access_token: Optional[str] = None
         self.app_token: Optional[str] = None
         self.admin_upn: Optional[str] = None
+
+    @property
+    def access_token(self) -> Optional[str]:
+        """
+        Retorna el token de acceso actual o lo renueva automáticamente de forma
+        silenciosa mediante MSAL si ha expirado.
+        """
+        if self._access_token:
+            try:
+                if self.app:
+                    accounts = self.app.get_accounts()
+                    if accounts:
+                        result = self.app.acquire_token_silent(self.scopes, account=accounts[0])
+                        if result and "access_token" in result:
+                            self._access_token = result["access_token"]
+                            self._save_cache()
+            except Exception:
+                pass
+        return self._access_token
+
+    @access_token.setter
+    def access_token(self, value: Optional[str]):
+        self._access_token = value
+
+    def ensure_valid_token(self, force_refresh: bool = False) -> str:
+        """
+        Garantiza que el token de acceso actual sea válido.
+        Si está expirado o se solicita force_refresh, intenta renovarlo
+        silenciosamente utilizando MSAL y el token cache seguro en disco.
+        """
+        if self.app:
+            try:
+                accounts = self.app.get_accounts()
+                if accounts:
+                    result = self.app.acquire_token_silent(
+                        self.scopes,
+                        account=accounts[0],
+                        force_refresh=force_refresh
+                    )
+                    if result and "access_token" in result:
+                        self._access_token = result["access_token"]
+                        self._save_cache()
+                        return self._access_token
+            except Exception as e:
+                print(f"Aviso de renovación silenciosa: {e}")
+
+        if self.confidential_app:
+            try:
+                res = self.confidential_app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+                if res and "access_token" in res:
+                    self._access_token = res["access_token"]
+                    return self._access_token
+            except Exception as e:
+                print(f"Aviso al obtener application token: {e}")
+
+        if self._access_token and not force_refresh:
+            return self._access_token
+
+        raise GraphClientError("La sesión de autenticación con Microsoft Graph ha expirado. Por favor, vuelva a autenticarse.")
 
     def _save_cache(self):
         """Guarda el estado del token cache en disco con permisos seguros 0600."""
@@ -79,7 +138,7 @@ class GraphClient:
                 os.remove(self.cache_path)
             except Exception:
                 pass
-        self.access_token = None
+        self._access_token = None
         self.admin_upn = None
 
     def authenticate_device_code(self) -> str:
@@ -92,11 +151,11 @@ class GraphClient:
         if accounts:
             result = self.app.acquire_token_silent(self.scopes, account=accounts[0])
             if result and "access_token" in result:
-                self.access_token = result["access_token"]
+                self._access_token = result["access_token"]
                 self.admin_upn = accounts[0].get("username")
                 self._save_cache()
                 print(f"⚡ Sesión restaurada desde caché seguro. Administrador: \033[1;32m{self.admin_upn or 'Identificado'}\033[0m")
-                return self.access_token
+                return self._access_token
 
         # Initiate Device Code Flow
         flow = self.app.initiate_device_flow(scopes=self.scopes)
@@ -114,7 +173,7 @@ class GraphClient:
 
         result = self.app.acquire_token_by_device_flow(flow)
         if "access_token" in result:
-            self.access_token = result["access_token"]
+            self._access_token = result["access_token"]
             # Extract admin UPN from id_token_claims or accounts
             id_claims = result.get("id_token_claims", {})
             self.admin_upn = (
@@ -128,26 +187,42 @@ class GraphClient:
                     self.admin_upn = accounts[0].get("username")
             self._save_cache()
             print(f"✅ Autenticación exitosa. Administrador identificado: \033[1;32m{self.admin_upn or 'Desconocido'}\033[0m")
-            return self.access_token
+            return self._access_token
         else:
             raise GraphClientError(f"Error de autenticación: {result.get('error_description', result.get('error'))}")
 
     def _request_with_retry(self, url: str, max_retries: int = 4) -> Dict[str, Any]:
         """
-        Ejecuta una petición GET a Graph con reintentos para HTTP 429 y errores 5xx.
+        Ejecuta una petición GET a Graph con reintentos para HTTP 429, 401 y errores 5xx.
         """
-        if not self.access_token:
+        token = self.access_token
+        if not token:
             raise GraphClientError("No hay token de acceso disponible. Ejecute authenticate_device_code() primero.")
 
         headers = {
-            "Authorization": f"Bearer {self.access_token}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
             "ConsistencyLevel": "eventual"
         }
 
         for attempt in range(1, max_retries + 1):
             try:
+                # Asegurar token actualizado en cada intento
+                current_token = self.access_token
+                headers["Authorization"] = f"Bearer {current_token}"
                 response = requests.get(url, headers=headers, timeout=30)
+
+                # HTTP 401 Unauthorized -> Renovar token de forma forzada y reintentar inmediatamente
+                if response.status_code == 401 and attempt < max_retries:
+                    print(f"⚠️ Token de Graph expirado (HTTP 401). Renovando token de acceso silenciosamente (Intento {attempt}/{max_retries})...")
+                    try:
+                        fresh_token = self.ensure_valid_token(force_refresh=True)
+                        headers["Authorization"] = f"Bearer {fresh_token}"
+                        response = requests.get(url, headers=headers, timeout=30)
+                        if response.status_code == 200:
+                            return response.json()
+                    except Exception as token_err:
+                        print(f"Aviso al forzar renovación tras 401: {token_err}")
 
                 # Rate limiting (HTTP 429)
                 if response.status_code == 429:

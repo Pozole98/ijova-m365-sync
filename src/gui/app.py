@@ -99,10 +99,25 @@ def create_app(config_path: str = "config.json") -> Flask:
         nonlocal _graph_instance
         with _graph_lock:
             if _graph_instance is None:
-                write_scopes = ["User.ReadWrite.All", "Domain.Read.All", "LicenseAssignment.Read.All"]
-                client = GraphClient(config.tenant_id, config.client_id, write_scopes, client_secret=config.client_secret)
+                full_scopes = list(dict.fromkeys(
+                    config.graph_scopes + [
+                        "User.ReadWrite.All",
+                        "Domain.Read.All",
+                        "LicenseAssignment.Read.All",
+                        "Group.ReadWrite.All",
+                        "TeamSettings.ReadWrite.All",
+                        "TeamMember.ReadWrite.All",
+                        "Team.ReadBasic.All"
+                    ]
+                ))
+                client = GraphClient(config.tenant_id, config.client_id, full_scopes, client_secret=config.client_secret)
                 client.authenticate_device_code()
                 _graph_instance = client
+            else:
+                try:
+                    _graph_instance.ensure_valid_token()
+                except Exception:
+                    pass
             return _graph_instance
 
     # Caché en memoria de alumnos del Excel escolar para búsqueda rápida

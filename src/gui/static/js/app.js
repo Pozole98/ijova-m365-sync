@@ -2179,6 +2179,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const rosterUnexpectedChips = document.getElementById('roster-unexpected-chips');
   const rosterSyncedBadge = document.getElementById('roster-synced-badge');
   const rosterSyncedChips = document.getElementById('roster-synced-chips');
+  const rosterSelectGrade = document.getElementById('roster-select-grade');
 
   let currentRosterTeamId = null;
   let currentRosterAuditData = null;
@@ -2198,7 +2199,21 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  async function openRosterModal(teamId, teamName) {
+  if (rosterSelectGrade) {
+    rosterSelectGrade.addEventListener('change', () => {
+      if (!currentRosterTeamId) return;
+      const val = rosterSelectGrade.value;
+      const tName = currentRosterAuditData ? currentRosterAuditData.team_name : 'Clase';
+      if (val) {
+        const parts = val.split('|');
+        openRosterModal(currentRosterTeamId, tName, parts[0], parts[1]);
+      } else {
+        openRosterModal(currentRosterTeamId, tName);
+      }
+    });
+  }
+
+  async function openRosterModal(teamId, teamName, overrideNivel = null, overrideGrado = null) {
     if (!modalRoster) return;
     currentRosterTeamId = teamId;
     modalRoster.style.display = 'flex';
@@ -2217,7 +2232,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rosterSyncedChips) rosterSyncedChips.innerHTML = '<span style="color: var(--text-muted); font-size: 0.8rem;">Analizando alumnos...</span>';
 
     try {
-      const resp = await fetch(`/api/teams/${teamId}/roster/audit`);
+      let url = `/api/teams/${teamId}/roster/audit`;
+      if (overrideNivel && overrideGrado) {
+        url += `?nivel=${encodeURIComponent(overrideNivel)}&grado=${encodeURIComponent(overrideGrado)}`;
+      }
+      const resp = await fetch(url);
       const data = await resp.json();
       if (data.success && data.roster) {
         currentRosterAuditData = data.roster;
@@ -2241,6 +2260,30 @@ document.addEventListener('DOMContentLoaded', () => {
   function renderRosterAudit(r) {
     if (rosterModalClassMeta) {
       rosterModalClassMeta.textContent = `${r.grado} • ${r.nivel} | Profesor Titular: ${r.teacher_name}`;
+    }
+
+    if (rosterSelectGrade) {
+      if (r.nivel && r.grado && r.nivel !== 'Desconocido' && r.grado !== 'Desconocido') {
+        const optionVal = `${r.nivel}|${r.grado}`;
+        // Comprobar si existe la opción en el select
+        let optionExists = false;
+        for (let i = 0; i < rosterSelectGrade.options.length; i++) {
+          if (rosterSelectGrade.options[i].value === optionVal) {
+            optionExists = true;
+            break;
+          }
+        }
+        if (optionExists) {
+          rosterSelectGrade.value = optionVal;
+        }
+      } else {
+        rosterSelectGrade.value = '';
+        if (rosterAlertBanner) {
+          rosterAlertBanner.style.display = 'block';
+          rosterAlertBanner.className = 'saas-alert-banner alert-warning';
+          rosterAlertBanner.textContent = 'Esta clase no tiene un grado explícito en su nombre. Por favor, selecciona el Grado Oficial en el selector superior para auditar la nómina de alumnos.';
+        }
+      }
     }
 
     if (rKpiOfficial) rKpiOfficial.textContent = r.official_count;
@@ -2328,7 +2371,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (res.success && res.result) {
           showToast(`Sincronización completada: se agregaron ${res.result.added_count} alumnos al equipo.`, 'success');
           // Re-auditar la clase en vivo para reflejar los cambios
-          openRosterModal(currentRosterTeamId, currentRosterAuditData.team_name);
+          openRosterModal(currentRosterTeamId, currentRosterAuditData.team_name, currentRosterAuditData.nivel, currentRosterAuditData.grado);
           loadTeamsData(true);
         } else {
           showToast(`Error al sincronizar: ${res.error || 'Error inesperado'}`, 'error');
