@@ -1502,32 +1502,35 @@
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--color-primary);"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>
             <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-secondary);">Grado Oficial Asociado:</span>
           </div>
-          <select id="roster-select-grade" class="form-select-saas" style="max-width: 280px; font-size: 0.8rem; padding: 4px 8px;">
-            <option value="">(Detectar automáticamente por nombre de clase)</option>
-            <optgroup label="Secundaria">
-              <option value="Secundaria|1° Secundaria">1° de Secundaria</option>
-              <option value="Secundaria|2° Secundaria">2° de Secundaria</option>
-              <option value="Secundaria|3° Secundaria">3° de Secundaria</option>
-            </optgroup>
-            <optgroup label="Primaria">
-              <option value="Primaria|1° Primaria">1° de Primaria</option>
-              <option value="Primaria|2° Primaria">2° de Primaria</option>
-              <option value="Primaria|3° Primaria">3° de Primaria</option>
-              <option value="Primaria|4° Primaria">4° de Primaria</option>
-              <option value="Primaria|5° Primaria">5° de Primaria</option>
-              <option value="Primaria|6° Primaria">6° de Primaria</option>
-            </optgroup>
-            <optgroup label="Preparatoria">
-              <option value="Preparatoria|1er Semestre">1er Semestre Preparatoria</option>
-              <option value="Preparatoria|3er Semestre">3er Semestre Preparatoria</option>
-              <option value="Preparatoria|5to Semestre">5to Semestre Preparatoria</option>
-            </optgroup>
-            <optgroup label="Preescolar">
-              <option value="Preescolar|1° Preescolar">1° de Preescolar</option>
-              <option value="Preescolar|2° Preescolar">2° de Preescolar</option>
-              <option value="Preescolar|3° Preescolar">3° de Preescolar</option>
-            </optgroup>
-          </select>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <select id="roster-select-grade" class="form-select-saas" style="max-width: 260px; font-size: 0.8rem; padding: 4px 8px;">
+              <option value="">(Detectar automáticamente por nombre de clase)</option>
+              <optgroup label="Secundaria">
+                <option value="Secundaria|1° Secundaria">1° de Secundaria</option>
+                <option value="Secundaria|2° Secundaria">2° de Secundaria</option>
+                <option value="Secundaria|3° Secundaria">3° de Secundaria</option>
+              </optgroup>
+              <optgroup label="Primaria">
+                <option value="Primaria|1° Primaria">1° de Primaria</option>
+                <option value="Primaria|2° Primaria">2° de Primaria</option>
+                <option value="Primaria|3° Primaria">3° de Primaria</option>
+                <option value="Primaria|4° Primaria">4° de Primaria</option>
+                <option value="Primaria|5° Primaria">5° de Primaria</option>
+                <option value="Primaria|6° Primaria">6° de Primaria</option>
+              </optgroup>
+              <optgroup label="Preparatoria">
+                <option value="Preparatoria|1er Semestre">1er Semestre Preparatoria</option>
+                <option value="Preparatoria|3er Semestre">3er Semestre Preparatoria</option>
+                <option value="Preparatoria|5to Semestre">5to Semestre Preparatoria</option>
+              </optgroup>
+              <optgroup label="Preescolar">
+                <option value="Preescolar|1° Preescolar">1° de Preescolar</option>
+                <option value="Preescolar|2° Preescolar">2° de Preescolar</option>
+                <option value="Preescolar|3° Preescolar">3° de Preescolar</option>
+              </optgroup>
+            </select>
+            <button type="button" class="btn btn-secondary-saas btn-sm" id="btn-refresh-roster-cloud" title="Consultar estado directo desde Microsoft Graph" style="font-size: 0.75rem; padding: 4px 10px; white-space: nowrap;">Actualizar desde M365</button>
+          </div>
         </div>
 
         <!-- Barra de métricas de roster -->
@@ -1562,18 +1565,24 @@
 
         <!-- Seccion 1: Alumnos Faltantes (por agregar) -->
         <div class="roster-section-box" id="roster-missing-box">
-          <div class="roster-section-header">
-            <span class="badge badge-amber" id="roster-missing-badge">0 Alumnos Faltantes</span>
-            <span class="roster-section-desc">Alumnos matriculados oficialmente en el grado que no están en el equipo de Teams.</span>
+          <div class="roster-section-header" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="badge badge-amber" id="roster-missing-badge">0 Alumnos Faltantes</span>
+              <span class="roster-section-desc">Alumnos matriculados oficialmente en el grado que no están en el equipo de Teams.</span>
+            </div>
+            <button type="button" class="btn-roster-action btn-roster-add" id="btn-sync-missing-only" style="display: none;">Inscribir Faltantes</button>
           </div>
           <div class="students-chips-list" id="roster-missing-chips"></div>
         </div>
 
         <!-- Seccion 2: Alumnos Inesperados / Bajas (por remover o desvincular) -->
         <div class="roster-section-box" id="roster-unexpected-box" style="margin-top: 15px;">
-          <div class="roster-section-header">
-            <span class="badge badge-danger" id="roster-unexpected-badge">0 Bajas / No pertenecen</span>
-            <span class="roster-section-desc">Cuentas presentes en el equipo pero que ya causaron baja o no pertenecen a este grado.</span>
+          <div class="roster-section-header" style="display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="badge badge-danger" id="roster-unexpected-badge">0 Bajas / No pertenecen</span>
+              <span class="roster-section-desc">Cuentas presentes en el equipo pero que ya causaron baja o no pertenecen a este grado.</span>
+            </div>
+            <button type="button" class="btn-roster-action btn-roster-remove" id="btn-remove-unexpected-only" style="display: none;">Dar de Baja a Todos</button>
           </div>
           <div class="students-chips-list" id="roster-unexpected-chips"></div>
         </div>
@@ -1588,11 +1597,16 @@
         </div>
       </div>
 
-      <div class="modal-footer-saas" style="display: flex; justify-content: space-between; align-items: center;">
+      <div class="modal-footer-saas" style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
         <button type="button" class="btn btn-secondary-saas" id="btn-close-roster-modal">Cerrar</button>
-        <button type="button" class="btn btn-primary-saas" id="btn-execute-roster-sync">
-          <span>Sincronizar y Regularizar Alumnos</span>
-        </button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button type="button" class="btn btn-danger-saas" id="btn-footer-remove-unexpected" style="display: none;">
+            <span>Dar de Baja No Pertenecientes</span>
+          </button>
+          <button type="button" class="btn btn-primary-saas" id="btn-execute-roster-sync">
+            <span>Sincronizar y Regularizar Alumnos</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>

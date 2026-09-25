@@ -1466,11 +1466,24 @@ def sync_class_roster(
     """
     Ejecuta la regularizacion de la nomina de una clase:
     - Agrega los alumnos faltantes
-    - Opcionalmente remueve a los alumnos inesperados / bajas
+    - Remueve a los alumnos dados de baja o ajenos al grado
+    - Retorna el detalle nominal de cuentas inscritas y dadas de baja
     """
     added_count = 0
     removed_count = 0
+    added_students = []
+    removed_students = []
     errors = []
+
+    missing_map = {}
+    unexpected_map = {}
+    if audit_info:
+        for s in audit_info.get("missing_students", []):
+            if s.get("user_id"):
+                missing_map[s["user_id"]] = s
+        for s in audit_info.get("unexpected_students", []):
+            if s.get("user_id"):
+                unexpected_map[s["user_id"]] = s
 
     to_add = list(missing_user_ids or [])
     if not to_add and audit_info and add_missing:
@@ -1490,25 +1503,56 @@ def sync_class_roster(
             }
             for u_id in to_add
         ]
+        batch_success = False
         try:
             import requests
             resp = requests.post(add_url, headers=headers, json={"values": members_values}, timeout=30)
             if resp.status_code in [200, 202, 207]:
-                added_count = len(to_add)
-            else:
-                for u_id in to_add:
-                    try:
-                        if graph.add_team_member(team_id, u_id, is_owner=False):
-                            added_count += 1
-                    except Exception as ex:
-                        errors.append(f"Error al agregar {u_id}: {str(ex)}")
+                try:
+                    resp_json = resp.json()
+                    batch_data = resp_json.get("value", []) if isinstance(resp_json, dict) else []
+                except Exception:
+                    batch_data = []
+
+                matched_any = False
+                if batch_data and isinstance(batch_data, list):
+                    for item in batch_data:
+                        if isinstance(item, dict) and "userId" in item:
+                            matched_any = True
+                            u_id = item.get("userId")
+                            err = item.get("error")
+                            st_info = missing_map.get(u_id, {"user_id": u_id, "matricula": "", "name": ""})
+                            if not err:
+                                added_students.append(st_info)
+                                added_count += 1
+                            else:
+                                try:
+                                    if graph.add_team_member(team_id, u_id, is_owner=False):
+                                        added_students.append(st_info)
+                                        added_count += 1
+                                except Exception as ex:
+                                    st_name = st_info.get("name") or st_info.get("matricula") or u_id
+                                    errors.append(f"Error al agregar a {st_name}: {str(ex)}")
+
+                if not matched_any:
+                    for u_id in to_add:
+                        st_info = missing_map.get(u_id, {"user_id": u_id, "matricula": "", "name": ""})
+                        added_students.append(st_info)
+                        added_count += 1
+                batch_success = True
         except Exception:
+            batch_success = False
+
+        if not batch_success:
             for u_id in to_add:
+                st_info = missing_map.get(u_id, {"user_id": u_id, "matricula": "", "name": ""})
                 try:
                     if graph.add_team_member(team_id, u_id, is_owner=False):
+                        added_students.append(st_info)
                         added_count += 1
                 except Exception as ex:
-                    errors.append(f"Error al agregar {u_id}: {str(ex)}")
+                    st_name = st_info.get("name") or st_info.get("matricula") or u_id
+                    errors.append(f"Error al agregar a {st_name}: {str(ex)}")
 
     to_remove = list(remove_user_ids or [])
     if not to_remove and audit_info and remove_unexpected:
@@ -1516,17 +1560,28 @@ def sync_class_roster(
 
     if to_remove and remove_unexpected:
         for u_id in to_remove:
+            st_info = unexpected_map.get(u_id, {"user_id": u_id, "matricula": "", "name": ""})
+            st_name = st_info.get("name") or st_info.get("matricula") or u_id
             try:
                 if graph.remove_team_member(team_id, u_id):
+                    removed_students.append(st_info)
                     removed_count += 1
+                else:
+                    errors.append(f"No fue posible desvincular a {st_name} del equipo.")
             except Exception as ex:
-                errors.append(f"Error al remover {u_id}: {str(ex)}")
+                errors.append(f"Error al desvincular a {st_name}: {str(ex)}")
+
+    overall_status = "success"
+    if errors:
+        overall_status = "partial" if (added_count > 0 or removed_count > 0) else "error"
 
     return {
-        "status": "success" if not errors else "partial",
+        "status": overall_status,
         "team_id": team_id,
         "added_count": added_count,
         "removed_count": removed_count,
+        "added_students": added_students,
+        "removed_students": removed_students,
         "errors": errors,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     }

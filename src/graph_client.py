@@ -942,31 +942,67 @@ class GraphClient:
         raise GraphClientError(f"Error al desarchivar equipo {team_id}: {resp.status_code} - {resp.text}")
 
     def add_team_member(self, team_id: str, user_id: str, is_owner: bool = False) -> bool:
-        """Agrega un miembro o propietario a un equipo."""
-        if not self.access_token:
-            raise GraphClientError("No hay token de acceso disponible.")
-        endpoint = "owners" if is_owner else "members"
-        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/{endpoint}/$ref"
-        headers = {
-            "Authorization": f"Bearer {self.access_token}",
-            "Content-Type": "application/json"
-        }
-        body = {"@odata.id": f"https://graph.microsoft.com/v1.0/directoryObjects/{user_id}"}
-        resp = requests.post(url, headers=headers, json=body, timeout=30)
-        if resp.status_code in [200, 204]:
-            return True
-        if resp.status_code == 400 and "already exist" in resp.text.lower():
-            return True
-        raise GraphClientError(f"Error al agregar usuario {user_id} a equipo {team_id}: {resp.status_code} - {resp.text}")
+        """Agrega un miembro o propietario a un equipo con renovacion automatica de token en caso de expiracion."""
+        for attempt in range(2):
+            if not self.access_token:
+                self.ensure_valid_token()
+            endpoint = "owners" if is_owner else "members"
+            url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/{endpoint}/$ref"
+            headers = {
+                "Authorization": f"Bearer {self.access_token}",
+                "Content-Type": "application/json"
+            }
+            body = {"@odata.id": f"https://graph.microsoft.com/v1.0/directoryObjects/{user_id}"}
+            resp = requests.post(url, headers=headers, json=body, timeout=30)
+            if resp.status_code in [200, 204]:
+                return True
+            if resp.status_code == 400 and "already exist" in resp.text.lower():
+                return True
+            if resp.status_code == 401 and attempt == 0:
+                self.ensure_valid_token(force_refresh=True)
+                continue
+            raise GraphClientError(f"Error al agregar usuario {user_id} a equipo {team_id}: {resp.status_code} - {resp.text}")
+        return False
+
+    def remove_team_owner(self, team_id: str, user_id: str) -> bool:
+        """Remueve a un usuario del rol de propietario (owner) de un equipo."""
+        for attempt in range(2):
+            if not self.access_token:
+                self.ensure_valid_token()
+            url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/owners/{user_id}/$ref"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            resp = requests.delete(url, headers=headers, timeout=30)
+            if resp.status_code in [200, 204, 404]:
+                return True
+            if resp.status_code == 401 and attempt == 0:
+                self.ensure_valid_token(force_refresh=True)
+                continue
+            raise GraphClientError(f"Error al remover propietario {user_id} del equipo {team_id}: {resp.status_code} - {resp.text}")
+        return False
 
     def remove_team_member(self, team_id: str, user_id: str) -> bool:
-        """Remueve un usuario de un equipo."""
-        if not self.access_token:
-            raise GraphClientError("No hay token de acceso disponible.")
-        url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/members/{user_id}/$ref"
-        headers = {"Authorization": f"Bearer {self.access_token}"}
-        resp = requests.delete(url, headers=headers, timeout=30)
-        return resp.status_code in [200, 204]
+        """Remueve un usuario de un equipo con gestion automatica de propietarios y token."""
+        for attempt in range(2):
+            if not self.access_token:
+                self.ensure_valid_token()
+            url = f"https://graph.microsoft.com/v1.0/groups/{team_id}/members/{user_id}/$ref"
+            headers = {"Authorization": f"Bearer {self.access_token}"}
+            resp = requests.delete(url, headers=headers, timeout=30)
+            if resp.status_code in [200, 204, 404]:
+                return True
+            if resp.status_code == 401 and attempt == 0:
+                self.ensure_valid_token(force_refresh=True)
+                continue
+            if resp.status_code == 400 and "owner" in resp.text.lower():
+                try:
+                    self.remove_team_owner(team_id, user_id)
+                except Exception:
+                    pass
+                resp2 = requests.delete(url, headers={"Authorization": f"Bearer {self.access_token}"}, timeout=30)
+                if resp2.status_code in [200, 204, 404]:
+                    return True
+            raise GraphClientError(f"Error al remover miembro {user_id} de equipo {team_id}: {resp.status_code} - {resp.text}")
+        return False
 
     def create_education_class_team(
         self,

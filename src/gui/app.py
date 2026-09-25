@@ -946,12 +946,25 @@ def create_app(config_path: str = "config.json") -> Flask:
     def api_teams_roster_sync(team_id: str):
         """Ejecuta la sincronización/regularización de miembros de una clase en Teams."""
         data = request.get_json() or {}
-        add_missing = data.get("add_missing", True)
-        remove_unexpected = data.get("remove_unexpected", False)
+        action = data.get("action", "custom")
+        if action == "add":
+            add_missing = True
+            remove_unexpected = False
+        elif action == "remove":
+            add_missing = False
+            remove_unexpected = True
+        elif action == "both":
+            add_missing = True
+            remove_unexpected = True
+        else:
+            add_missing = data.get("add_missing", True)
+            remove_unexpected = data.get("remove_unexpected", False)
+
         missing_user_ids = data.get("missing_user_ids")
         remove_user_ids = data.get("remove_user_ids")
         nivel = data.get("nivel")
         grado = data.get("grado")
+        audit_info = data.get("audit_info")
 
         try:
             from export_students_m365 import build_school_db
@@ -959,8 +972,7 @@ def create_app(config_path: str = "config.json") -> Flask:
             graph = get_graph()
             school_db = build_school_db()
 
-            audit_info = None
-            if not missing_user_ids and not remove_user_ids:
+            if not audit_info:
                 audit_info = audit_class_roster(graph, team_id, nivel, grado, school_db)
 
             res = sync_class_roster(

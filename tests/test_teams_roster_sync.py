@@ -225,5 +225,72 @@ class TestTeamsRosterSyncAndPhase1(unittest.TestCase):
             client.ensure_valid_token.assert_called_with(force_refresh=True)
 
 
+    @patch("src.graph_client.PublicClientApplication")
+    def test_remove_team_member_with_owner_conflict(self, mock_msal):
+        """Valida que remover un miembro que tambien es owner desvincule primero de owners y luego de members."""
+        from src.graph_client import GraphClient
+
+        client = GraphClient(tenant_id="test-tenant", client_id="test-client", scopes=["User.Read.All"], cache_path=None)
+        client.access_token = "valid-token-123"
+
+        resp_owner_del = MagicMock(status_code=204)
+        resp_member_err = MagicMock(status_code=400, text="A member cannot be removed while they are an owner.")
+        resp_member_ok = MagicMock(status_code=204)
+
+        with patch("requests.delete", side_effect=[resp_member_err, resp_owner_del, resp_member_ok]) as mock_del:
+            success = client.remove_team_member("team-1", "user-owner-1")
+            self.assertTrue(success)
+            self.assertEqual(mock_del.call_count, 3)
+
+    @patch("src.graph_client.PublicClientApplication")
+    def test_remove_team_member_401_refresh(self, mock_msal):
+        """Valida que un 401 en remove_team_member active la renovación automática del token."""
+        from src.graph_client import GraphClient
+
+        client = GraphClient(tenant_id="test-tenant", client_id="test-client", scopes=["User.Read.All"], cache_path=None)
+        client.access_token = "expired-token"
+        client.ensure_valid_token = MagicMock(return_value="refreshed-token")
+
+        resp_401 = MagicMock(status_code=401)
+        resp_204 = MagicMock(status_code=204)
+
+        with patch("requests.delete", side_effect=[resp_401, resp_204]) as mock_del:
+            success = client.remove_team_member("team-1", "user-1")
+            self.assertTrue(success)
+            self.assertEqual(mock_del.call_count, 2)
+            client.ensure_valid_token.assert_called_with(force_refresh=True)
+
+    def test_sync_class_roster_nominal_tracking(self):
+        """Valida que sync_class_roster retorne los arreglos nominales de alumnos agregados y removidos."""
+        graph_mock = MagicMock()
+        graph_mock.access_token = "token-123"
+        graph_mock.remove_team_member.return_value = True
+
+        audit_info = {
+            "missing_students": [{"user_id": "u-add-1", "matricula": "250001", "name": "ALUMNO ALTA"}],
+            "unexpected_students": [{"user_id": "u-del-1", "matricula": "250099", "name": "ALUMNO BAJA"}]
+        }
+
+        with patch("requests.post") as mock_post:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                "value": [{"userId": "u-add-1", "error": None}]
+            }
+            res = sync_class_roster(
+                graph=graph_mock,
+                team_id="team-xyz",
+                add_missing=True,
+                remove_unexpected=True,
+                audit_info=audit_info
+            )
+            self.assertEqual(res["status"], "success")
+            self.assertEqual(res["added_count"], 1)
+            self.assertEqual(res["removed_count"], 1)
+            self.assertEqual(len(res["added_students"]), 1)
+            self.assertEqual(res["added_students"][0]["matricula"], "250001")
+            self.assertEqual(len(res["removed_students"]), 1)
+            self.assertEqual(res["removed_students"][0]["matricula"], "250099")
+
+
 if __name__ == "__main__":
     unittest.main()

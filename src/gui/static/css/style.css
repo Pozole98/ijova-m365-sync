@@ -3036,3 +3036,109 @@ body.saas-body {
   color: var(--text-secondary, #94A3B8);
 }
 
+.btn-roster-action {
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all var(--transition-fast, 0.15s ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-roster-add {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--color-amber, #F59E0B);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.btn-roster-add:hover {
+  background: rgba(245, 158, 11, 0.3);
+  border-color: var(--color-amber, #F59E0B);
+  color: #FCD34D;
+}
+
+.btn-roster-remove {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--color-red, #EF4444);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+.btn-roster-remove:hover {
+  background: rgba(239, 68, 68, 0.3);
+  border-color: var(--color-red, #EF4444);
+  color: #FCA5A5;
+}
+
+.btn-danger-saas {
+  background: #DC2626;
+  color: #FFFFFF;
+  border: 1px solid #B91C1C;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-danger-saas:hover {
+  background: #B91C1C;
+  border-color: #991B1B;
+}
+
+.chip-action-btn {
+  margin-left: 6px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.btn-chip-add {
+  background: rgba(245, 158, 11, 0.2);
+  color: var(--color-amber, #F59E0B);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.btn-chip-add:hover {
+  background: #F59E0B;
+  color: #1E293B;
+  border-color: #F59E0B;
+}
+
+.btn-chip-remove {
+  background: rgba(239, 68, 68, 0.2);
+  color: var(--color-red, #EF4444);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+.btn-chip-remove:hover {
+  background: #EF4444;
+  color: #FFFFFF;
+  border-color: #EF4444;
+}
+
+.student-chip.chip-just-added {
+  border-color: #10B981 !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+  animation: pulse-chip-green 1.5s ease-in-out;
+}
+
+@keyframes pulse-chip-green {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+  100% { transform: scale(1); }
+}
+
+.student-chip.chip-processing {
+  opacity: 0.6;
+  pointer-events: none;
+}
+

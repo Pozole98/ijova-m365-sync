@@ -2229,6 +2229,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  const btnRefreshRosterCloud = document.getElementById('btn-refresh-roster-cloud');
+  const btnSyncMissingOnly = document.getElementById('btn-sync-missing-only');
+  const btnRemoveUnexpectedOnly = document.getElementById('btn-remove-unexpected-only');
+  const btnFooterRemoveUnexpected = document.getElementById('btn-footer-remove-unexpected');
+
   async function openRosterModal(teamId, teamName, overrideNivel = null, overrideGrado = null) {
     if (!modalRoster) return;
     currentRosterTeamId = teamId;
@@ -2273,6 +2278,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
+  if (btnRefreshRosterCloud) {
+    btnRefreshRosterCloud.addEventListener('click', () => {
+      if (!currentRosterTeamId || !currentRosterAuditData) return;
+      showToast('Actualizando auditoría en vivo desde Microsoft 365...', 'info');
+      openRosterModal(
+        currentRosterTeamId,
+        currentRosterAuditData.team_name,
+        currentRosterAuditData.nivel,
+        currentRosterAuditData.grado
+      );
+    });
+  }
+
   function renderRosterAudit(r) {
     if (rosterModalClassMeta) {
       rosterModalClassMeta.textContent = `${r.grado} • ${r.nivel} | Profesor Titular: ${r.teacher_name}`;
@@ -2281,7 +2299,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (rosterSelectGrade) {
       if (r.nivel && r.grado && r.nivel !== 'Desconocido' && r.grado !== 'Desconocido') {
         const optionVal = `${r.nivel}|${r.grado}`;
-        // Comprobar si existe la opción en el select
         let optionExists = false;
         for (let i = 0; i < rosterSelectGrade.options.length; i++) {
           if (rosterSelectGrade.options[i].value === optionVal) {
@@ -2311,6 +2328,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 1. Faltantes
     if (rosterMissingBadge) rosterMissingBadge.textContent = `${r.missing_count} Alumnos Faltantes`;
+    if (btnSyncMissingOnly) {
+      if (r.missing_count > 0) {
+        btnSyncMissingOnly.style.display = 'inline-flex';
+        btnSyncMissingOnly.textContent = `Inscribir Faltantes (${r.missing_count})`;
+      } else {
+        btnSyncMissingOnly.style.display = 'none';
+      }
+    }
     if (rosterMissingChips) {
       if (r.missing_students.length === 0) {
         rosterMissingChips.innerHTML = '<span style="color: var(--color-green); font-size: 0.82rem;">Ninguno. Todos los alumnos oficiales están inscritos en el equipo.</span>';
@@ -2319,7 +2344,14 @@ document.addEventListener('DOMContentLoaded', () => {
         r.missing_students.forEach(st => {
           const chip = document.createElement('div');
           chip.className = 'student-chip chip-amber';
-          chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.name)}</span>`;
+          chip.dataset.userId = st.user_id || '';
+          chip.dataset.matricula = st.matricula || '';
+          chip.dataset.name = st.name || '';
+          chip.innerHTML = `
+            <span class="chip-mat">${escapeHtml(st.matricula)}</span>
+            <span>${escapeHtml(st.name)}</span>
+            <button type="button" class="chip-action-btn btn-chip-add" data-user-id="${escapeHtml(st.user_id || '')}" data-matricula="${escapeHtml(st.matricula || '')}" data-name="${escapeHtml(st.name || '')}" title="Inscribir individualmente a ${escapeHtml(st.name)}">+ Inscribir</button>
+          `;
           rosterMissingChips.appendChild(chip);
         });
       }
@@ -2327,6 +2359,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 2. Inesperados / Bajas
     if (rosterUnexpectedBadge) rosterUnexpectedBadge.textContent = `${r.unexpected_count} Bajas / No pertenecen`;
+    if (btnRemoveUnexpectedOnly) {
+      if (r.unexpected_count > 0) {
+        btnRemoveUnexpectedOnly.style.display = 'inline-flex';
+        btnRemoveUnexpectedOnly.textContent = `Dar de Baja a Todos (${r.unexpected_count})`;
+      } else {
+        btnRemoveUnexpectedOnly.style.display = 'none';
+      }
+    }
     if (rosterUnexpectedChips) {
       if (r.unexpected_students.length === 0) {
         rosterUnexpectedChips.innerHTML = '<span style="color: var(--color-green); font-size: 0.82rem;">Ninguno. No hay cuentas de alumnos ajenas al grado actual.</span>';
@@ -2335,7 +2375,14 @@ document.addEventListener('DOMContentLoaded', () => {
         r.unexpected_students.forEach(st => {
           const chip = document.createElement('div');
           chip.className = 'student-chip chip-red';
-          chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.name)}</span>`;
+          chip.dataset.userId = st.user_id || '';
+          chip.dataset.matricula = st.matricula || '';
+          chip.dataset.name = st.name || '';
+          chip.innerHTML = `
+            <span class="chip-mat">${escapeHtml(st.matricula)}</span>
+            <span>${escapeHtml(st.name)}</span>
+            <button type="button" class="chip-action-btn btn-chip-remove" data-user-id="${escapeHtml(st.user_id || '')}" data-matricula="${escapeHtml(st.matricula || '')}" data-name="${escapeHtml(st.name || '')}" title="Desvincular a ${escapeHtml(st.name)} de este equipo">× Dar de Baja</button>
+          `;
           rosterUnexpectedChips.appendChild(chip);
         });
       }
@@ -2350,52 +2397,283 @@ document.addEventListener('DOMContentLoaded', () => {
         rosterSyncedChips.innerHTML = '';
         r.synced_students.forEach(st => {
           const chip = document.createElement('div');
-          chip.className = 'student-chip';
-          chip.innerHTML = `<span class="chip-mat">${escapeHtml(st.matricula)}</span><span>${escapeHtml(st.name)}</span>`;
+          chip.className = st.just_added ? 'student-chip chip-just-added' : 'student-chip';
+          chip.innerHTML = `
+            <span class="chip-mat">${escapeHtml(st.matricula)}</span>
+            <span>${escapeHtml(st.name)}</span>
+            ${st.just_added ? '<span style="font-size: 0.68rem; color: #10B981; font-weight: 700; margin-left: 4px;">Recién Inscrito</span>' : ''}
+          `;
           rosterSyncedChips.appendChild(chip);
         });
       }
     }
 
+    // Botones del footer
+    if (btnFooterRemoveUnexpected) {
+      if (r.unexpected_count > 0 && r.missing_count > 0) {
+        btnFooterRemoveUnexpected.style.display = 'inline-flex';
+        btnFooterRemoveUnexpected.disabled = false;
+        btnFooterRemoveUnexpected.innerHTML = `<span>Dar de Baja No Pertenecientes (${r.unexpected_count})</span>`;
+      } else {
+        btnFooterRemoveUnexpected.style.display = 'none';
+      }
+    }
+
     if (btnExecuteRosterSync) {
       btnExecuteRosterSync.disabled = (r.missing_count === 0 && r.unexpected_count === 0);
-      btnExecuteRosterSync.innerHTML = r.missing_count > 0
-        ? `<span>Sincronizar ${r.missing_count} Alumno(s) Faltante(s)</span>`
-        : '<span>Nómina Sincronizada al 100%</span>';
+      if (r.missing_count > 0 && r.unexpected_count > 0) {
+        btnExecuteRosterSync.className = 'btn btn-primary-saas';
+        btnExecuteRosterSync.innerHTML = `<span>Regularizar Todo (Inscribir ${r.missing_count} y Dar de Baja ${r.unexpected_count})</span>`;
+      } else if (r.missing_count > 0) {
+        btnExecuteRosterSync.className = 'btn btn-primary-saas';
+        btnExecuteRosterSync.innerHTML = `<span>Inscribir ${r.missing_count} Alumno(s) Faltante(s)</span>`;
+      } else if (r.unexpected_count > 0) {
+        btnExecuteRosterSync.className = 'btn btn-danger-saas';
+        btnExecuteRosterSync.innerHTML = `<span>Dar de Baja a ${r.unexpected_count} Alumno(s)</span>`;
+      } else {
+        btnExecuteRosterSync.className = 'btn btn-primary-saas';
+        btnExecuteRosterSync.innerHTML = '<span>Nómina Sincronizada al 100%</span>';
+      }
     }
   }
 
-  // Ejecutar sincronización de roster
+  // Helper centralizado para ejecución ágil y actualización optimista instantánea
+  async function executeRosterSync(options) {
+    if (!currentRosterTeamId || !currentRosterAuditData) return;
+
+    const action = options.action || 'custom';
+    const missingUserIds = options.missing_user_ids || null;
+    const removeUserIds = options.remove_user_ids || null;
+
+    // Deshabilitar controles interactivos durante la operación
+    if (btnExecuteRosterSync) btnExecuteRosterSync.disabled = true;
+    if (btnFooterRemoveUnexpected) btnFooterRemoveUnexpected.disabled = true;
+    if (btnSyncMissingOnly) btnSyncMissingOnly.disabled = true;
+    if (btnRemoveUnexpectedOnly) btnRemoveUnexpectedOnly.disabled = true;
+
+    if (options.triggerBtn) {
+      options.triggerBtn.dataset.originalText = options.triggerBtn.textContent;
+      options.triggerBtn.textContent = 'Procesando...';
+    }
+
+    try {
+      const resp = await fetch(`/api/teams/${currentRosterTeamId}/roster/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: action,
+          nivel: currentRosterAuditData.nivel,
+          grado: currentRosterAuditData.grado,
+          missing_user_ids: missingUserIds,
+          remove_user_ids: removeUserIds,
+          audit_info: currentRosterAuditData
+        })
+      });
+
+      const res = await resp.json();
+      if (res.success && res.result) {
+        const result = res.result;
+
+        // Actualización optimista inmediata en memoria (cero latencia de replicación)
+        if (result.added_students && result.added_students.length > 0) {
+          const addedIds = new Set(result.added_students.map(s => s.user_id));
+          const addedMats = new Set(result.added_students.map(s => s.matricula));
+
+          // Mover de faltantes a sincronizados
+          currentRosterAuditData.missing_students = currentRosterAuditData.missing_students.filter(
+            s => !addedIds.has(s.user_id) && !addedMats.has(s.matricula)
+          );
+
+          result.added_students.forEach(st => {
+            currentRosterAuditData.synced_students.push({
+              ...st,
+              just_added: true,
+              status: 'SINCRONIZADO'
+            });
+          });
+        }
+
+        if (result.removed_students && result.removed_students.length > 0) {
+          const removedIds = new Set(result.removed_students.map(s => s.user_id));
+          const removedMats = new Set(result.removed_students.map(s => s.matricula));
+
+          // Eliminar de inesperados / bajas
+          currentRosterAuditData.unexpected_students = currentRosterAuditData.unexpected_students.filter(
+            s => !removedIds.has(s.user_id) && !removedMats.has(s.matricula)
+          );
+        }
+
+        // Recalcular métricas
+        currentRosterAuditData.missing_count = currentRosterAuditData.missing_students.length;
+        currentRosterAuditData.unexpected_count = currentRosterAuditData.unexpected_students.length;
+        currentRosterAuditData.synced_count = currentRosterAuditData.synced_students.length;
+        currentRosterAuditData.team_count = currentRosterAuditData.synced_count + currentRosterAuditData.unexpected_count;
+        currentRosterAuditData.sync_percentage = currentRosterAuditData.official_count > 0
+          ? Math.round((currentRosterAuditData.synced_count / currentRosterAuditData.official_count) * 1000) / 10
+          : (currentRosterAuditData.team_count === 0 ? 100.0 : 0.0);
+        currentRosterAuditData.is_synced = (currentRosterAuditData.missing_count === 0 && currentRosterAuditData.unexpected_count === 0);
+
+        // Renderizar inmediatamente la vista actualizada
+        renderRosterAudit(currentRosterAuditData);
+
+        // Mensaje de éxito claro y profesional
+        let feedbackMsg = '';
+        if (result.added_count > 0 && result.removed_count > 0) {
+          feedbackMsg = `Regularización exitosa: ${result.added_count} alumno(s) inscritos y ${result.removed_count} alumno(s) dados de baja.`;
+        } else if (result.added_count > 0) {
+          feedbackMsg = `Inscripción confirmada: ${result.added_count} alumno(s) agregados al equipo de Teams.`;
+        } else if (result.removed_count > 0) {
+          feedbackMsg = `Baja confirmada: ${result.removed_count} alumno(s) desvinculados exitosamente del equipo.`;
+        } else {
+          feedbackMsg = 'Operación procesada sin cambios requeridos.';
+        }
+
+        if (result.errors && result.errors.length > 0) {
+          showToast(`${feedbackMsg} (Con advertencias: ${result.errors.join('; ')})`, 'warning');
+          if (rosterAlertBanner) {
+            rosterAlertBanner.style.display = 'block';
+            rosterAlertBanner.className = 'saas-alert-banner alert-warning';
+            rosterAlertBanner.textContent = `Advertencias reportadas por Microsoft Graph: ${result.errors.join(' | ')}`;
+          }
+        } else {
+          showToast(feedbackMsg, 'success');
+          if (rosterAlertBanner) rosterAlertBanner.style.display = 'none';
+        }
+
+        // En segundo plano tras 2.5 segundos (convergencia de replicación de Azure AD), actualizar la tabla de equipos
+        setTimeout(() => {
+          loadTeamsData(true);
+        }, 2500);
+
+      } else {
+        showToast(`Error al procesar operación: ${res.error || 'Respuesta no válida'}`, 'error');
+        if (rosterAlertBanner) {
+          rosterAlertBanner.style.display = 'block';
+          rosterAlertBanner.className = 'saas-alert-banner alert-danger';
+          rosterAlertBanner.textContent = `Error: ${res.error || 'Error inesperado de Microsoft 365'}`;
+        }
+        if (btnExecuteRosterSync) btnExecuteRosterSync.disabled = false;
+        if (btnFooterRemoveUnexpected) btnFooterRemoveUnexpected.disabled = false;
+        if (btnSyncMissingOnly) btnSyncMissingOnly.disabled = false;
+        if (btnRemoveUnexpectedOnly) btnRemoveUnexpectedOnly.disabled = false;
+      }
+    } catch (err) {
+      showToast(`Error de conexión con el servidor: ${err.message}`, 'error');
+      if (btnExecuteRosterSync) btnExecuteRosterSync.disabled = false;
+      if (btnFooterRemoveUnexpected) btnFooterRemoveUnexpected.disabled = false;
+      if (btnSyncMissingOnly) btnSyncMissingOnly.disabled = false;
+      if (btnRemoveUnexpectedOnly) btnRemoveUnexpectedOnly.disabled = false;
+    } finally {
+      if (options.triggerBtn && options.triggerBtn.dataset.originalText) {
+        options.triggerBtn.textContent = options.triggerBtn.dataset.originalText;
+      }
+    }
+  }
+
+  // Delegación de eventos para botones individuales en chips de alumnos
+  if (rosterMissingChips) {
+    rosterMissingChips.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-chip-add');
+      if (!btn) return;
+      const uId = btn.dataset.userId;
+      const stName = btn.dataset.name || 'el alumno';
+      if (!uId) {
+        showToast('No se encontró el identificador de usuario en Entra ID para este alumno.', 'error');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Inscribiendo...';
+      executeRosterSync({
+        action: 'add_single',
+        missing_user_ids: [uId],
+        triggerBtn: btn
+      });
+    });
+  }
+
+  if (rosterUnexpectedChips) {
+    rosterUnexpectedChips.addEventListener('click', (e) => {
+      const btn = e.target.closest('.btn-chip-remove');
+      if (!btn) return;
+      const uId = btn.dataset.userId;
+      const stName = btn.dataset.name || 'este alumno';
+      if (!uId) {
+        showToast('No se encontró el identificador del usuario en Teams para procesar la baja.', 'error');
+        return;
+      }
+      if (!confirm(`¿Confirmas dar de baja y desvincular a "${stName}" de este equipo de Teams?`)) {
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Desvinculando...';
+      executeRosterSync({
+        action: 'remove_single',
+        remove_user_ids: [uId],
+        triggerBtn: btn
+      });
+    });
+  }
+
+  // Botón: Inscribir Todos los Faltantes
+  if (btnSyncMissingOnly) {
+    btnSyncMissingOnly.addEventListener('click', () => {
+      if (!currentRosterAuditData || currentRosterAuditData.missing_count === 0) return;
+      executeRosterSync({
+        action: 'add',
+        triggerBtn: btnSyncMissingOnly
+      });
+    });
+  }
+
+  // Botón: Dar de Baja a Todos los No Pertenecientes (encabezado de sección)
+  if (btnRemoveUnexpectedOnly) {
+    btnRemoveUnexpectedOnly.addEventListener('click', () => {
+      if (!currentRosterAuditData || currentRosterAuditData.unexpected_count === 0) return;
+      if (!confirm(`¿Confirmas dar de baja a los ${currentRosterAuditData.unexpected_count} alumnos no pertenecientes de este equipo?`)) {
+        return;
+      }
+      executeRosterSync({
+        action: 'remove',
+        triggerBtn: btnRemoveUnexpectedOnly
+      });
+    });
+  }
+
+  // Botón: Dar de Baja No Pertenecientes (pie de modal)
+  if (btnFooterRemoveUnexpected) {
+    btnFooterRemoveUnexpected.addEventListener('click', () => {
+      if (!currentRosterAuditData || currentRosterAuditData.unexpected_count === 0) return;
+      if (!confirm(`¿Confirmas dar de baja a los ${currentRosterAuditData.unexpected_count} alumnos no pertenecientes de este equipo?`)) {
+        return;
+      }
+      executeRosterSync({
+        action: 'remove',
+        triggerBtn: btnFooterRemoveUnexpected
+      });
+    });
+  }
+
+  // Botón principal de pie de modal (Regularización Inteligente)
   if (btnExecuteRosterSync) {
     btnExecuteRosterSync.addEventListener('click', async () => {
       if (!currentRosterTeamId || !currentRosterAuditData) return;
-      btnExecuteRosterSync.disabled = true;
-      btnExecuteRosterSync.innerHTML = '<span>Sincronizando miembros en Teams...</span>';
+      const mCount = currentRosterAuditData.missing_count || 0;
+      const uCount = currentRosterAuditData.unexpected_count || 0;
 
-      try {
-        const resp = await fetch(`/api/teams/${currentRosterTeamId}/roster/sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            add_missing: true,
-            remove_unexpected: false,
-            nivel: currentRosterAuditData.nivel,
-            grado: currentRosterAuditData.grado
-          })
-        });
-        const res = await resp.json();
-        if (res.success && res.result) {
-          showToast(`Sincronización completada: se agregaron ${res.result.added_count} alumnos al equipo.`, 'success');
-          // Re-auditar la clase en vivo para reflejar los cambios
-          openRosterModal(currentRosterTeamId, currentRosterAuditData.team_name, currentRosterAuditData.nivel, currentRosterAuditData.grado);
-          loadTeamsData(true);
-        } else {
-          showToast(`Error al sincronizar: ${res.error || 'Error inesperado'}`, 'error');
-          btnExecuteRosterSync.disabled = false;
+      if (mCount === 0 && uCount === 0) return;
+
+      if (mCount > 0 && uCount > 0) {
+        if (!confirm(`Se inscribirán ${mCount} alumno(s) faltantes y se darán de baja ${uCount} alumno(s) no pertenecientes en este equipo. ¿Deseas continuar?`)) {
+          return;
         }
-      } catch (err) {
-        showToast(`Error de conexión: ${err.message}`, 'error');
-        btnExecuteRosterSync.disabled = false;
+        executeRosterSync({ action: 'both', triggerBtn: btnExecuteRosterSync });
+      } else if (mCount > 0) {
+        executeRosterSync({ action: 'add', triggerBtn: btnExecuteRosterSync });
+      } else if (uCount > 0) {
+        if (!confirm(`¿Confirmas dar de baja a ${uCount} alumno(s) no pertenecientes de este equipo?`)) {
+          return;
+        }
+        executeRosterSync({ action: 'remove', triggerBtn: btnExecuteRosterSync });
       }
     });
   }
