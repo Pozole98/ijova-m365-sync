@@ -423,7 +423,7 @@ def execute_bulk_password_reset(
 
 def execute_modular_grade_password_reset(
     graph: GraphClient,
-    excel_path: str = "Listado_Global_Matriculado_M365.ods",
+    excel_path: Optional[str] = None,
     sheet_name: str = "Listado Global Matriculado",
     target_levels: Optional[List[str]] = None,
     output_base_dir: str = "reports/fichas_entregas_2026",
@@ -436,8 +436,12 @@ def execute_modular_grade_password_reset(
     (6 tarjetas por hoja) y archivos CSV de credenciales.
     """
     from collections import defaultdict
+    from src.config import load_config
     from src.excel_parser import parse_excel_students
     from src.pdf_generator import generate_pdf_cards_from_list
+
+    if excel_path is None:
+        excel_path = load_config().excel_path
 
     if target_levels is None:
         target_levels = ["Secundaria", "Preparatoria"]

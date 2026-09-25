@@ -18,11 +18,19 @@ token_cache.bin
 backups/
 reports/
 data/
+scratch/
 *.xlsx
 *.xls
 *.ods
 *.csv
+*.tsv
+*.pdf
+*.pptx
 .~lock.*
+*Alumnos*
+*Matriculado*
+*COLEGIATURAS*
+*Listado*
 
 # Temporary / OS
 .DS_Store
@@ -31,4 +39,5 @@ data/
 *.log
 logs/
 librosluca/
-*.pptx
+*.bak
+*.swp
