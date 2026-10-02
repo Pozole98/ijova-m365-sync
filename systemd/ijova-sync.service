@@ -1,0 +1,21 @@
+[Unit]
+Description=IJOVA M365 Sync - Servicio de Gestion, Auditoria y Sincronizacion Escolar
+Documentation=https://github.com/Pozole98/ijova-m365-sync
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Antigravity Projects/ijovausers
+ExecStart="%h/Antigravity Projects/ijovausers/.venv/bin/python" main.py gui --port 5055 --no-browser
+Restart=always
+RestartSec=5s
+Environment=PYTHONUNBUFFERED=1
+StandardOutput=journal
+StandardError=journal
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
