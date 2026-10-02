@@ -76,7 +76,7 @@ def build_school_db():
                         'tiene_foto': False
                     }
     except Exception as e:
-        print(f"⚠️ Aviso al leer Listado de Alumnos Inscritos.xlsx: {e}")
+        print(f"Aviso al leer Listado de Alumnos Inscritos.xlsx: {e}")
 
     # 2. Grade sheets in Listado de Alumnos Inscritos.xlsx
     try:
@@ -109,7 +109,7 @@ def build_school_db():
                 if c: d['curp'] = c
                 if s: d['sexo'] = s
     except Exception as e:
-        print(f"⚠️ Aviso al leer hojas de grado: {e}")
+        print(f"Aviso al leer hojas de grado: {e}")
 
     # 3. Cometa export (students_report_2026-09-07_gfW21IW.xlsx)
     try:
@@ -135,7 +135,7 @@ def build_school_db():
                 if cd.get('Nombre') and not rec.get('nombres'): rec['nombres'] = str(cd.get('Nombre')).strip().upper()
                 if cd.get('Apellido') and not rec.get('paterno'): rec['paterno'] = str(cd.get('Apellido')).strip().upper()
     except Exception as e:
-        print(f"⚠️ Aviso al leer students_report_2026-09-07_gfW21IW.xlsx: {e}")
+        print(f"Aviso al leer students_report_2026-09-07_gfW21IW.xlsx: {e}")
 
     # 4. librosluca/pagoslibrosprimariaypreescolar.xlsx
     try:
@@ -233,7 +233,10 @@ def build_school_db():
     try:
         col_files = glob.glob("COLEGIATURAS 26-27*.xlsx")
         if col_files:
-            col_path = sorted(col_files)[-1]
+            def extract_col_version(f):
+                m = re.search(r'\((\d+)\)', f)
+                return int(m.group(1)) if m else 0
+            col_path = max(col_files, key=extract_col_version)
             wb_col = openpyxl.load_workbook(col_path, data_only=True)
             sheets_config = [
                 ("PREESCOLAR", 2, 4, 9, "Preescolar"),
@@ -281,7 +284,8 @@ def build_school_db():
                 "LAMADRID ALVAREZ XIMENA OSIRIS": "260007",
                 "GOMEZ TRUJILLO OSVALDO": "260008",
                 "JUAN ESPINDOLA CAMILA": "260001",
-                "LEON ROJAS DAFNE ANAHI": "260002"
+                "LEON ROJAS DAFNE ANAHI": "260002",
+                "GAMALLO NAVARRO DIEGO DANIEL": "250019"
             }
 
             name_to_mat = {}
@@ -335,7 +339,8 @@ def build_school_db():
                                     break
 
                         if target_mat and not target_mat.endswith("_PENDING") and target_mat != "PENDING_BAJA":
-                            active_2627_mats.add(target_mat)
+                            if not is_baja:
+                                active_2627_mats.add(target_mat)
                             if target_mat not in school_db:
                                 school_db[target_mat] = {"matricula": target_mat}
                             rec = school_db[target_mat]
@@ -345,15 +350,14 @@ def build_school_db():
                             rec["ciclo"] = "2026-2027"
                             rec["display_name"] = rec.get("display_name") or val
 
-            # Alumnos de la base anterior no presentes en Colegiaturas 26-27 se marcan como inactivos/egresados,
-            # a excepcion de aquellos reincorporados o marcados explicitamente como Activo en Listado Global.
+            # COLEGIATURAS 26-27 es la plantilla y fuente oficial única de verdad del ciclo 2026-2027.
+            # Todo alumno de la base histórica que no figure activo en esta plantilla
+            # corresponde a ciclos pasados o se encuentra dado de baja.
             for mat, d in school_db.items():
                 if mat not in active_2627_mats:
-                    if d.get("estatus") == "Activo":
-                        d["ciclo"] = "2026-2027"
-                    else:
+                    if d.get("estatus") != "Baja":
                         d["estatus"] = "Egresado / Ciclo Anterior"
-                        d["ciclo"] = "2025-2026"
+                    d["ciclo"] = "2025-2026"
     except Exception as e:
         print(f"Aviso al procesar Colegiaturas 26-27: {e}")
 
