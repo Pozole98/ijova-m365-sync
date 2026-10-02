@@ -2619,49 +2619,179 @@ body.saas-body {
   font-size: 0.8rem;
 }
 
-/* Acciones en la tabla de Equipos */
-.team-actions-cell {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.4rem;
+/* ==========================================================================
+   OPTIMIZACION DE TABLA DE EQUIPOS & ACCIONES COMPACTAS STICKY
+   ========================================================================== */
+.teams-table-compact {
+  width: 100%;
+  table-layout: auto;
 }
 
-.btn-action-sm {
-  padding: 5px 10px;
-  font-size: 0.75rem;
-  border-radius: var(--radius-sm);
+.teams-table-compact th,
+.teams-table-compact td {
+  padding: 0.65rem 0.85rem !important;
+}
+
+.teams-table-compact .team-title-cell {
+  max-width: 280px;
+  min-width: 170px;
+}
+
+/* Columna de acciones fija (Sticky Pinning) */
+.saas-table th.col-actions-sticky,
+.saas-table td.col-actions-sticky {
+  position: sticky !important;
+  right: 0 !important;
+  background: var(--bg-card, #1E293B) !important;
+  z-index: 4;
+  box-shadow: -8px 0 14px -3px rgba(0, 0, 0, 0.4);
+  white-space: nowrap !important;
+  text-align: right !important;
+}
+
+.saas-table th.col-actions-sticky {
+  background: var(--bg-main, #0F172A) !important;
+  z-index: 5;
+}
+
+.saas-table tr:hover td.col-actions-sticky {
+  background: var(--bg-elevated, #243044) !important;
+}
+
+/* Contenedor compacto de botones de accion */
+.team-actions-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+.btn-action-compact {
+  padding: 4px 8px;
+  font-size: 0.74rem;
+  border-radius: var(--radius-sm, 6px);
   font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--border-subtle);
-  background: var(--bg-surface);
-  color: var(--text-secondary);
-  transition: all var(--transition-fast);
   display: inline-flex;
   align-items: center;
   gap: 4px;
   text-decoration: none;
+  transition: all var(--transition-fast, 0.15s ease);
+  line-height: 1.2;
 }
 
-.btn-action-sm:hover {
-  background: var(--bg-elevated);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
+.btn-action-compact.btn-roster {
+  color: #38BDF8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.28);
 }
 
-.btn-action-sm.btn-rename:hover {
-  color: var(--brand-blue);
-  border-color: var(--brand-blue);
+.btn-action-compact.btn-roster:hover {
+  background: #0284C7;
+  color: #FFFFFF;
+  border-color: #0284C7;
+  box-shadow: 0 2px 6px rgba(2, 132, 199, 0.35);
 }
 
-.btn-action-sm.btn-members:hover {
-  color: var(--color-green);
-  border-color: var(--color-green);
+.btn-action-compact.btn-assignments {
+  color: #A78BFA;
+  background: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.28);
 }
 
-.btn-action-sm.btn-archive:hover {
-  color: var(--color-amber);
-  border-color: var(--color-amber);
+.btn-action-compact.btn-assignments:hover {
+  background: #7C3AED;
+  color: #FFFFFF;
+  border-color: #7C3AED;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.35);
+}
+
+.btn-action-icon {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--border-subtle, #334155);
+  background: var(--bg-surface, #1E293B);
+  color: var(--text-secondary, #94A3B8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+  flex-shrink: 0;
+}
+
+.btn-action-icon:hover,
+.btn-action-icon.active {
+  background: var(--bg-elevated, #243044);
+  color: #F8FAFC;
+  border-color: var(--color-blue, #3B82F6);
+}
+
+/* Menu flotante de mas acciones */
+.saas-dropdown-floating {
+  position: fixed;
+  z-index: 10000;
+  min-width: 195px;
+  background: var(--bg-elevated, #1E293B);
+  border: 1px solid var(--border-subtle, #334155);
+  border-radius: var(--radius-md, 10px);
+  padding: 6px;
+  box-shadow: 0 16px 36px -4px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  animation: dropdown-pop 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropdown-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.dropdown-action-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-primary, #F8FAFC);
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+
+.dropdown-action-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60A5FA;
+}
+
+.dropdown-action-btn svg {
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
+.dropdown-action-btn:hover svg {
+  opacity: 1;
+}
+
+.dropdown-separator {
+  height: 1px;
+  background: var(--border-subtle, #334155);
+  margin: 4px 0;
 }
 
 .team-title-cell {

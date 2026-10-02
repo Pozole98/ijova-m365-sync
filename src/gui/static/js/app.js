@@ -1170,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // Propietarios
       let ownersHtml = '';
       if (!t.owners || t.owners.length === 0) {
-        ownersHtml = '<span class="owner-orphan-tag">⚠️ Huérfano (0 Propietarios)</span>';
+        ownersHtml = '<span class="owner-orphan-tag"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:3px; vertical-align:-1px;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>Huérfano (0 Propietarios)</span>';
       } else {
         const ownerNames = t.owners.map(o => escapeHtml(o.name || o.upn)).join(', ');
         ownersHtml = `<div class="owners-tag-list" title="${escapeHtml(ownerNames)}"><strong>${escapeHtml(t.owners[0].name || t.owners[0].upn)}</strong>${t.owners.length > 1 ? `<span style="font-size:0.72rem; color:var(--text-muted);">+${t.owners.length - 1} más</span>` : ''}</div>`;
@@ -1198,7 +1198,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Nombre y descripción
       const isArchived = Boolean(t.is_archived);
-      const archivedIcon = isArchived ? '<span title="Archivado / Solo lectura" style="font-size: 0.8rem; margin-right: 4px;">🔒</span>' : '';
+      const archivedIcon = isArchived ? '<span title="Archivado / Solo lectura" style="display: inline-flex; align-items: center; margin-right: 4px; color: var(--color-amber);"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg></span>' : '';
       const descHtml = t.description ? `<span class="team-desc-muted" title="${escapeHtml(t.description)}">${escapeHtml(t.description)}</span>` : '';
 
       tr.innerHTML = `
@@ -1208,32 +1208,24 @@ document.addEventListener('DOMContentLoaded', () => {
             ${descHtml}
           </div>
         </td>
-        <td>${cycleBadge}</td>
-        <td>${typeBadge}</td>
+        <td class="text-center">${cycleBadge}</td>
+        <td class="text-center">${typeBadge}</td>
         <td>${ownersHtml}</td>
         <td class="text-center">${membersBadge}</td>
         <td>${creatorHtml}</td>
         <td class="mono" style="font-size: 0.78rem;">${createdDate}</td>
-        <td class="text-right">
+        <td class="text-right col-actions-sticky">
           <div class="team-actions-cell">
-            <button type="button" class="btn-action-sm btn-assignments" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Ver tareas y actividades académicas">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
-              <span>Tareas</span>
-            </button>
-            <button type="button" class="btn-action-sm btn-roster" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Sincronizar y auditar alumnos de la nómina escolar">
+            <button type="button" class="btn-action-compact btn-roster" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Balance y sincronización de nómina de alumnos">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
               <span>Roster</span>
             </button>
-            <button type="button" class="btn-action-sm btn-rename" data-id="${t.id}" title="Renombrar equipo">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-              <span>Renombrar</span>
+            <button type="button" class="btn-action-compact btn-assignments" data-id="${t.id}" data-name="${escapeHtml(t.name)}" title="Ver tareas y actividades académicas">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              <span>Tareas</span>
             </button>
-            <button type="button" class="btn-action-sm btn-members" data-id="${t.id}" title="Ver alumnos y docentes">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              <span>Integrantes</span>
-            </button>
-            <button type="button" class="btn-action-sm btn-archive" data-id="${t.id}" data-archived="${isArchived ? 'true' : 'false'}" title="${isArchived ? 'Desarchivar' : 'Archivar (Solo lectura)'}">
-              <span>${isArchived ? '🔓 Desarchivar' : '📦 Archivar'}</span>
+            <button type="button" class="btn-action-icon btn-team-more" data-id="${t.id}" data-name="${escapeHtml(t.name)}" data-archived="${isArchived ? 'true' : 'false'}" title="Más opciones del equipo">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1.5"></circle><circle cx="19" cy="12" r="1.5"></circle><circle cx="5" cy="12" r="1.5"></circle></svg>
             </button>
           </div>
         </td>
@@ -1259,28 +1251,108 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
 
-    teamsTableTbody.querySelectorAll('.btn-rename').forEach(btn => {
-      btn.addEventListener('click', () => {
+    teamsTableTbody.querySelectorAll('.btn-team-more').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
         const teamId = btn.getAttribute('data-id');
-        openRenameModal(teamId);
-      });
-    });
-
-    teamsTableTbody.querySelectorAll('.btn-members').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const teamId = btn.getAttribute('data-id');
-        openMembersModal(teamId);
-      });
-    });
-
-    teamsTableTbody.querySelectorAll('.btn-archive').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const teamId = btn.getAttribute('data-id');
+        const teamName = btn.getAttribute('data-name');
         const isArchived = btn.getAttribute('data-archived') === 'true';
-        toggleArchiveTeam(teamId, isArchived);
+        openTeamsActionDropdown(btn, teamId, teamName, isArchived);
       });
     });
   }
+
+  // Controlador de menú flotante de más opciones de clase
+  const teamsActionDropdown = document.getElementById('teams-action-dropdown');
+  const ddBtnMembers = document.getElementById('dd-btn-members');
+  const ddBtnRename = document.getElementById('dd-btn-rename');
+  const ddBtnArchive = document.getElementById('dd-btn-archive');
+  const ddLabelArchive = document.getElementById('dd-label-archive');
+
+  let activeDropdownTeamId = null;
+  let activeDropdownTeamName = null;
+  let activeDropdownArchived = false;
+  let activeMoreButton = null;
+
+  function closeTeamsActionDropdown() {
+    if (teamsActionDropdown) teamsActionDropdown.style.display = 'none';
+    if (activeMoreButton) {
+      activeMoreButton.classList.remove('active');
+      activeMoreButton = null;
+    }
+  }
+
+  function openTeamsActionDropdown(btn, teamId, teamName, isArchived) {
+    if (!teamsActionDropdown) return;
+
+    if (activeMoreButton === btn && teamsActionDropdown.style.display === 'flex') {
+      closeTeamsActionDropdown();
+      return;
+    }
+
+    closeTeamsActionDropdown();
+
+    activeDropdownTeamId = teamId;
+    activeDropdownTeamName = teamName;
+    activeDropdownArchived = isArchived;
+    activeMoreButton = btn;
+    btn.classList.add('active');
+
+    if (ddLabelArchive) {
+      ddLabelArchive.textContent = activeDropdownArchived ? 'Desarchivar Equipo' : 'Archivar (Solo lectura)';
+    }
+
+    teamsActionDropdown.style.display = 'flex';
+
+    const rect = btn.getBoundingClientRect();
+    const dropWidth = 195;
+    const dropHeight = 125;
+
+    let left = rect.right - dropWidth;
+    if (left < 10) left = 10;
+
+    let top = rect.bottom + 6;
+    if (top + dropHeight > window.innerHeight - 10) {
+      top = rect.top - dropHeight - 6;
+    }
+
+    teamsActionDropdown.style.top = `${top}px`;
+    teamsActionDropdown.style.left = `${left}px`;
+  }
+
+  if (ddBtnMembers) {
+    ddBtnMembers.addEventListener('click', () => {
+      const tid = activeDropdownTeamId;
+      closeTeamsActionDropdown();
+      if (tid) openMembersModal(tid);
+    });
+  }
+
+  if (ddBtnRename) {
+    ddBtnRename.addEventListener('click', () => {
+      const tid = activeDropdownTeamId;
+      closeTeamsActionDropdown();
+      if (tid) openRenameModal(tid);
+    });
+  }
+
+  if (ddBtnArchive) {
+    ddBtnArchive.addEventListener('click', () => {
+      const tid = activeDropdownTeamId;
+      const isArch = activeDropdownArchived;
+      closeTeamsActionDropdown();
+      if (tid) toggleArchiveTeam(tid, isArch);
+    });
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.btn-team-more') && !e.target.closest('#teams-action-dropdown')) {
+      closeTeamsActionDropdown();
+    }
+  });
+
+  window.addEventListener('resize', closeTeamsActionDropdown);
+  window.addEventListener('scroll', closeTeamsActionDropdown, true);
 
   // Configuración de Filtros tipo Pill
   function setupPillFilters(containerId, activeCallback) {
@@ -2908,7 +2980,7 @@ document.addEventListener('DOMContentLoaded', () => {
         </td>
         <td style="max-width: 250px;">${missingHtml}</td>
         <td style="max-width: 200px;">${extraneousHtml}</td>
-        <td class="text-right">
+        <td class="text-right col-actions-sticky">
           ${hasDiscrepancy ? `
             <button type="button" class="btn btn-xs btn-primary-saas btn-sync-single-student" data-matricula="${escapeHtml(st.matricula)}">
               Sincronizar
@@ -3200,7 +3272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <td><span style="font-size: 0.8rem;">${escapeHtml(c.detected_grade || '-')}${c.detected_group ? ' ' + escapeHtml(c.detected_group) : ''}</span></td>
         <td><span style="font-size: 0.78rem; font-family: monospace;">${escapeHtml(c.detected_cycle || '-')}</span></td>
         <td class="text-center">${statusBadge}</td>
-        <td class="text-right" style="white-space: nowrap;">
+        <td class="text-right col-actions-sticky" style="white-space: nowrap;">
           <button type="button" class="btn btn-xs btn-primary-saas btn-rename-single-team" data-team-id="${escapeHtml(c.team_id)}" title="Aplicar nombre sugerido de inmediato">
             Renombrar
           </button>

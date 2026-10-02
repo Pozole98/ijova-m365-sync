@@ -940,17 +940,17 @@
           <!-- Tabla de Equipos y Clases -->
           <div class="saas-card table-card-premium">
             <div class="table-responsive">
-              <table class="saas-table" id="teams-table">
+              <table class="saas-table teams-table-compact" id="teams-table">
                 <thead>
                   <tr>
                     <th>Materia / Nombre de Equipo</th>
-                    <th>Ciclo</th>
-                    <th>Tipo</th>
+                    <th class="text-center" style="width: 75px;">Ciclo</th>
+                    <th class="text-center" style="width: 80px;">Tipo</th>
                     <th>Profesor(es) Titular(es)</th>
-                    <th class="text-center">Alumnos</th>
-                    <th>Creador / Origen</th>
-                    <th>Fecha Creación</th>
-                    <th class="text-right">Acciones</th>
+                    <th class="text-center" style="width: 70px;">Alumnos</th>
+                    <th style="width: 120px;">Creador / Origen</th>
+                    <th style="width: 95px;">Fecha Creación</th>
+                    <th class="text-right col-actions-sticky" style="width: 155px;">Acciones</th>
                   </tr>
                 </thead>
                 <tbody id="teams-table-tbody">
@@ -1094,7 +1094,7 @@
                     <th style="min-width: 130px;">Progreso de Cobertura</th>
                     <th>Materias Faltantes</th>
                     <th>Clases No Correspondientes</th>
-                    <th class="text-right">Acción</th>
+                    <th class="text-right col-actions-sticky">Acción</th>
                   </tr>
                 </thead>
                 <tbody id="cov-table-tbody">
@@ -1228,7 +1228,7 @@
                     <th>Grado y Nivel</th>
                     <th>Ciclo</th>
                     <th class="text-center">Estado</th>
-                    <th class="text-right">Acción</th>
+                    <th class="text-right col-actions-sticky">Acción</th>
                   </tr>
                 </thead>
                 <tbody id="nom-table-tbody">
@@ -1527,8 +1527,23 @@
   </div>
 
   <!-- =========================================================================
-       MODALES DEL MÓDULO DE TEAMS
+       MENÚ FLOTANTE DE ACCIONES DE EQUIPO (TEAMS)
        ========================================================================= -->
+  <div id="teams-action-dropdown" class="saas-dropdown-floating" style="display: none;">
+    <button type="button" class="dropdown-action-btn" id="dd-btn-members">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      <span>Ver Integrantes</span>
+    </button>
+    <button type="button" class="dropdown-action-btn" id="dd-btn-rename">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+      <span>Renombrar Equipo</span>
+    </button>
+    <div class="dropdown-separator"></div>
+    <button type="button" class="dropdown-action-btn" id="dd-btn-archive">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
+      <span id="dd-label-archive">Archivar (Solo lectura)</span>
+    </button>
+  </div>
 
   <!-- MODAL 1: CREAR NUEVA CLASE ESCOLAR -->
   <div class="modal-overlay" id="modal-create-class" style="display: none;">
