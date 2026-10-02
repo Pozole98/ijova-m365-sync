@@ -506,7 +506,8 @@ def create_app(config_path: str = "config.json") -> Flask:
                 graph=graph,
                 domain=config.domain,
                 excel_path=config.excel_path,
-                sheet_name=config.sheet_name
+                sheet_name=config.sheet_name,
+                auto_confirm=True
             )
             if result:
                 return jsonify({

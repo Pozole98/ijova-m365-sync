@@ -14,26 +14,27 @@ def execute_student_restoration(
     graph: GraphClient,
     domain: str = "ijova.com",
     excel_path: str = "Listado de Alumnos Inscritos.xlsx",
-    sheet_name: str = "Listado Global Matriculado"
+    sheet_name: str = "Listado Global Matriculado",
+    auto_confirm: bool = False
 ) -> Optional[Dict[str, Any]]:
     """
-    Restaura una cuenta de alumno desde la papelera de reciclaje de Entra ID a partir de su matrícula.
+    Restaura una cuenta de alumno desde la papelera de reciclaje de Entra ID a partir de su matricula.
     """
-    # 1. Validar matrícula estudiantil
+    # 1. Validar matricula estudiantil
     is_valid, result = is_student_matricula(identifier)
     if not is_valid:
-        print(f"\n⛔ BLOQUEO DE SEGURIDAD: {result}")
+        print(f"\n[BLOQUEO DE SEGURIDAD] {result}")
         return None
 
     upn = result
     matricula = upn.split("@")[0]
 
-    print(f"\n🔍 Buscando matrícula \033[1;34m{matricula}\033[0m en la Papelera de Reciclaje de Microsoft Entra ID...")
+    print(f"\nBuscando matricula \033[1;34m{matricula}\033[0m en la Papelera de Reciclaje de Microsoft Entra ID...")
 
     try:
         deleted_users = graph.get_deleted_users()
     except Exception as e:
-        print(f"❌ Error al consultar la papelera de reciclaje: {e}")
+        print(f"[ERROR] Fallo al consultar la papelera de reciclaje: {e}")
         return None
 
     target_user = None
@@ -45,32 +46,36 @@ def execute_student_restoration(
             break
 
     if not target_user:
-        print(f"ℹ️ No se encontró ninguna cuenta para {upn} en la Papelera de Reciclaje.")
+        print(f"[INFO] No se encontro ninguna cuenta para {upn} en la Papelera de Reciclaje.")
         print("   Posibles causas:")
-        print("   1. La cuenta ya está activa en Microsoft 365.")
-        print("   2. Fue eliminada hace más de 30 días y ya fue purgada permanentemente por Microsoft.")
+        print("   1. La cuenta ya esta activa en Microsoft 365.")
+        print("   2. Fue eliminada hace mas de 30 dias y ya fue purgada permanentemente por Microsoft.")
         return None
 
     user_id = target_user.get("id")
     display_name = target_user.get("displayName", "Alumno")
     deleted_date = target_user.get("deletedDateTime", "Recientemente")
 
-    print(f"   👤 Alumno encontrado en Papelera: \033[1m{display_name}\033[0m")
-    print(f"   🆔 Entra Object ID:              {user_id}")
-    print(f"   📅 Fecha de eliminación:         {deleted_date}")
+    print(f"   Alumno encontrado en Papelera: \033[1m{display_name}\033[0m")
+    print(f"   Entra Object ID:              {user_id}")
+    print(f"   Fecha de eliminacion:         {deleted_date}")
 
-    confirm = input(f"\n¿Deseas restaurar a '{display_name}' y reactivar todos sus accesos? (s/n): ")
-    if confirm.strip().lower() not in ["s", "si", "y", "yes"]:
-        print("⛔ Restauración cancelada por el usuario.")
-        return None
+    if not auto_confirm:
+        try:
+            confirm = input(f"\nDeseas restaurar a '{display_name}' y reactivar todos sus accesos? (s/n): ")
+            if confirm.strip().lower() not in ["s", "si", "y", "yes"]:
+                print("[CANCELADO] Restauracion cancelada por el usuario.")
+                return None
+        except EOFError:
+            print(f"[INFO] Entrada no interactiva detectada. Procediendo automaticamente con restauracion de {display_name}.")
 
     # 2. Restaurar usuario en Entra ID
-    print(f"\n🚀 Restaurando cuenta en Microsoft Graph...")
+    print(f"\nRestaurando cuenta en Microsoft Graph...")
     try:
         restored = graph.restore_deleted_user(user_id)
-        print(f"✅ ¡Cuenta de \033[1;32m{display_name}\033[0m restaurada exitosamente!")
+        print(f"[EXITO] Cuenta de \033[1;32m{display_name}\033[0m restaurada exitosamente.")
     except Exception as e:
-        print(f"❌ Error al restaurar usuario: {e}")
+        print(f"[ERROR] Fallo al restaurar usuario: {e}")
         return None
 
     # 3. Asignar/Verificar Licencia Office 365 A1
@@ -78,27 +83,24 @@ def execute_student_restoration(
     if student_sku:
         try:
             graph.assign_license(user_id, student_sku["skuId"])
-            print(f"🏷️ Licencia {student_sku['skuPartNumber']} reasignada correctamente.")
+            print(f"[LICENCIA] Licencia {student_sku['skuPartNumber']} reasignada correctamente.")
         except Exception as e:
-            print(f"⚠️ Nota de licencia: {e}")
+            print(f"[AVISO] Nota de licencia: {e}")
 
     # 4. Actualizar estatus en Excel a 'Activo'
     excel_updated = update_student_status_in_excel(excel_path, sheet_name, matricula, "Activo")
     if excel_updated:
-        print("📑 Estatus del alumno actualizado a 'Activo' en el Excel.")
+        print("[EXCEL] Estatus del alumno actualizado a 'Activo' en la hoja escolar.")
 
-    # 5. Marcar en registro histórico como Reactivado
+    # 5. Marcar en registro historico como Reactivado
     from src.historical_registry import mark_student_reactivated
     mark_student_reactivated(matricula)
 
-    print("\n" + "╔" + "═" * 68 + "╗")
-    print(f"║ {'CUENTA RESTAURADA EXITOSAMENTE':^68} ║")
-    print("╠" + "═" * 68 + "╣")
-    print(f"║ Alumno:        {display_name:<51} ║")
-    print(f"║ Matrícula:     {matricula:<51} ║")
-    print(f"║ Correo:        {upn:<51} ║")
-    print(f"║ Estado:        \033[1;32m{'ACTIVO (Buzón, OneDrive y Teams Recuperados)':<43}\033[0m ║")
-    print("╚" + "═" * 68 + "╝\n")
+    print("\n" + "=" * 70)
+    print(f"  CUENTA RESTAURADA EXITOSAMENTE: {display_name}")
+    print(f"  Matricula: {matricula} | UPN: {upn}")
+    print(f"  Estado: ACTIVO (Buzon, OneDrive y Teams Recuperados)")
+    print("=" * 70 + "\n")
 
     return {
         "matricula": matricula,

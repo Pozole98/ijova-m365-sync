@@ -361,7 +361,8 @@ def cmd_restore(args):
         graph=graph,
         domain=config.domain,
         excel_path=config.excel_path,
-        sheet_name=config.sheet_name
+        sheet_name=config.sheet_name,
+        auto_confirm=getattr(args, "yes", False)
     )
 
 
@@ -867,6 +868,11 @@ def main():
     p_restore.add_argument(
         "matricula",
         help="Matrícula del alumno a restaurar (ej. 250010)"
+    )
+    p_restore.add_argument(
+        "-y", "--yes",
+        action="store_true",
+        help="Confirma automáticamente la restauración sin confirmación interactiva"
     )
 
     # status command

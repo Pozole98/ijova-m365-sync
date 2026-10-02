@@ -711,7 +711,13 @@ class GraphClient:
                 resp = requests.post(url, headers=headers, json={}, timeout=25)
 
                 if resp.status_code in [200, 201]:
-                    return resp.json()
+                    try:
+                        return resp.json()
+                    except Exception:
+                        return {"id": user_id, "status": "restored"}
+
+                if resp.status_code == 204:
+                    return {"id": user_id, "status": "restored"}
 
                 if resp.status_code == 429:
                     time.sleep(int(resp.headers.get("Retry-After", 2)))

@@ -170,6 +170,28 @@ class TestResetVerificationAndGUI(unittest.TestCase):
         self.assertFalse(data["success"])
         self.assertIn("Falta la matrícula", data["error"])
 
+    @patch.object(GraphClient, "authenticate_device_code")
+    @patch("src.gui.app.execute_student_restoration")
+    def test_gui_recycle_bin_restore_success_auto_confirm(self, mock_restore, mock_auth):
+        """Verifica que la restauracion web use auto_confirm=True sin bloquear por stdin."""
+        mock_restore.return_value = {
+            "matricula": "250019",
+            "display_name": "DIEGO DANIEL GAMALLO",
+            "upn": "250019@ijova.com",
+            "id": "mock-id-gamallo"
+        }
+        app = create_app()
+        client = app.test_client()
+
+        resp = client.post("/api/recycle-bin/restore", json={"matricula": "250019"})
+        self.assertEqual(resp.status_code, 200)
+        data = resp.get_json()
+        self.assertTrue(data["success"])
+        self.assertEqual(data["matricula"], "250019")
+        self.assertIn("restaurada con éxito", data["message"])
+        mock_restore.assert_called_once()
+        self.assertTrue(mock_restore.call_args.kwargs.get("auto_confirm"))
+
     def test_gui_photos_stats_and_gallery(self):
         """Verifica que los endpoints de fotos entreguen estadísticas y estructura de galería."""
         app = create_app()

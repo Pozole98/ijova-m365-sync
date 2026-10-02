@@ -104,7 +104,7 @@ def execute_interactive_enrollment(
                     status="SUCCESS",
                     details=f"Redirigido a restauración de cuenta en papelera: {del_name}"
                 )
-                return execute_student_restoration(mat_input, graph, domain, excel_path, sheet_name)
+                return execute_student_restoration(mat_input, graph, domain, excel_path, sheet_name, auto_confirm=True)
             else:
                 print("   ℹ️ Continuando con el proceso de alta...")
 
