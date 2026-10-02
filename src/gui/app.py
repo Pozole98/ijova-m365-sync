@@ -1023,6 +1023,75 @@ def create_app(config_path: str = "config.json") -> Flask:
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route("/api/teams/nomenclature/audit", methods=["GET"])
+    def api_teams_nomenclature_audit():
+        """Audita el cumplimiento de nomenclatura institucional en nombres de equipos."""
+        cycle = request.args.get("cycle", "2026-2027")
+        try:
+            from src.teams_engine import audit_teams_nomenclature
+            graph = get_graph()
+            data = audit_teams_nomenclature(graph, cycle_filter=cycle)
+            return jsonify({"success": True, "data": data, **data})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/nomenclature/rename-batch", methods=["POST"])
+    def api_teams_nomenclature_rename_batch():
+        """Aplica renombrado estandarizado masivo o individual a equipos."""
+        body = request.get_json() or {}
+        renames = body.get("renames", [])
+        if not renames:
+            return jsonify({"success": False, "error": "No se recibieron equipos para renombrar."}), 400
+        try:
+            from src.teams_engine import batch_rename_teams
+            graph = get_graph()
+            res = batch_rename_teams(graph, renames)
+            return jsonify({"success": True, "data": res, **res})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/coverage/audit", methods=["GET"])
+    def api_teams_coverage_audit():
+        """Audita la cobertura global de inscripciones de alumnos en equipos de Teams."""
+        cycle = request.args.get("cycle", "2026-2027")
+        try:
+            from src.teams_engine import audit_global_student_coverage
+            graph = get_graph()
+            cov_data = audit_global_student_coverage(graph, cycle_filter=cycle)
+            return jsonify({"success": True, "data": cov_data, **cov_data})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/coverage/sync-global", methods=["POST"])
+    def api_teams_coverage_sync_global():
+        """Sincroniza masivamente la matriculacion de alumnos faltantes en sus equipos."""
+        body = request.get_json() or {}
+        fix_missing = body.get("fix_missing", True)
+        fix_extraneous = body.get("fix_extraneous", False)
+        try:
+            from src.teams_engine import sync_global_student_coverage
+            graph = get_graph()
+            res = sync_global_student_coverage(graph, fix_missing=fix_missing, fix_extraneous=fix_extraneous)
+            return jsonify({"success": True, "data": res, **res})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/coverage/export-excel", methods=["GET"])
+    def api_teams_coverage_export_excel():
+        """Exporta el reporte consolidado de cobertura global a Excel."""
+        cycle = request.args.get("cycle", "2026-2027")
+        try:
+            from src.teams_engine import audit_global_student_coverage, export_global_coverage_excel
+            graph = get_graph()
+            cov_data = audit_global_student_coverage(graph, cycle_filter=cycle)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Cobertura_Global_Equipos_Teams_{ts}.xlsx"
+            out_path = os.path.join(config.reports_dir, filename)
+            export_global_coverage_excel(cov_data, out_path)
+            return send_file(out_path, as_attachment=True, download_name=filename)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     return app
 
 

@@ -809,7 +809,27 @@
             </div>
           </div>
 
-          <!-- Métricas KPIs -->
+          <!-- Sub-Navegación de Teams -->
+          <div class="teams-subnav-bar">
+            <button type="button" class="teams-subnav-btn active" id="btn-subnav-teams-catalog" data-subtab="teams-subtab-catalog">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              <span>Catálogo e Inventario</span>
+            </button>
+            <button type="button" class="teams-subnav-btn" id="btn-subnav-teams-coverage" data-subtab="teams-subtab-coverage">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+              <span>Verificador de Matrícula Global</span>
+              <span class="subnav-badge badge-amber" id="badge-coverage-unmet" style="display: none;">0</span>
+            </button>
+            <button type="button" class="teams-subnav-btn" id="btn-subnav-teams-nomenclature" data-subtab="teams-subtab-nomenclature">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              <span>Normalizador de Nomenclatura</span>
+              <span class="subnav-badge badge-blue" id="badge-nomenclature-pending" style="display: none;">0</span>
+            </button>
+          </div>
+
+          <!-- SUB-TAB 1: CATALOGO E INVENTARIO -->
+          <div class="teams-subtab-pane active" id="teams-subtab-catalog">
+            <!-- Métricas KPIs -->
           <div class="kpi-grid-saas">
             <div class="kpi-card">
               <div class="kpi-header">
@@ -941,7 +961,286 @@
               </table>
             </div>
           </div>
-        </section>
+        </div> <!-- Fin de #teams-subtab-catalog -->
+
+        <!-- ==================================================================
+             SUB-TAB 2: VERIFICADOR GLOBAL DE MATRICULA Y COBERTURA DE EQUIPOS
+             ================================================================== -->
+        <div class="teams-subtab-pane" id="teams-subtab-coverage" style="display: none;">
+          <!-- Banner Informativo -->
+          <div class="saas-card-banner mb-4">
+            <div class="banner-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            </div>
+            <div class="banner-content">
+              <h4>Verificador Global de Matrícula y Cobertura de Equipos</h4>
+              <p>Auditoría en tiempo real que cruza el padrón escolar con las membresías de los equipos de Teams del Ciclo 2026-2027. Detecta alumnos a los que les faltan materias de su grado o que permanecen en clases no correspondientes.</p>
+            </div>
+            <div class="banner-actions">
+              <button type="button" id="btn-export-coverage-excel" class="btn btn-secondary-saas btn-sm" title="Descargar reporte completo en Excel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                <span>Descargar Excel</span>
+              </button>
+              <button type="button" id="btn-refresh-coverage" class="btn btn-secondary-saas btn-sm" title="Re-auditar membresías de alumnos">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                <span>Re-verificar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Métricas KPIs de Cobertura -->
+          <div class="kpi-grid-saas">
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">ALUMNOS MATRICULADOS</span>
+                <span class="kpi-badge badge-blue">Padrón</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number" id="cov-kpi-students-total">0</span>
+                <span class="kpi-sub">Alumnos evaluados</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">COBERTURA COMPLETA</span>
+                <span class="kpi-badge badge-green">100% OK</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-green" id="cov-kpi-full-coverage">0</span>
+                <span class="kpi-sub">Inscritos en todas sus clases</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">FALTANTES DE INSCRIPCIÓN</span>
+                <span class="kpi-badge badge-amber">Atención</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-amber" id="cov-kpi-missing-coverage">0</span>
+                <span class="kpi-sub">Faltan de al menos una clase</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">CLASES ACTIVAS EVALUADAS</span>
+                <span class="kpi-badge badge-gray">Ciclo 26-27</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-blue" id="cov-kpi-classes-count">0</span>
+                <span class="kpi-sub">Equipos en el tenant</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Búsqueda y Filtros de Cobertura -->
+          <div class="saas-card teams-filters-panel">
+            <div class="teams-search-row">
+              <div class="search-input-wrapper flex-grow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="cov-search-input" class="saas-input" placeholder="Buscar alumno por nombre, matrícula o correo..." autocomplete="off">
+              </div>
+              <button type="button" id="btn-sync-global-coverage" class="btn btn-primary-saas" title="Inscribe a todos los alumnos faltantes y remueve miembros de otros grados">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="16 11 18 13 22 9"></polyline></svg>
+                <span>Sincronizar Matrícula Global (1-Click)</span>
+              </button>
+            </div>
+
+            <div class="teams-filters-row">
+              <div class="filter-col">
+                <span class="filter-group-lbl">Estado de Cobertura:</span>
+                <div class="filter-pill-group" id="filter-group-coverage">
+                  <button type="button" class="pill-btn active" data-cov-filter="all">Todos</button>
+                  <button type="button" class="pill-btn" data-cov-filter="missing">Con Clases Faltantes</button>
+                  <button type="button" class="pill-btn" data-cov-filter="complete">Cobertura 100%</button>
+                  <button type="button" class="pill-btn" data-cov-filter="extraneous">Con Clases No Correspondientes</button>
+                </div>
+              </div>
+
+              <div class="filter-col">
+                <span class="filter-group-lbl">Filtrar por Grado:</span>
+                <select id="cov-filter-grade" class="saas-select saas-select-sm" style="min-width: 170px;">
+                  <option value="all">Todos los Grados</option>
+                  <option value="1° Primaria">1° Primaria</option>
+                  <option value="2° Primaria">2° Primaria</option>
+                  <option value="3° Primaria">3° Primaria</option>
+                  <option value="4° Primaria">4° Primaria</option>
+                  <option value="5° Primaria">5° Primaria</option>
+                  <option value="6° Primaria">6° Primaria</option>
+                  <option value="1° Secundaria">1° Secundaria</option>
+                  <option value="2° Secundaria">2° Secundaria</option>
+                  <option value="3° Secundaria">3° Secundaria</option>
+                </select>
+              </div>
+
+              <div class="filter-col" style="margin-left: auto;">
+                <span class="teams-count-pill" id="cov-filtered-count">Cargando verificación...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de Cobertura de Alumnos -->
+          <div class="saas-card table-card-premium">
+            <div class="table-responsive">
+              <table class="saas-table" id="cov-table">
+                <thead>
+                  <tr>
+                    <th>Matrícula</th>
+                    <th>Alumno</th>
+                    <th>Grado Oficial</th>
+                    <th class="text-center">Clases (Inscritas / Total)</th>
+                    <th style="min-width: 130px;">Progreso de Cobertura</th>
+                    <th>Materias Faltantes</th>
+                    <th>Clases No Correspondientes</th>
+                    <th class="text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="cov-table-tbody">
+                  <tr>
+                    <td colspan="8" class="table-empty-row">Iniciando verificación de membresías en tiempo real...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div> <!-- Fin de #teams-subtab-coverage -->
+
+        <!-- ==================================================================
+             SUB-TAB 3: NORMALIZADOR Y VERIFICADOR DE NOMENCLATURA INSTITUCIONAL
+             ================================================================== -->
+        <div class="teams-subtab-pane" id="teams-subtab-nomenclature" style="display: none;">
+          <!-- Banner Informativo -->
+          <div class="saas-card-banner mb-4">
+            <div class="banner-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+            </div>
+            <div class="banner-content">
+              <h4>Verificador y Normalizador de Nomenclatura Institucional IJOVA</h4>
+              <p>Fórmula oficial establecida: <code>[Materia] ([Grado] [Nivel][ Grupo]) - [Ciclo]</code>. Ejemplo: <code>Matemáticas (3° Secundaria) - 26-27</code> o <code>Español (1° Primaria A) - 26-27</code>. Permite detectar nombres desalineados, previsualizar la corrección y renombrar por lote o individualmente.</p>
+            </div>
+            <div class="banner-actions">
+              <button type="button" id="btn-refresh-nomenclature" class="btn btn-secondary-saas btn-sm" title="Re-analizar nomenclatura">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                <span>Re-analizar</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Métricas KPIs de Nomenclatura -->
+          <div class="kpi-grid-saas">
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">EQUIPOS AUDITADOS</span>
+                <span class="kpi-badge badge-blue">Tenant</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number" id="nom-kpi-total">0</span>
+                <span class="kpi-sub">Clases analizadas</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">CUMPLEN ESTÁNDAR</span>
+                <span class="kpi-badge badge-green">Oficial</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-green" id="nom-kpi-compliant">0</span>
+                <span class="kpi-sub">Nomenclatura 100% correcta</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">REQUIEREN NORMALIZACIÓN</span>
+                <span class="kpi-badge badge-amber">Desalineados</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-amber" id="nom-kpi-non-compliant">0</span>
+                <span class="kpi-sub">Listos para corregir</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">CICLO ACTIVO 26-27</span>
+                <span class="kpi-badge badge-purple">Vigente</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-purple" id="nom-kpi-cycle-active">0</span>
+                <span class="kpi-sub">Clases en impartición</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Búsqueda y Filtros de Nomenclatura -->
+          <div class="saas-card teams-filters-panel">
+            <div class="teams-search-row">
+              <div class="search-input-wrapper flex-grow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="nom-search-input" class="saas-input" placeholder="Buscar por materia, grado o nombre actual..." autocomplete="off">
+              </div>
+              <button type="button" id="btn-batch-apply-nomenclature" class="btn btn-primary-saas" disabled>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                <span id="btn-batch-apply-label">Aplicar Normalización (0 seleccionados)</span>
+              </button>
+            </div>
+
+            <div class="teams-filters-row">
+              <div class="filter-col">
+                <span class="filter-group-lbl">Estado de Formato:</span>
+                <div class="filter-pill-group" id="filter-group-nom-status">
+                  <button type="button" class="pill-btn active" data-nom-status="all">Todos</button>
+                  <button type="button" class="pill-btn" data-nom-status="non_compliant">Requieren Cambio</button>
+                  <button type="button" class="pill-btn" data-nom-status="compliant">Cumplen Estándar</button>
+                </div>
+              </div>
+
+              <div class="filter-col">
+                <span class="filter-group-lbl">Ciclo:</span>
+                <div class="filter-pill-group" id="filter-group-nom-cycle">
+                  <button type="button" class="pill-btn active" data-nom-cycle="2026-2027">Ciclo 26-27</button>
+                  <button type="button" class="pill-btn" data-nom-cycle="2025-2026">Ciclo 25-26</button>
+                  <button type="button" class="pill-btn" data-nom-cycle="all">Todos</button>
+                </div>
+              </div>
+
+              <div class="filter-col" style="margin-left: auto;">
+                <span class="teams-count-pill" id="nom-filtered-count">Cargando auditoría...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de Normalización de Nombres -->
+          <div class="saas-card table-card-premium">
+            <div class="table-responsive">
+              <table class="saas-table" id="nom-table">
+                <thead>
+                  <tr>
+                    <th style="width: 40px; text-align: center;">
+                      <input type="checkbox" id="nom-select-all" title="Seleccionar todos los que requieren cambio">
+                    </th>
+                    <th>Nombre Actual en Teams</th>
+                    <th>Nomenclatura Estándar Sugerida</th>
+                    <th>Materia</th>
+                    <th>Grado y Nivel</th>
+                    <th>Ciclo</th>
+                    <th class="text-center">Estado</th>
+                    <th class="text-right">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="nom-table-tbody">
+                  <tr>
+                    <td colspan="8" class="table-empty-row">Analizando nombres de equipos con el estándar institucional...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div> <!-- Fin de #teams-subtab-nomenclature -->
+      </section>
 
         <!-- ==================================================================
              PESTAÑA 7: SALUD DEL TENANT
@@ -1328,6 +1627,52 @@
         <div class="form-group-saas">
           <label>Nombre Actual:</label>
           <input type="text" id="rename-current-name" class="saas-input mono" readonly disabled>
+        </div>
+
+        <!-- Asistente de Nomenclatura IJOVA -->
+        <div class="saas-card-subtle mb-3" style="background: var(--bg-hover, #f8fafc); border: 1px dashed var(--border-color, #cbd5e1); border-radius: 8px; padding: 12px; margin-bottom: 15px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span style="font-size: 12px; font-weight: 700; color: var(--text-heading, #1e293b); text-transform: uppercase; letter-spacing: 0.5px;">Asistente de Nomenclatura IJOVA</span>
+            <button type="button" class="btn btn-xs btn-secondary-saas" id="btn-helper-autofill">Autodetectar</button>
+          </div>
+          <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px;">
+            <div>
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-muted, #64748b); display: block; margin-bottom: 3px;">Materia:</label>
+              <input type="text" id="helper-nom-subject" class="saas-input saas-input-sm" placeholder="Ej. Español">
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-muted, #64748b); display: block; margin-bottom: 3px;">Grado:</label>
+              <select id="helper-nom-grade" class="saas-select saas-select-sm">
+                <option value="1°">1°</option>
+                <option value="2°">2°</option>
+                <option value="3°">3°</option>
+                <option value="4°">4°</option>
+                <option value="5°">5°</option>
+                <option value="6°">6°</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-muted, #64748b); display: block; margin-bottom: 3px;">Nivel:</label>
+              <select id="helper-nom-level" class="saas-select saas-select-sm">
+                <option value="Primaria">Primaria</option>
+                <option value="Secundaria">Secundaria</option>
+                <option value="General">General</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size: 11px; font-weight: 600; color: var(--text-muted, #64748b); display: block; margin-bottom: 3px;">Ciclo:</label>
+              <select id="helper-nom-cycle" class="saas-select saas-select-sm">
+                <option value="26-27">26-27</option>
+                <option value="25-26">25-26</option>
+              </select>
+            </div>
+          </div>
+          <div style="margin-top: 10px; display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--border-color, #e2e8f0);">
+            <div style="font-size: 12px; color: var(--text-muted, #64748b); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              Fórmula: <code id="helper-nom-preview" style="font-weight: 700; color: var(--brand-primary, #0284c7);">-</code>
+            </div>
+            <button type="button" class="btn btn-xs btn-primary-saas" id="btn-helper-apply-preview" style="white-space: nowrap; margin-left: 8px;">Aplicar al Campo</button>
+          </div>
         </div>
 
         <div class="form-group-saas">

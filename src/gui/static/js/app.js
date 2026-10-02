@@ -2697,5 +2697,800 @@ document.addEventListener('DOMContentLoaded', () => {
       window.location.href = `/api/teams/roster/export-excel?cycle=${encodeURIComponent(cycle)}`;
     });
   }
+
+  // =========================================================================
+  // SUB-NAVEGACION DE TEAMS & SUBTABS
+  // =========================================================================
+  const teamsSubnavBtns = document.querySelectorAll('.teams-subnav-btn');
+  const teamsSubtabPanes = document.querySelectorAll('.teams-subtab-pane');
+
+  function switchTeamsSubtab(targetSubtabId) {
+    teamsSubnavBtns.forEach(btn => {
+      if (btn.getAttribute('data-subtab') === targetSubtabId) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+
+    teamsSubtabPanes.forEach(pane => {
+      if (pane.id === targetSubtabId) {
+        pane.style.display = 'block';
+        pane.classList.add('active');
+      } else {
+        pane.style.display = 'none';
+        pane.classList.remove('active');
+      }
+    });
+
+    if (targetSubtabId === 'teams-subtab-coverage') {
+      loadTeamsCoverageAudit();
+    } else if (targetSubtabId === 'teams-subtab-nomenclature') {
+      loadTeamsNomenclatureAudit();
+    }
+  }
+
+  teamsSubnavBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = btn.getAttribute('data-subtab');
+      if (target) switchTeamsSubtab(target);
+    });
+  });
+
+  // =========================================================================
+  // SUB-TAB 2: VERIFICADOR GLOBAL DE MATRICULA Y COBERTURA
+  // =========================================================================
+  let covAuditCache = null;
+  let covLoading = false;
+  let covSearchQuery = '';
+  let covFilterStatus = 'all';
+  let covFilterGrade = 'all';
+
+  const covKpiTotal = document.getElementById('cov-kpi-students-total');
+  const covKpiFull = document.getElementById('cov-kpi-full-coverage');
+  const covKpiMissing = document.getElementById('cov-kpi-missing-coverage');
+  const covKpiClasses = document.getElementById('cov-kpi-classes-count');
+  const badgeCoverageUnmet = document.getElementById('badge-coverage-unmet');
+
+  const covSearchInput = document.getElementById('cov-search-input');
+  const covFilterGradeSelect = document.getElementById('cov-filter-grade');
+  const covFilteredCount = document.getElementById('cov-filtered-count');
+  const covTableTbody = document.getElementById('cov-table-tbody');
+  const btnSyncGlobalCoverage = document.getElementById('btn-sync-global-coverage');
+  const btnExportCoverageExcel = document.getElementById('btn-export-coverage-excel');
+  const btnRefreshCoverage = document.getElementById('btn-refresh-coverage');
+
+  async function loadTeamsCoverageAudit(forceRefresh = false) {
+    if (covLoading) return;
+    covLoading = true;
+
+    if (covTableTbody) {
+      covTableTbody.innerHTML = '<tr><td colspan="8" class="table-empty-row">Consultando padron y membresias de Teams en tiempo real...</td></tr>';
+    }
+
+    try {
+      const resp = await fetch('/api/teams/coverage/audit?cycle=2026-2027');
+      const res = await resp.json();
+
+      if (res.success && res.data) {
+        covAuditCache = res.data;
+        const s = res.data.summary || {};
+
+        if (covKpiTotal) covKpiTotal.textContent = s.total_students_audited || 0;
+        if (covKpiFull) covKpiFull.textContent = s.full_coverage_students || 0;
+        if (covKpiMissing) covKpiMissing.textContent = s.unmet_coverage_students || 0;
+        if (covKpiClasses) covKpiClasses.textContent = s.active_classes_evaluated || 0;
+
+        if (badgeCoverageUnmet) {
+          const unmet = s.unmet_coverage_students || 0;
+          if (unmet > 0) {
+            badgeCoverageUnmet.style.display = 'inline-flex';
+            badgeCoverageUnmet.textContent = unmet;
+          } else {
+            badgeCoverageUnmet.style.display = 'none';
+          }
+        }
+
+        applyCovFilters();
+
+        if (forceRefresh) {
+          showToast('Verificacion de cobertura actualizada.', 'success');
+        }
+      } else {
+        if (covTableTbody) {
+          covTableTbody.innerHTML = `<tr><td colspan="8" class="table-empty-row" style="color: var(--color-danger);">Error: ${res.error || 'No se pudo cargar la verificacion'}</td></tr>`;
+        }
+        showToast('Error en verificador de cobertura: ' + (res.error || ''), 'error');
+      }
+    } catch (err) {
+      if (covTableTbody) {
+        covTableTbody.innerHTML = `<tr><td colspan="8" class="table-empty-row" style="color: var(--color-danger);">Error de conexion: ${err.message}</td></tr>`;
+      }
+      showToast('Error al conectar con el servidor: ' + err.message, 'error');
+    } finally {
+      covLoading = false;
+    }
+  }
+
+  function applyCovFilters() {
+    if (!covAuditCache || !covAuditCache.students) return;
+
+    const q = covSearchQuery.trim().toLowerCase();
+    const students = covAuditCache.students;
+
+    const filtered = students.filter(st => {
+      // 1. Busqueda libre
+      if (q) {
+        const mat = (st.matricula || '').toLowerCase();
+        const nom = (st.nombre || '').toLowerCase();
+        const mail = (st.mail || '').toLowerCase();
+        if (!mat.includes(q) && !nom.includes(q) && !mail.includes(q)) {
+          return false;
+        }
+      }
+
+      // 2. Filtro de estado
+      if (covFilterStatus === 'missing' && st.coverage_status !== 'INCOMPLETO') {
+        return false;
+      }
+      if (covFilterStatus === 'complete' && st.coverage_status !== 'COMPLETO') {
+        return false;
+      }
+      if (covFilterStatus === 'extraneous' && (!st.extraneous_classes || st.extraneous_classes.length === 0)) {
+        return false;
+      }
+
+      // 3. Filtro de grado
+      if (covFilterGrade !== 'all' && st.official_grade !== covFilterGrade) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (covFilteredCount) {
+      covFilteredCount.textContent = `Mostrando ${filtered.length} de ${students.length} alumnos`;
+    }
+
+    renderCovTable(filtered);
+  }
+
+  function renderCovTable(students) {
+    if (!covTableTbody) return;
+
+    if (students.length === 0) {
+      covTableTbody.innerHTML = '<tr><td colspan="8" class="table-empty-row">No se encontraron alumnos con los criterios seleccionados.</td></tr>';
+      return;
+    }
+
+    covTableTbody.innerHTML = '';
+
+    students.forEach(st => {
+      const tr = document.createElement('tr');
+      const pct = st.coverage_percentage || 0;
+      let fillClass = 'fill-100';
+      if (pct < 60) fillClass = 'fill-low';
+      else if (pct < 100) fillClass = 'fill-partial';
+
+      // Missing tags
+      let missingHtml = '<span style="color: var(--color-green); font-size: 0.78rem; font-weight: 600;">Ninguna (100% inscrito)</span>';
+      if (st.missing_classes && st.missing_classes.length > 0) {
+        missingHtml = st.missing_classes.map(m => {
+          return `<span class="chip-discrepancy chip-discrepancy-missing" title="${escapeHtml(m.team_name)}">${escapeHtml(m.subject)}</span>`;
+        }).join('');
+      }
+
+      // Extraneous tags
+      let extraneousHtml = '<span style="color: var(--text-muted); font-size: 0.78rem;">Ninguna</span>';
+      if (st.extraneous_classes && st.extraneous_classes.length > 0) {
+        extraneousHtml = st.extraneous_classes.map(e => {
+          return `<span class="chip-discrepancy chip-discrepancy-extraneous" title="${escapeHtml(e.team_name)}">${escapeHtml(e.team_name)}</span>`;
+        }).join('');
+      }
+
+      const hasDiscrepancy = (st.missing_classes && st.missing_classes.length > 0) || (st.extraneous_classes && st.extraneous_classes.length > 0);
+
+      tr.innerHTML = `
+        <td style="font-family: monospace; font-weight: 700; color: var(--brand-blue, #60A5FA);">${escapeHtml(st.matricula)}</td>
+        <td>
+          <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(st.nombre)}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted);">${escapeHtml(st.mail)}</div>
+        </td>
+        <td><span class="chip-filter" style="font-size: 0.76rem;">${escapeHtml(st.official_grade)}</span></td>
+        <td class="text-center" style="font-weight: 700;">${st.enrolled_count} / ${st.expected_count}</td>
+        <td>
+          <div style="display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: 700;">
+            <span>${pct}%</span>
+          </div>
+          <div class="cov-progress-bar-wrap">
+            <div class="cov-progress-bar-fill ${fillClass}" style="width: ${pct}%;"></div>
+          </div>
+        </td>
+        <td style="max-width: 250px;">${missingHtml}</td>
+        <td style="max-width: 200px;">${extraneousHtml}</td>
+        <td class="text-right">
+          ${hasDiscrepancy ? `
+            <button type="button" class="btn btn-xs btn-primary-saas btn-sync-single-student" data-matricula="${escapeHtml(st.matricula)}">
+              Sincronizar
+            </button>
+          ` : `
+            <span style="color: var(--color-green); font-size: 0.76rem; font-weight: 600;">Correcto</span>
+          `}
+        </td>
+      `;
+
+      covTableTbody.appendChild(tr);
+    });
+
+    // Wire single student sync
+    covTableTbody.querySelectorAll('.btn-sync-single-student').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mat = btn.getAttribute('data-matricula');
+        if (!mat) return;
+        btn.disabled = true;
+        btn.textContent = 'Sincronizando...';
+
+        try {
+          const resp = await fetch('/api/teams/coverage/sync-global', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ matriculas: [mat] })
+          });
+          const res = await resp.json();
+
+          if (res.success) {
+            showToast(`Alumno ${mat} sincronizado correctamente.`, 'success');
+            loadTeamsCoverageAudit(false);
+          } else {
+            showToast(`Error al sincronizar alumno ${mat}: ${res.error || ''}`, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Reintentar';
+          }
+        } catch (err) {
+          showToast('Error de red: ' + err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Reintentar';
+        }
+      });
+    });
+  }
+
+  // Filter events for coverage
+  if (covSearchInput) {
+    covSearchInput.addEventListener('input', () => {
+      covSearchQuery = covSearchInput.value;
+      applyCovFilters();
+    });
+  }
+
+  const covFilterButtons = document.querySelectorAll('#filter-group-coverage .pill-btn');
+  covFilterButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      covFilterButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      covFilterStatus = btn.getAttribute('data-cov-filter') || 'all';
+      applyCovFilters();
+    });
+  });
+
+  if (covFilterGradeSelect) {
+    covFilterGradeSelect.addEventListener('change', () => {
+      covFilterGrade = covFilterGradeSelect.value;
+      applyCovFilters();
+    });
+  }
+
+  if (btnRefreshCoverage) {
+    btnRefreshCoverage.addEventListener('click', () => {
+      loadTeamsCoverageAudit(true);
+    });
+  }
+
+  if (btnExportCoverageExcel) {
+    btnExportCoverageExcel.addEventListener('click', () => {
+      showToast('Generando libro de cobertura global en Excel...', 'info');
+      window.location.href = '/api/teams/coverage/export-excel?cycle=2026-2027';
+    });
+  }
+
+  if (btnSyncGlobalCoverage) {
+    btnSyncGlobalCoverage.addEventListener('click', async () => {
+      const confirmSync = confirm(
+        'Deseas sincronizar la matriculacion global de todos los alumnos en Microsoft Teams?\n\n' +
+        'El sistema realizara:\n' +
+        '1. Inscripcion automatica a todas las materias faltantes de su grado escolar.\n' +
+        '2. Baja de equipos que pertenezcan a otros grados no correspondientes.\n\n' +
+        'Deseas continuar?'
+      );
+
+      if (!confirmSync) return;
+
+      btnSyncGlobalCoverage.disabled = true;
+      const originalHtml = btnSyncGlobalCoverage.innerHTML;
+      btnSyncGlobalCoverage.innerHTML = '<span>Sincronizando matricula global...</span>';
+
+      try {
+        const resp = await fetch('/api/teams/coverage/sync-global', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({})
+        });
+        const res = await resp.json();
+
+        if (res.success && res.data) {
+          const d = res.data;
+          showToast(`Sincronizacion completada: ${d.total_enrolled} inscritos, ${d.total_removed} desincorporados.`, 'success');
+          loadTeamsCoverageAudit(true);
+          loadTeamsData(true);
+        } else {
+          showToast('Error en la sincronizacion global: ' + (res.error || 'Error desconocido'), 'error');
+        }
+      } catch (err) {
+        showToast('Error al conectar con el servidor: ' + err.message, 'error');
+      } finally {
+        btnSyncGlobalCoverage.disabled = false;
+        btnSyncGlobalCoverage.innerHTML = originalHtml;
+      }
+    });
+  }
+
+  // =========================================================================
+  // SUB-TAB 3: NORMALIZADOR Y VERIFICADOR DE NOMENCLATURA INSTITUCIONAL
+  // =========================================================================
+  let nomAuditCache = null;
+  let nomLoading = false;
+  let nomSearchQuery = '';
+  let nomFilterStatus = 'all';
+  let nomFilterCycle = '2026-2027';
+  const nomSelectedIds = new Set();
+
+  const nomKpiTotal = document.getElementById('nom-kpi-total');
+  const nomKpiCompliant = document.getElementById('nom-kpi-compliant');
+  const nomKpiNonCompliant = document.getElementById('nom-kpi-non-compliant');
+  const nomKpiCycleActive = document.getElementById('nom-kpi-cycle-active');
+  const badgeNomenclaturePending = document.getElementById('badge-nomenclature-pending');
+
+  const nomSearchInput = document.getElementById('nom-search-input');
+  const nomFilteredCount = document.getElementById('nom-filtered-count');
+  const nomTableTbody = document.getElementById('nom-table-tbody');
+  const nomSelectAll = document.getElementById('nom-select-all');
+  const btnBatchApplyNomenclature = document.getElementById('btn-batch-apply-nomenclature');
+  const btnBatchApplyLabel = document.getElementById('btn-batch-apply-label');
+  const btnRefreshNomenclature = document.getElementById('btn-refresh-nomenclature');
+
+  async function loadTeamsNomenclatureAudit(forceRefresh = false) {
+    if (nomLoading) return;
+    nomLoading = true;
+
+    if (nomTableTbody) {
+      nomTableTbody.innerHTML = '<tr><td colspan="8" class="table-empty-row">Analizando nombres de equipos con el estandar institucional...</td></tr>';
+    }
+
+    try {
+      const resp = await fetch('/api/teams/nomenclature/audit');
+      const res = await resp.json();
+
+      if (res.success && res.data) {
+        nomAuditCache = res.data;
+        const s = res.data.summary || {};
+
+        if (nomKpiTotal) nomKpiTotal.textContent = s.total_evaluated || 0;
+        if (nomKpiCompliant) nomKpiCompliant.textContent = s.compliant_count || 0;
+        if (nomKpiNonCompliant) nomKpiNonCompliant.textContent = s.non_compliant_count || 0;
+        if (nomKpiCycleActive) nomKpiCycleActive.textContent = s.current_cycle_count || 0;
+
+        if (badgeNomenclaturePending) {
+          const pending = s.non_compliant_count || 0;
+          if (pending > 0) {
+            badgeNomenclaturePending.style.display = 'inline-flex';
+            badgeNomenclaturePending.textContent = pending;
+          } else {
+            badgeNomenclaturePending.style.display = 'none';
+          }
+        }
+
+        nomSelectedIds.clear();
+        updateBatchRenameButtonState();
+        applyNomFilters();
+
+        if (forceRefresh) {
+          showToast('Auditoria de nomenclatura actualizada.', 'success');
+        }
+      } else {
+        if (nomTableTbody) {
+          nomTableTbody.innerHTML = `<tr><td colspan="8" class="table-empty-row" style="color: var(--color-danger);">Error: ${res.error || 'No se pudo auditar la nomenclatura'}</td></tr>`;
+        }
+        showToast('Error en auditoria de nomenclatura: ' + (res.error || ''), 'error');
+      }
+    } catch (err) {
+      if (nomTableTbody) {
+        nomTableTbody.innerHTML = `<tr><td colspan="8" class="table-empty-row" style="color: var(--color-danger);">Error de conexion: ${err.message}</td></tr>`;
+      }
+      showToast('Error al conectar con el servidor: ' + err.message, 'error');
+    } finally {
+      nomLoading = false;
+    }
+  }
+
+  function updateBatchRenameButtonState() {
+    const count = nomSelectedIds.size;
+    if (btnBatchApplyLabel) {
+      btnBatchApplyLabel.textContent = `Aplicar Normalizacion (${count} seleccionados)`;
+    }
+    if (btnBatchApplyNomenclature) {
+      btnBatchApplyNomenclature.disabled = count === 0;
+    }
+  }
+
+  function applyNomFilters() {
+    if (!nomAuditCache || !nomAuditCache.classes) return;
+
+    const q = nomSearchQuery.trim().toLowerCase();
+    const classes = nomAuditCache.classes;
+
+    const filtered = classes.filter(c => {
+      // 1. Busqueda libre
+      if (q) {
+        const cur = (c.current_name || '').toLowerCase();
+        const sug = (c.suggested_name || '').toLowerCase();
+        const sub = (c.detected_subject || '').toLowerCase();
+        const gr = (c.detected_grade || '').toLowerCase();
+        if (!cur.includes(q) && !sug.includes(q) && !sub.includes(q) && !gr.includes(q)) {
+          return false;
+        }
+      }
+
+      // 2. Filtro de estado
+      if (nomFilterStatus === 'non_compliant' && c.is_compliant) {
+        return false;
+      }
+      if (nomFilterStatus === 'compliant' && !c.is_compliant) {
+        return false;
+      }
+
+      // 3. Filtro de ciclo
+      const cycleVal = c.detected_cycle || '';
+      if (nomFilterCycle === '2026-2027' && !cycleVal.includes('26-27') && !cycleVal.includes('2026-2027')) {
+        return false;
+      }
+      if (nomFilterCycle === '2025-2026' && !cycleVal.includes('25-26') && !cycleVal.includes('2025-2026')) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (nomFilteredCount) {
+      nomFilteredCount.textContent = `Mostrando ${filtered.length} de ${classes.length} equipos`;
+    }
+
+    renderNomTable(filtered);
+  }
+
+  function renderNomTable(classes) {
+    if (!nomTableTbody) return;
+
+    if (classes.length === 0) {
+      nomTableTbody.innerHTML = '<tr><td colspan="8" class="table-empty-row">No se encontraron equipos con los filtros seleccionados.</td></tr>';
+      return;
+    }
+
+    nomTableTbody.innerHTML = '';
+
+    classes.forEach(c => {
+      const tr = document.createElement('tr');
+      const isCompliant = c.is_compliant;
+      const isSelected = nomSelectedIds.has(c.team_id);
+
+      const statusBadge = isCompliant
+        ? '<span class="kpi-badge badge-green">Cumple Estandar</span>'
+        : '<span class="kpi-badge badge-amber">Requiere Cambio</span>';
+
+      const previewBadgeClass = isCompliant ? 'is-unchanged' : 'is-changed';
+
+      tr.innerHTML = `
+        <td style="text-align: center;">
+          <input type="checkbox" class="nom-row-checkbox" data-team-id="${escapeHtml(c.team_id)}" ${isSelected ? 'checked' : ''} ${isCompliant ? 'disabled' : ''}>
+        </td>
+        <td style="font-weight: 600; color: var(--text-primary);">${escapeHtml(c.current_name)}</td>
+        <td>
+          <input type="text" class="saas-input saas-input-sm nom-suggested-input" data-team-id="${escapeHtml(c.team_id)}" value="${escapeHtml(c.suggested_name)}" style="font-family: monospace; font-size: 0.8rem; width: 100%; min-width: 200px;">
+        </td>
+        <td><span class="chip-filter" style="font-size: 0.76rem;">${escapeHtml(c.detected_subject || 'General')}</span></td>
+        <td><span style="font-size: 0.8rem;">${escapeHtml(c.detected_grade || '-')}${c.detected_group ? ' ' + escapeHtml(c.detected_group) : ''}</span></td>
+        <td><span style="font-size: 0.78rem; font-family: monospace;">${escapeHtml(c.detected_cycle || '-')}</span></td>
+        <td class="text-center">${statusBadge}</td>
+        <td class="text-right" style="white-space: nowrap;">
+          <button type="button" class="btn btn-xs btn-primary-saas btn-rename-single-team" data-team-id="${escapeHtml(c.team_id)}" title="Aplicar nombre sugerido de inmediato">
+            Renombrar
+          </button>
+          <button type="button" class="btn btn-xs btn-secondary-saas btn-customize-nom" data-team-id="${escapeHtml(c.team_id)}" title="Abrir asistente de formula">
+            Personalizar
+          </button>
+        </td>
+      `;
+
+      nomTableTbody.appendChild(tr);
+    });
+
+    // Checkbox individual change
+    nomTableTbody.querySelectorAll('.nom-row-checkbox').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const teamId = cb.getAttribute('data-team-id');
+        if (!teamId) return;
+        if (cb.checked) {
+          nomSelectedIds.add(teamId);
+        } else {
+          nomSelectedIds.delete(teamId);
+        }
+        updateBatchRenameButtonState();
+      });
+    });
+
+    // Single rename direct action
+    nomTableTbody.querySelectorAll('.btn-rename-single-team').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const teamId = btn.getAttribute('data-team-id');
+        if (!teamId) return;
+
+        const input = nomTableTbody.querySelector(`.nom-suggested-input[data-team-id="${teamId}"]`);
+        const newName = input ? input.value.trim() : '';
+
+        if (!newName) {
+          showToast('El nuevo nombre no puede estar vacio.', 'error');
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Guardando...';
+
+        try {
+          const resp = await fetch('/api/teams/nomenclature/rename-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              renames: [{ team_id: teamId, new_name: newName }]
+            })
+          });
+          const res = await resp.json();
+
+          if (res.success) {
+            showToast(`Equipo renombrado a "${newName}" con exito.`, 'success');
+            loadTeamsNomenclatureAudit(false);
+            loadTeamsData(true);
+          } else {
+            showToast('Error al renombrar: ' + (res.error || ''), 'error');
+            btn.disabled = false;
+            btn.textContent = 'Renombrar';
+          }
+        } catch (err) {
+          showToast('Error de conexion: ' + err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Renombrar';
+        }
+      });
+    });
+
+    // Customize in modal
+    nomTableTbody.querySelectorAll('.btn-customize-nom').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const teamId = btn.getAttribute('data-team-id');
+        if (!teamId) return;
+        openRenameModal(teamId);
+        const team = (nomAuditCache.classes || []).find(c => c.team_id === teamId);
+        if (team) {
+          autofillNomenclatureHelper(team.current_name);
+        }
+      });
+    });
+  }
+
+  // Select all checkbox
+  if (nomSelectAll) {
+    nomSelectAll.addEventListener('change', () => {
+      const isChecked = nomSelectAll.checked;
+      const checkboxes = nomTableTbody ? nomTableTbody.querySelectorAll('.nom-row-checkbox:not(:disabled)') : [];
+      checkboxes.forEach(cb => {
+        cb.checked = isChecked;
+        const teamId = cb.getAttribute('data-team-id');
+        if (teamId) {
+          if (isChecked) nomSelectedIds.add(teamId);
+          else nomSelectedIds.delete(teamId);
+        }
+      });
+      updateBatchRenameButtonState();
+    });
+  }
+
+  // Filter events for nomenclature
+  if (nomSearchInput) {
+    nomSearchInput.addEventListener('input', () => {
+      nomSearchQuery = nomSearchInput.value;
+      applyNomFilters();
+    });
+  }
+
+  const nomFilterStatusButtons = document.querySelectorAll('#filter-group-nom-status .pill-btn');
+  nomFilterStatusButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      nomFilterStatusButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      nomFilterStatus = btn.getAttribute('data-nom-status') || 'all';
+      applyNomFilters();
+    });
+  });
+
+  const nomFilterCycleButtons = document.querySelectorAll('#filter-group-nom-cycle .pill-btn');
+  nomFilterCycleButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
+      nomFilterCycleButtons.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      nomFilterCycle = btn.getAttribute('data-nom-cycle') || 'all';
+      applyNomFilters();
+    });
+  });
+
+  if (btnRefreshNomenclature) {
+    btnRefreshNomenclature.addEventListener('click', () => {
+      loadTeamsNomenclatureAudit(true);
+    });
+  }
+
+  // Batch apply nomenclature
+  if (btnBatchApplyNomenclature) {
+    btnBatchApplyNomenclature.addEventListener('click', async () => {
+      if (nomSelectedIds.size === 0) return;
+
+      const renames = [];
+      nomSelectedIds.forEach(id => {
+        const input = nomTableTbody ? nomTableTbody.querySelector(`.nom-suggested-input[data-team-id="${id}"]`) : null;
+        if (input && input.value.trim()) {
+          renames.push({ team_id: id, new_name: input.value.trim() });
+        }
+      });
+
+      if (renames.length === 0) {
+        showToast('No hay nombres validos para aplicar.', 'error');
+        return;
+      }
+
+      const confirmBatch = confirm(
+        `Deseas aplicar la nomenclatura estandar a los ${renames.length} equipos seleccionados en Microsoft Teams?\n\n` +
+        'Esta accion actualizara el nombre visible de los equipos en Microsoft 365.\n\n' +
+        'Deseas continuar?'
+      );
+
+      if (!confirmBatch) return;
+
+      btnBatchApplyNomenclature.disabled = true;
+      const originalText = btnBatchApplyLabel.textContent;
+      btnBatchApplyLabel.textContent = `Renombrando ${renames.length} equipos en M365...`;
+
+      try {
+        const resp = await fetch('/api/teams/nomenclature/rename-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ renames })
+        });
+        const res = await resp.json();
+
+        if (res.success && res.data) {
+          const d = res.data;
+          showToast(`Normalizacion completada: ${d.total_renamed} equipos renombrados con exito.`, 'success');
+          nomSelectedIds.clear();
+          if (nomSelectAll) nomSelectAll.checked = false;
+          loadTeamsNomenclatureAudit(true);
+          loadTeamsData(true);
+        } else {
+          showToast('Error al renombrar por lote: ' + (res.error || 'Error desconocido'), 'error');
+        }
+      } catch (err) {
+        showToast('Error al conectar con el servidor: ' + err.message, 'error');
+      } finally {
+        updateBatchRenameButtonState();
+      }
+    });
+  }
+
+  // =========================================================================
+  // ASISTENTE DE NOMENCLATURA EN MODAL DE RENOMBRAR
+  // =========================================================================
+  const helperNomSubject = document.getElementById('helper-nom-subject');
+  const helperNomGrade = document.getElementById('helper-nom-grade');
+  const helperNomLevel = document.getElementById('helper-nom-level');
+  const helperNomCycle = document.getElementById('helper-nom-cycle');
+  const helperNomPreview = document.getElementById('helper-nom-preview');
+  const btnHelperAutofill = document.getElementById('btn-helper-autofill');
+  const btnHelperApplyPreview = document.getElementById('btn-helper-apply-preview');
+
+  function updateHelperNomPreview() {
+    const subj = (helperNomSubject?.value || '').trim();
+    const grade = helperNomGrade?.value || '1°';
+    const level = helperNomLevel?.value || 'Primaria';
+    const cycle = helperNomCycle?.value || '26-27';
+
+    if (!helperNomPreview) return;
+    if (!subj) {
+      helperNomPreview.textContent = '-';
+      return;
+    }
+    helperNomPreview.textContent = `${subj} (${grade} ${level}) - ${cycle}`;
+  }
+
+  function autofillNomenclatureHelper(currentName) {
+    if (!currentName) return;
+    const text = currentName.trim();
+
+    // Ciclo
+    let cycle = '26-27';
+    if (text.includes('25-26') || text.includes('2025-2026')) {
+      cycle = '25-26';
+    }
+    if (helperNomCycle) helperNomCycle.value = cycle;
+
+    // Limpiar ciclo para detectar grado y nivel
+    const clean = text.replace(/202[5-7]-202[6-8]/g, '').replace(/2[5-7]-2[6-8]/g, '').trim();
+
+    // Nivel
+    let level = 'Secundaria';
+    if (/primaria/i.test(clean)) {
+      level = 'Primaria';
+    } else if (/secundaria/i.test(clean)) {
+      level = 'Secundaria';
+    } else {
+      level = 'General';
+    }
+    if (helperNomLevel) helperNomLevel.value = level;
+
+    // Grado
+    let grade = '1°';
+    if (/\b(1|1ro|1er|1ero|1°|i)\b/i.test(clean)) grade = '1°';
+    else if (/\b(2|2do|2°|ii)\b/i.test(clean)) grade = '2°';
+    else if (/\b(3|3ro|3er|3ero|3°|iii)\b/i.test(clean)) grade = '3°';
+    else if (/\b(4|4to|4°|iv)\b/i.test(clean)) grade = '4°';
+    else if (/\b(5|5to|5°|v)\b/i.test(clean)) grade = '5°';
+    else if (/\b(6|6to|6°|vi)\b/i.test(clean)) grade = '6°';
+    if (helperNomGrade) helperNomGrade.value = grade;
+
+    // Materia
+    let subj = clean
+      .replace(/\b(primaria|secundaria|general)\b/gi, '')
+      .replace(/\b(1ro|2do|3ro|4to|5to|6to|1er|3er|1ero|3ero|1°|2°|3°|4°|5°|6°|iii|ii|iv|vi|v|i)\b/gi, '')
+      .replace(/[\(\)\[\]\-_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (subj) {
+      subj = subj.toLowerCase().split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    }
+    if (helperNomSubject) helperNomSubject.value = subj || 'Materia';
+
+    updateHelperNomPreview();
+  }
+
+  [helperNomSubject, helperNomGrade, helperNomLevel, helperNomCycle].forEach(el => {
+    if (el) {
+      el.addEventListener('input', updateHelperNomPreview);
+      el.addEventListener('change', updateHelperNomPreview);
+    }
+  });
+
+  if (btnHelperAutofill) {
+    btnHelperAutofill.addEventListener('click', () => {
+      const cur = renameCurrentName ? renameCurrentName.value : '';
+      autofillNomenclatureHelper(cur);
+    });
+  }
+
+  if (btnHelperApplyPreview) {
+    btnHelperApplyPreview.addEventListener('click', () => {
+      const prev = helperNomPreview ? helperNomPreview.textContent : '';
+      if (prev && prev !== '-' && renameNewName) {
+        renameNewName.value = prev;
+        renameNewName.focus();
+        showToast('Nombre de la formula aplicado.', 'info');
+      }
+    });
+  }
 });
 

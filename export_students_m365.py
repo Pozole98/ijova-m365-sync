@@ -345,11 +345,15 @@ def build_school_db():
                             rec["ciclo"] = "2026-2027"
                             rec["display_name"] = rec.get("display_name") or val
 
-            # Alumnos de la base anterior no presentes en Colegiaturas 26-27 se marcan como inactivos/egresados
+            # Alumnos de la base anterior no presentes en Colegiaturas 26-27 se marcan como inactivos/egresados,
+            # a excepcion de aquellos reincorporados o marcados explicitamente como Activo en Listado Global.
             for mat, d in school_db.items():
                 if mat not in active_2627_mats:
-                    d["estatus"] = "Egresado / Ciclo Anterior"
-                    d["ciclo"] = "2025-2026"
+                    if d.get("estatus") == "Activo":
+                        d["ciclo"] = "2026-2027"
+                    else:
+                        d["estatus"] = "Egresado / Ciclo Anterior"
+                        d["ciclo"] = "2025-2026"
     except Exception as e:
         print(f"Aviso al procesar Colegiaturas 26-27: {e}")
 

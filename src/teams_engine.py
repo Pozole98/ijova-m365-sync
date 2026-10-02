@@ -5,6 +5,7 @@ import os
 import re
 from datetime import datetime
 from typing import List, Dict, Any, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
 import openpyxl
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
@@ -1861,6 +1862,670 @@ def export_roster_audit_excel(roster_data: Dict[str, Any], output_path: str) -> 
     os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
     wb.save(output_path)
     return output_path
+
+
+def format_standard_team_name(
+    subject: str,
+    grado: str = "1°",
+    nivel: str = "Secundaria",
+    grupo: str = "",
+    cycle: str = "26-27"
+) -> str:
+    """
+    Construye el nombre institucional canónico a partir de sus componentes individuales.
+    Fórmula: [Materia] ([Grado] [Nivel][ Grupo]) - [Ciclo]
+    Soporta argumentos en orden (materia, grado, nivel) o (materia, nivel, grado).
+    """
+    clean_subj = (subject or "Clase").strip()
+    arg2 = str(grado or "").strip()
+    arg3 = str(nivel or "").strip()
+
+    if any(n in arg2.lower() for n in ["primaria", "secundaria", "general", "preparatoria"]) and not any(n in arg3.lower() for n in ["primaria", "secundaria", "general", "preparatoria"]):
+        clean_nivel = arg2
+        clean_grado = arg3 or "1°"
+    elif any(n in arg3.lower() for n in ["primaria", "secundaria", "general", "preparatoria"]):
+        clean_grado = arg2 or "1°"
+        clean_nivel = arg3
+    else:
+        clean_grado = arg2 or "1°"
+        clean_nivel = arg3 or "Secundaria"
+
+    clean_grp = (grupo or "").strip().upper()
+    clean_cycle = (cycle or "26-27").strip()
+
+    grp_part = f" {clean_grp}" if clean_grp else ""
+    grade_label = f"{clean_grado} {clean_nivel}{grp_part}".strip()
+    return f"{clean_subj} ({grade_label}) - {clean_cycle}"
+
+
+def parse_and_standardize_team_name(name: str, desc: str = "") -> Dict[str, Any]:
+    """
+    Desglosa el nombre y descripción de un equipo en Materia, Nivel, Grado, Grupo y Ciclo,
+    generando el nombre oficial estandarizado bajo la fórmula IJOVA:
+    [Materia] ([Grado] [Nivel][ Grupo]) - [Ciclo]
+    """
+    clean = (name or "").strip()
+    clean_desc = (desc or "").strip()
+
+    # 1. Ciclo escolar
+    cycle = "26-27"
+    if any(k in clean for k in ["25-26", "2025-2026", "25 - 26"]):
+        cycle = "25-26"
+    elif any(k in clean for k in ["26-27", "2026-2027", "26 - 27"]):
+        cycle = "26-27"
+
+    text_no_cycle = re.sub(r'202\d\s*-\s*202\d|2\d\s*-\s*2\d|ciclo\s*202\d-202\d', '', clean, flags=re.IGNORECASE).strip()
+    combined_text = f"{text_no_cycle} {clean_desc}".lower()
+
+    # 2. Nivel educativo
+    nivel = "Secundaria"
+    if any(k in combined_text for k in ["prepa", "semestre", "sem."]):
+        nivel = "Preparatoria"
+    elif any(k in combined_text for k in ["primaria", "sexto grado", "6°", "prim"]):
+        nivel = "Primaria"
+    elif any(k in combined_text for k in ["preescolar", "kinder"]):
+        nivel = "Preescolar"
+    elif any(k in combined_text for k in ["secundaria", "sec"]):
+        nivel = "Secundaria"
+
+    # 3. Grado escolar
+    grado = "1°"
+    if nivel == "Preparatoria":
+        sem_m = re.search(r'([1-6])\s*(?:er|do|to|o|°)?\s*sem', combined_text)
+        if sem_m:
+            num = sem_m.group(1)
+            suffixes = {"1": "1er", "2": "2do", "3": "3er", "4": "4to", "5": "5to", "6": "6to"}
+            grado = f"{suffixes.get(num, num)} Semestre"
+        elif "iii" in combined_text:
+            grado = "3er Semestre"
+        elif "v" in combined_text:
+            grado = "5to Semestre"
+        elif "i" in combined_text:
+            grado = "1er Semestre"
+        else:
+            g_any = re.search(r'([1-6])', combined_text)
+            num = g_any.group(1) if g_any else "1"
+            suffixes = {"1": "1er", "2": "2do", "3": "3er", "4": "4to", "5": "5to", "6": "6to"}
+            grado = f"{suffixes.get(num, num)} Semestre"
+    elif nivel == "Primaria":
+        if "6" in combined_text or "sexto" in combined_text:
+            grado = "6°"
+        else:
+            g_m = re.search(r'([1-6])', combined_text)
+            grado = f"{g_m.group(1)}°" if g_m else "1°"
+    elif nivel == "Preescolar":
+        g_m = re.search(r'([1-3])', combined_text)
+        grado = f"{g_m.group(1)}°" if g_m else "1°"
+    else:  # Secundaria
+        if re.search(r'\biii\b', combined_text):
+            grado = "3°"
+        elif re.search(r'\bii\b', combined_text):
+            grado = "2°"
+        elif re.search(r'\bi\b', combined_text):
+            grado = "1°"
+        else:
+            g_m = re.search(r'([1-3])\s*(?:ero|er|do|ro|o|°)?', combined_text)
+            grado = f"{g_m.group(1)}°" if g_m else "1°"
+
+    # 4. Grupo (opcional, ej. A, B, C)
+    grupo = ""
+    grp_m = re.search(r'\bgrupo\s+([A-D])\b|\bsec(?:cion)?\s+([A-D])\b|\b(?:primaria|secundaria)\s+([A-D])\b', combined_text, re.IGNORECASE)
+    if grp_m:
+        grupo = (grp_m.group(1) or grp_m.group(2) or grp_m.group(3) or "").upper()
+
+    # 5. Materia
+    s_low = text_no_cycle.lower()
+    if "pensamiento filos" in s_low or "humanidades" in s_low:
+        subject = "Pensamiento Filosófico y Humanidades"
+    elif "lengua y comunicaci" in s_low:
+        subject = "Lengua y Comunicación"
+    elif "ciencias sociales" in s_low or "laboratorio de inv" in s_low:
+        subject = "Laboratorio de Investigación y Ciencias Sociales"
+    elif "ciencias naturales" in s_low:
+        subject = "Ciencias Naturales"
+    elif "saberes" in s_low:
+        subject = "Saberes y Pensamiento Científico"
+    elif "comunicad" in s_low or "anuncio" in s_low:
+        subject = "Comunicados"
+    elif "mate" in s_low:
+        subject = "Matemáticas"
+    elif "español" in s_low or "espanol" in s_low:
+        subject = "Español"
+    elif "educacion fisica" in s_low or "educación física" in s_low or "ed. fisica" in s_low or "ed. física" in s_low or "ed fisica" in s_low or "ed física" in s_low:
+        subject = "Educación Física"
+    elif "quimica" in s_low or "química" in s_low:
+        subject = "Química"
+    elif "fisica" in s_low or "física" in s_low:
+        subject = "Física"
+    elif "biologia" in s_low or "biología" in s_low:
+        subject = "Biología"
+    elif "historia" in s_low:
+        subject = "Historia"
+    elif "geografia" in s_low or "geografía" in s_low:
+        subject = "Geografía"
+    elif "fce" in s_low or "civica" in s_low or "cívica" in s_low:
+        subject = "Formación Cívica y Ética"
+    elif "english" in s_low or "ingles" in s_low or "inglés" in s_low:
+        subject = "Inglés"
+    elif "tecnologia" in s_low or "tecnología" in s_low or "computacion" in s_low:
+        subject = "Tecnología"
+    elif "progrentis" in s_low:
+        subject = "Progrentis"
+    elif "ciencias" in s_low:
+        subject = "Ciencias"
+    elif re.search(r'^(?:secundaria|primaria|preescolar|\d+[°º]?\s*semestre|\d+\s*secundaria|\d+\s*sec)', s_low.strip()):
+        subject = "Comunicados"
+    else:
+        toks = [
+            r'\(?\s*\d+\s*sec\s*\)?', r'\(?\s*\d+\s*sem\.\s*\)?', r'secundaria', r'primaria',
+            r'prepa', r'ijova', r'class', r'course', r'\d+[°º]', r'\biii\b', r'\bii\b', r'\bi\b'
+        ]
+        c_sub = text_no_cycle
+        for tk in toks:
+            c_sub = re.sub(tk, '', c_sub, flags=re.IGNORECASE)
+        c_sub = ' '.join(re.sub(r'[\(\)\-\:\.]', ' ', c_sub).split()).strip().title()
+        subject = c_sub if c_sub else "Comunicados"
+
+    proposed = format_standard_team_name(subject, nivel, grado, grupo, cycle)
+    is_compliant = (clean.strip().lower() == proposed.strip().lower())
+
+    return {
+        "current_name": clean,
+        "is_compliant": is_compliant,
+        "subject": subject,
+        "nivel": nivel,
+        "grado": grado,
+        "grupo": grupo,
+        "cycle": cycle,
+        "proposed_name": proposed,
+        "suggested_name": proposed
+    }
+
+
+def audit_teams_nomenclature(
+    graph: GraphClient,
+    cycle_filter: str = "2026-2027"
+) -> Dict[str, Any]:
+    """
+    Audita los nombres de todos los equipos del ciclo escolar evaluando su conformidad
+    contra la nomenclatura institucional de IJOVA.
+    """
+    raw_teams = graph.get_all_teams()
+    audited = []
+    compliant_count = 0
+    non_compliant_count = 0
+
+    for t in raw_teams:
+        t_name = t.get("displayName") or ""
+        t_id = t.get("id")
+        created_at = t.get("createdDateTime")
+        cycle = detect_team_cycle(t_name, created_at)
+
+        if cycle_filter and cycle != cycle_filter:
+            continue
+
+        desc = t.get("description") or ""
+        parsed = parse_and_standardize_team_name(t_name, desc)
+        parsed["team_id"] = t_id
+        parsed["created_at"] = created_at
+        parsed["team_type"] = detect_team_type(t_name)
+
+        if parsed["is_compliant"]:
+            compliant_count += 1
+        else:
+            non_compliant_count += 1
+
+        audited.append(parsed)
+
+    audited.sort(key=lambda x: (x["is_compliant"], x["current_name"]))
+
+    return {
+        "success": True,
+        "total_teams": len(audited),
+        "compliant_count": compliant_count,
+        "non_compliant_count": non_compliant_count,
+        "compliance_pct": round((compliant_count / len(audited) * 100), 1) if audited else 0.0,
+        "cycle": cycle_filter,
+        "teams": audited,
+        "classes": audited
+    }
+
+
+def batch_rename_teams(
+    graph: GraphClient,
+    renames: List[Dict[str, str]]
+) -> Dict[str, Any]:
+    """
+    Ejecuta el renombrado masivo de equipos en Microsoft Graph.
+    Recibe lista de dicts: [{'team_id': '...', 'new_name': '...', 'new_desc': '...'}]
+    """
+    results = []
+    succeeded = 0
+    failed = 0
+
+    for r in renames:
+        t_id = r.get("team_id")
+        n_name = r.get("new_name", "").strip()
+        n_desc = r.get("new_desc")
+
+        if not t_id or not n_name:
+            continue
+
+        try:
+            graph.update_team_info(t_id, n_name, n_desc)
+            results.append({
+                "team_id": t_id,
+                "new_name": n_name,
+                "status": "SUCCESS"
+            })
+            succeeded += 1
+        except Exception as e:
+            results.append({
+                "team_id": t_id,
+                "new_name": n_name,
+                "status": "ERROR",
+                "error": str(e)
+            })
+            failed += 1
+
+    return {
+        "total_requested": len(renames),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results
+    }
+
+
+def audit_global_student_coverage(
+    graph: GraphClient,
+    school_db: Optional[Dict[str, Any]] = None,
+    cycle_filter: str = "2026-2027"
+) -> Dict[str, Any]:
+    """
+    Auditoría exhaustiva de cobertura de alumnos en equipos de Teams:
+    1. Obtiene todas las clases del ciclo escolar actual (2026-2027).
+    2. Descarga concurrentemente la membresía de alumnos de cada equipo.
+    3. Cruza con la base de datos escolar activa.
+    4. Detecta alumnos con materias faltantes y alumnos en clases que no corresponden a su grado.
+    """
+    if school_db is None:
+        from export_students_m365 import build_school_db
+        school_db = build_school_db()
+
+    raw_teams = graph.get_all_teams()
+    classes = [
+        t for t in raw_teams
+        if detect_team_type(t.get("displayName", "")) == "CLASE"
+        and (not cycle_filter or detect_team_cycle(t.get("displayName", ""), t.get("createdDateTime")) == cycle_filter)
+    ]
+
+    class_metadata = {}
+    for c in classes:
+        c_id = c["id"]
+        c_name = c.get("displayName", "")
+        c_desc = c.get("description", "")
+        parsed = parse_and_standardize_team_name(c_name, c_desc)
+        class_metadata[c_id] = {
+            "id": c_id,
+            "name": c_name,
+            "nivel": parsed["nivel"],
+            "grado": parsed["grado"],
+            "subject": parsed["subject"],
+            "members": set()
+        }
+
+    def fetch_members(team_id):
+        try:
+            m_list = graph.get_team_members(team_id)
+            m_mats = set()
+            for m in m_list:
+                upn = (m.get("userPrincipalName") or m.get("mail") or "").strip().lower()
+                mat = upn.split("@")[0]
+                if is_valid_matricula_format(mat):
+                    m_mats.add(mat)
+            return team_id, m_mats
+        except Exception:
+            return team_id, set()
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = executor.map(fetch_members, [c["id"] for c in classes])
+        for t_id, m_set in results:
+            class_metadata[t_id]["members"] = m_set
+
+    # Agrupar clases por (nivel, grado_num)
+    classes_by_grade = {}
+    for c_id, c_info in class_metadata.items():
+        g_num = re.search(r'\d+', c_info["grado"])
+        num_str = g_num.group(0) if g_num else c_info["grado"]
+        key = (c_info["nivel"].lower(), num_str)
+        if key not in classes_by_grade:
+            classes_by_grade[key] = []
+        classes_by_grade[key].append(c_info)
+
+    student_records = []
+    fully_enrolled_count = 0
+    partial_enrolled_count = 0
+    zero_enrolled_count = 0
+    with_extraneous_count = 0
+    total_missing_enrollments = 0
+    total_extraneous_enrollments = 0
+
+    for mat, s_data in sorted(school_db.items(), key=lambda x: x[0]):
+        estatus = (s_data.get("estatus") or "").strip().lower()
+        if "baja" in estatus or "inactivo" in estatus or "egresado" in estatus:
+            continue
+
+        s_nivel = (s_data.get("nivel") or "Secundaria").strip()
+        s_grado = (s_data.get("grado") or "1ro").strip()
+        g_num = re.search(r'\d+', s_grado)
+        num_str = g_num.group(0) if g_num else s_grado
+        grade_key = (s_nivel.lower(), num_str)
+
+        expected_classes = classes_by_grade.get(grade_key, [])
+        total_expected = len(expected_classes)
+
+        enrolled_classes = []
+        missing_classes = []
+        for c in expected_classes:
+            if mat in c["members"]:
+                enrolled_classes.append({"id": c["id"], "name": c["name"], "subject": c["subject"]})
+            else:
+                missing_classes.append({"id": c["id"], "name": c["name"], "subject": c["subject"]})
+
+        extraneous_classes = []
+        for c_id, c in class_metadata.items():
+            if c not in expected_classes and mat in c["members"]:
+                extraneous_classes.append({
+                    "id": c["id"],
+                    "name": c["name"],
+                    "actual_nivel": c["nivel"],
+                    "actual_grado": c["grado"]
+                })
+
+        enrolled_count = len(enrolled_classes)
+        missing_count = len(missing_classes)
+        extraneous_count = len(extraneous_classes)
+
+        total_missing_enrollments += missing_count
+        total_extraneous_enrollments += extraneous_count
+
+        cov_pct = round((enrolled_count / total_expected * 100), 1) if total_expected > 0 else 100.0
+
+        if total_expected == 0:
+            status = "SIN_CLASES_REGISTRADAS"
+        elif enrolled_count == total_expected and extraneous_count == 0:
+            status = "COBERTURA_COMPLETA"
+            fully_enrolled_count += 1
+        elif enrolled_count == 0:
+            status = "SIN_INSCRIPCION"
+            zero_enrolled_count += 1
+        else:
+            status = "COBERTURA_PARCIAL"
+            partial_enrolled_count += 1
+
+        if extraneous_count > 0:
+            with_extraneous_count += 1
+
+        disp_name = s_data.get("display_name") or f"{s_data.get('paterno', '')} {s_data.get('nombres', '')}".strip()
+
+        student_records.append({
+            "matricula": mat,
+            "display_name": disp_name,
+            "upn": f"{mat}@ijova.com",
+            "nivel": s_nivel,
+            "grado": s_grado,
+            "seccion": s_data.get("seccion", "A"),
+            "total_expected": total_expected,
+            "enrolled_count": enrolled_count,
+            "missing_count": missing_count,
+            "extraneous_count": extraneous_count,
+            "coverage_pct": cov_pct,
+            "coverage_percentage": cov_pct,
+            "status": status,
+            "coverage_status": status,
+            "enrolled_classes": enrolled_classes,
+            "missing_classes": missing_classes,
+            "extraneous_classes": extraneous_classes
+        })
+
+    classes_summary = []
+    for c_id, c in class_metadata.items():
+        g_num = re.search(r'\d+', c["grado"])
+        num_str = g_num.group(0) if g_num else c["grado"]
+        grade_key = (c["nivel"].lower(), num_str)
+
+        expected_students = [
+            s["matricula"] for s in student_records
+            if (s["nivel"].lower(), re.search(r'\d+', s["grado"]).group(0) if re.search(r'\d+', s["grado"]) else s["grado"]) == grade_key
+        ]
+        actual_members = c["members"]
+        missing_mats = [m for m in expected_students if m not in actual_members]
+        unexpected_mats = [m for m in actual_members if m not in expected_students]
+
+        classes_summary.append({
+            "id": c_id,
+            "name": c["name"],
+            "nivel": c["nivel"],
+            "grado": c["grado"],
+            "subject": c["subject"],
+            "members_count": len(actual_members),
+            "expected_count": len(expected_students),
+            "missing_count": len(missing_mats),
+            "unexpected_count": len(unexpected_mats),
+            "is_synced": (len(missing_mats) == 0 and len(unexpected_mats) == 0)
+        })
+
+    total_students = len(student_records)
+    global_cov = round((fully_enrolled_count / total_students * 100), 1) if total_students > 0 else 0.0
+
+    return {
+        "success": True,
+        "total_active_students": total_students,
+        "fully_enrolled_count": fully_enrolled_count,
+        "partial_enrolled_count": partial_enrolled_count,
+        "zero_enrolled_count": zero_enrolled_count,
+        "with_extraneous_count": with_extraneous_count,
+        "total_missing_enrollments": total_missing_enrollments,
+        "total_extraneous_enrollments": total_extraneous_enrollments,
+        "global_coverage_pct": global_cov,
+        "total_classes": len(classes_summary),
+        "synced_classes_count": sum(1 for c in classes_summary if c["is_synced"]),
+        "unsynced_classes_count": sum(1 for c in classes_summary if not c["is_synced"]),
+        "students": student_records,
+        "classes": classes_summary
+    }
+
+
+def sync_global_student_coverage(
+    graph: GraphClient,
+    fix_missing: bool = True,
+    fix_extraneous: bool = False,
+    school_db: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    Sincroniza masivamente la cobertura escolar en Teams:
+    - Agrega los alumnos a las materias donde faltan.
+    - Opcionalmente retira a los alumnos de clases de otros grados.
+    """
+    cov = audit_global_student_coverage(graph, school_db)
+    all_users = graph.get_all_users()
+    upn_to_id = {u.user_principal_name.lower(): u.id for u in all_users}
+
+    added_total = 0
+    removed_total = 0
+    errors = []
+
+    # 1. Resolver faltantes
+    if fix_missing:
+        team_add_map = {}
+        for s in cov.get("students", []):
+            mat = s["matricula"]
+            upn = f"{mat}@ijova.com".lower()
+            uid = upn_to_id.get(upn)
+            if not uid:
+                continue
+            for c in s.get("missing_classes", []):
+                t_id = c["id"]
+                if t_id not in team_add_map:
+                    team_add_map[t_id] = []
+                team_add_map[t_id].append((uid, s["display_name"]))
+
+        for t_id, users in team_add_map.items():
+            for uid, name in users:
+                try:
+                    graph.add_team_member(t_id, uid)
+                    added_total += 1
+                except Exception as e:
+                    errors.append(f"Fallo al agregar {name} al equipo {t_id}: {e}")
+
+    # 2. Resolver incongruencias / pertenencias erróneas
+    if fix_extraneous:
+        team_remove_map = {}
+        for s in cov.get("students", []):
+            mat = s["matricula"]
+            upn = f"{mat}@ijova.com".lower()
+            uid = upn_to_id.get(upn)
+            if not uid:
+                continue
+            for c in s.get("extraneous_classes", []):
+                t_id = c["id"]
+                if t_id not in team_remove_map:
+                    team_remove_map[t_id] = []
+                team_remove_map[t_id].append((uid, s["display_name"]))
+
+        for t_id, users in team_remove_map.items():
+            for uid, name in users:
+                try:
+                    graph.remove_team_member(t_id, uid)
+                    removed_total += 1
+                except Exception as e:
+                    errors.append(f"Fallo al retirar {name} del equipo {t_id}: {e}")
+
+    return {
+        "status": "COMPLETED",
+        "added_total": added_total,
+        "removed_total": removed_total,
+        "errors_count": len(errors),
+        "errors": errors[:20]
+    }
+
+
+def export_global_coverage_excel(coverage_data: Dict[str, Any], output_path: str) -> str:
+    """
+    Exporta el reporte ejecutivo de cobertura global de alumnos y clases a Excel oficial IJOVA.
+    """
+    wb = openpyxl.Workbook()
+    header_fill = PatternFill(start_color="1B365D", end_color="1B365D", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    data_font = Font(name="Calibri", size=10)
+    green_font = Font(name="Calibri", size=10, bold=True, color="107C41")
+    amber_font = Font(name="Calibri", size=10, bold=True, color="8A3B00")
+    red_font = Font(name="Calibri", size=10, bold=True, color="A80000")
+    thin_border = Border(
+        left=Side(style='thin', color='D0D7DE'),
+        right=Side(style='thin', color='D0D7DE'),
+        top=Side(style='thin', color='D0D7DE'),
+        bottom=Side(style='thin', color='D0D7DE')
+    )
+
+    # Hoja 1: Resumen y Alumnos
+    ws1 = wb.active
+    ws1.title = "Cobertura Alumnos"
+    headers1 = [
+        "Matrícula", "Nombre del Alumno", "Correo UPN", "Nivel", "Grado",
+        "Clases Esperadas", "Clases Inscritas", "Faltantes", "Incongruentes",
+        "Cobertura %", "Estado", "Materias Faltantes"
+    ]
+    ws1.append(headers1)
+    for c_idx in range(1, len(headers1) + 1):
+        cell = ws1.cell(row=1, column=c_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for idx, s in enumerate(coverage_data.get("students", []), start=2):
+        missing_names = ", ".join(c.get("name") or c.get("subject", "") for c in s.get("missing_classes", []))
+        row_vals = [
+            s.get("matricula", ""),
+            s.get("display_name", ""),
+            s.get("upn", ""),
+            s.get("nivel", ""),
+            s.get("grado", ""),
+            s.get("total_expected", 0),
+            s.get("enrolled_count", 0),
+            s.get("missing_count", 0),
+            s.get("extraneous_count", 0),
+            f"{s.get('coverage_pct', 0)}%",
+            s.get("status", ""),
+            missing_names
+        ]
+        ws1.append(row_vals)
+        for c_idx in range(1, len(row_vals) + 1):
+            cell = ws1.cell(row=idx, column=c_idx)
+            cell.font = data_font
+            cell.border = thin_border
+            if c_idx in [1, 6, 7, 8, 9, 10, 11]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            if c_idx == 10:
+                pct = s.get("coverage_pct", 0)
+                if pct == 100:
+                    cell.font = green_font
+                elif pct > 0:
+                    cell.font = amber_font
+                else:
+                    cell.font = red_font
+
+    ws1.freeze_panes = "A2"
+    for col in ws1.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws1.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 40)
+
+    # Hoja 2: Estado de las Clases
+    ws2 = wb.create_sheet(title="Estado de Clases")
+    headers2 = ["ID Equipo", "Nombre de la Clase", "Materia", "Nivel", "Grado", "Inscritos Actuales", "Esperados", "Faltantes", "Incongruentes", "Estado"]
+    ws2.append(headers2)
+    for c_idx in range(1, len(headers2) + 1):
+        cell = ws2.cell(row=1, column=c_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    for idx, c in enumerate(coverage_data.get("classes", []), start=2):
+        status_label = "SINCRONIZADO" if c.get("is_synced") else "DISCREPANCIA"
+        row_vals = [
+            c.get("id", ""),
+            c.get("name", ""),
+            c.get("subject", ""),
+            c.get("nivel", ""),
+            c.get("grado", ""),
+            c.get("members_count", 0),
+            c.get("expected_count", 0),
+            c.get("missing_count", 0),
+            c.get("unexpected_count", 0),
+            status_label
+        ]
+        ws2.append(row_vals)
+        for c_idx in range(1, len(row_vals) + 1):
+            cell = ws2.cell(row=idx, column=c_idx)
+            cell.font = data_font
+            cell.border = thin_border
+            if c_idx in [6, 7, 8, 9, 10]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            if c_idx == 10:
+                cell.font = green_font if c.get("is_synced") else amber_font
+
+    ws2.freeze_panes = "A2"
+    for col in ws2.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws2.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 40)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    wb.save(output_path)
+    return output_path
+
+
 
 
 

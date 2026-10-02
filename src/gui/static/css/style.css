@@ -3142,3 +3142,142 @@ body.saas-body {
   pointer-events: none;
 }
 
+/* ==========================================================================
+   TEAMS SUBNAV BAR & SUBTABS
+   ========================================================================== */
+.teams-subnav-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+  background: var(--bg-card, #1E293B);
+  padding: 6px;
+  border-radius: var(--radius-lg, 12px);
+  border: 1px solid var(--border-subtle, #334155);
+}
+
+.teams-subnav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary, #94A3B8);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 8px);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s ease);
+}
+
+.teams-subnav-btn:hover {
+  color: var(--text-primary, #F8FAFC);
+  background: var(--bg-elevated, #243044);
+}
+
+.teams-subnav-btn.active {
+  color: #FFFFFF;
+  background: var(--brand-navy, #1B365D);
+  border-color: rgba(59, 130, 246, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.subnav-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+  line-height: 1;
+}
+
+/* ==========================================================================
+   VERIFICADOR GLOBAL DE COBERTURA & MATRICULA
+   ========================================================================== */
+.cov-progress-bar-wrap {
+  width: 100%;
+  height: 8px;
+  background: rgba(148, 163, 184, 0.15);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.cov-progress-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+
+.cov-progress-bar-fill.fill-100 {
+  background: var(--color-green, #10B981);
+}
+
+.cov-progress-bar-fill.fill-partial {
+  background: var(--color-amber, #F59E0B);
+}
+
+.cov-progress-bar-fill.fill-low {
+  background: var(--color-red, #EF4444);
+}
+
+.chip-discrepancy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: 0.74rem;
+  font-weight: 600;
+  border-radius: 4px;
+  margin: 2px 4px 2px 0;
+  white-space: nowrap;
+}
+
+.chip-discrepancy-missing {
+  background: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.chip-discrepancy-extraneous {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.nom-preview-badge {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8rem;
+  background: rgba(59, 130, 246, 0.12);
+  color: #60A5FA;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nom-preview-badge.is-unchanged {
+  background: rgba(16, 185, 129, 0.1);
+  color: #34D399;
+  border-color: rgba(16, 185, 129, 0.2);
+}
+
+.nom-preview-badge.is-changed {
+  background: rgba(245, 158, 11, 0.12);
+  color: #FBBF24;
+  border-color: rgba(245, 158, 11, 0.3);
+}
+
+.saas-select-sm, .saas-input-sm {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  height: 32px;
+}
+
+
