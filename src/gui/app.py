@@ -1092,6 +1092,36 @@ def create_app(config_path: str = "config.json") -> Flask:
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    @app.route("/api/teams/activity/audit", methods=["GET"])
+    def api_teams_activity_audit():
+        """Audita el inicio de sesion y la inactividad de alumnos en Teams y Microsoft 365."""
+        days = request.args.get("days", 5, type=int)
+        try:
+            from src.teams_engine import audit_students_login_activity
+            graph = get_graph()
+            activity_data = audit_students_login_activity(graph, days_threshold=days)
+            return jsonify({"success": True, "data": activity_data, **activity_data})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/teams/activity/export-excel", methods=["GET"])
+    def api_teams_activity_export_excel():
+        """Exporta el reporte consolidado de inactividad de alumnos a Excel."""
+        days = request.args.get("days", 5, type=int)
+        try:
+            from src.teams_engine import audit_students_login_activity, export_activity_audit_excel
+            graph = get_graph()
+            activity_data = audit_students_login_activity(graph, days_threshold=days)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Auditoria_Inactividad_Alumnos_{ts}.xlsx"
+            rep_dir = os.path.abspath(config.reports_dir)
+            os.makedirs(rep_dir, exist_ok=True)
+            out_path = os.path.join(rep_dir, filename)
+            export_activity_audit_excel(activity_data, out_path)
+            return send_file(out_path, as_attachment=True, download_name=filename)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     return app
 
 
@@ -1101,10 +1131,10 @@ def start_gui(config_path: str = "config.json", host: str = "127.0.0.1", port: i
     url = f"http://{host}:{port}"
 
     print("\n" + "=" * 76)
-    print("🌐 PANEL DE CONTROL WEB — INSTITUTO JOSÉ VASCONCELOS")
+    print("PANEL DE CONTROL WEB - INSTITUTO JOSE VASCONCELOS")
     print("=" * 76)
-    print(f"🚀 Servidor ejecutándose en: \033[1;32m{url}\033[0m")
-    print("📌 Presiona \033[1mCtrl + C\033[0m en esta terminal para detener el servidor.")
+    print(f"Servidor ejecutandose en: \033[1;32m{url}\033[0m")
+    print("Presiona \033[1mCtrl + C\033[0m en esta terminal para detener el servidor.")
     print("=" * 76 + "\n")
 
     if open_browser:

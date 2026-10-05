@@ -98,6 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
       loadHistory();
     } else if (targetTabId === 'tab-teams') {
       loadTeamsData();
+      loadTeamsActivityAudit();
     } else if (targetTabId === 'tab-tenant') {
       loadTenantStatus();
     }
@@ -134,14 +135,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const savedTheme = localStorage.getItem('ijova_theme');
   if (savedTheme === 'light') {
     document.body.classList.add('light-mode');
-    if (themeIcon) themeIcon.textContent = '☀️';
   }
 
   if (btnThemeToggle) {
     btnThemeToggle.addEventListener('click', () => {
       document.body.classList.toggle('light-mode');
       const isLight = document.body.classList.contains('light-mode');
-      if (themeIcon) themeIcon.textContent = isLight ? '☀️' : '🌙';
       localStorage.setItem('ijova_theme', isLight ? 'light' : 'dark');
       showToast(isLight ? 'Modo claro activado' : 'Modo oscuro activado', 'info');
     });
@@ -334,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
         studentPhotoImg.src = `/api/student/${encodeURIComponent(currentStudent.matricula)}/photo?t=${Date.now()}`;
         studentPhotoImg.style.display = 'block';
         studentAvatarPlaceholder.style.display = 'none';
-        studentPhotoStatus.textContent = '✓ Foto Oficial Configurada';
+        studentPhotoStatus.textContent = 'Foto Oficial Configurada';
         studentPhotoStatus.style.color = 'var(--color-green)';
       } else {
         studentPhotoImg.style.display = 'none';
@@ -390,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnToggleCustomPw.addEventListener('click', () => {
       const isPw = inputCustomPassword.type === 'password';
       inputCustomPassword.type = isPw ? 'text' : 'password';
-      btnToggleCustomPw.textContent = isPw ? '🔒 Ocultar' : '👁️ Ver';
+      btnToggleCustomPw.textContent = isPw ? 'Ocultar' : 'Ver';
     });
   }
 
@@ -477,9 +476,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const ticketFooterStrip = document.querySelector('.ticket-footer-strip span');
         if (ticketFooterStrip) {
           if (forceChangeCheckbox && forceChangeCheckbox.checked) {
-            ticketFooterStrip.textContent = 'ℹ️ El sistema te solicitará cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.';
+            ticketFooterStrip.textContent = 'El sistema te solicitará cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.';
           } else {
-            ticketFooterStrip.textContent = '✓ Contraseña permanente asignada. No requiere cambio en el primer inicio de sesión.';
+            ticketFooterStrip.textContent = 'Contraseña permanente asignada. No requiere cambio en el primer inicio de sesión.';
           }
         }
 
@@ -566,7 +565,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (deleteLockBadge) {
       deleteLockBadge.className = 'lock-status-pill locked';
-      deleteLockBadge.textContent = '🔒 Bloqueado';
+      deleteLockBadge.textContent = 'Bloqueado';
     }
 
     try {
@@ -628,10 +627,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (deleteLockBadge) {
         if (isMatch) {
           deleteLockBadge.className = 'lock-status-pill unlocked';
-          deleteLockBadge.textContent = '🔓 Desbloqueado';
+          deleteLockBadge.textContent = 'Desbloqueado';
         } else {
           deleteLockBadge.className = 'lock-status-pill locked';
-          deleteLockBadge.textContent = '🔒 Bloqueado';
+          deleteLockBadge.textContent = 'Bloqueado';
         }
       }
     });
@@ -659,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       btnExecuteDelete.disabled = true;
-      btnExecuteDelete.textContent = '⏳ Procesando baja en Microsoft 365...';
+      btnExecuteDelete.textContent = 'Procesando baja en Microsoft 365...';
 
       try {
         const resp = await fetch('/api/student/delete', {
@@ -709,7 +708,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const users = data.users || [];
 
       if (users.length === 0) {
-        recycleTbody.innerHTML = '<tr><td colspan="6" class="table-empty-row">✨ La Papelera de Reciclaje está vacía. No hay cuentas de alumnos en retención.</td></tr>';
+        recycleTbody.innerHTML = '<tr><td colspan="6" class="table-empty-row">La Papelera de Reciclaje está vacía. No hay cuentas de alumnos en retención.</td></tr>';
         return;
       }
 
@@ -821,8 +820,8 @@ document.addEventListener('DOMContentLoaded', () => {
           : `<span>${initials}</span>`;
 
         const pillHtml = s.has_photo
-          ? `<span class="photo-card-pill has-photo">✓ Foto Oficial</span>`
-          : `<span class="photo-card-pill no-photo">○ Sin Foto</span>`;
+          ? `<span class="photo-card-pill has-photo">Foto Oficial</span>`
+          : `<span class="photo-card-pill no-photo">Sin Foto</span>`;
 
         card.innerHTML = `
           <div class="photo-card-avatar">
@@ -865,7 +864,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnTriggerPhotoScan) {
     btnTriggerPhotoScan.addEventListener('click', async () => {
       btnTriggerPhotoScan.disabled = true;
-      btnTriggerPhotoScan.innerHTML = '⚡ Escaneando en segundo plano...';
+      btnTriggerPhotoScan.innerHTML = 'Escaneando en segundo plano...';
 
       try {
         const resp = await fetch('/api/photos/scan', { method: 'POST' });
@@ -926,7 +925,7 @@ document.addEventListener('DOMContentLoaded', () => {
       rows.forEach(r => {
         const tr = document.createElement('tr');
         const pdfLink = r.pdf_url
-          ? `<a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-secondary-saas">📄 Ver Comprobante</a>`
+          ? `<a href="${r.pdf_url}" target="_blank" class="btn btn-sm btn-secondary-saas">Ver Comprobante</a>`
           : `<span style="color: var(--text-muted);">No generada</span>`;
 
         tr.innerHTML = `
@@ -990,7 +989,7 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         await navigator.clipboard.writeText(cmd);
         const originalHtml = btn.innerHTML;
-        btn.innerHTML = '<span style="color: var(--color-green); font-weight: 700;">✓ Copiado</span>';
+        btn.innerHTML = '<span style="color: var(--color-green); font-weight: 700;">Copiado</span>';
         showToast(`Comando copiado: "${cmd}"`, 'success');
 
         setTimeout(() => {
@@ -1788,7 +1787,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Render Teachers
         if (membersTeachersRow) {
           if (!d.teachers || d.teachers.length === 0) {
-            membersTeachersRow.innerHTML = '<span class="owner-orphan-tag">⚠️ No hay profesores propietarios asignados (Equipo Huérfano)</span>';
+            membersTeachersRow.innerHTML = '<span class="owner-orphan-tag">No hay profesores propietarios asignados (Equipo Huérfano)</span>';
           } else {
             membersTeachersRow.innerHTML = '';
             d.teachers.forEach(tc => {
@@ -1796,7 +1795,7 @@ document.addEventListener('DOMContentLoaded', () => {
               pill.className = 'teacher-pill';
               const tcName = tc.displayName || tc.display_name || tc.name || 'Profesor';
               const tcUpn = tc.userPrincipalName || tc.user_principal_name || tc.upn || tc.mail || '';
-              pill.innerHTML = `<span>👤 ${escapeHtml(tcName)}</span>` + (tcUpn ? `<span style="font-size: 0.72rem; opacity: 0.85;">(${escapeHtml(tcUpn)})</span>` : '');
+              pill.innerHTML = `<span>${escapeHtml(tcName)}</span>` + (tcUpn ? `<span style="font-size: 0.72rem; opacity: 0.85;">(${escapeHtml(tcUpn)})</span>` : '');
               membersTeachersRow.appendChild(pill);
             });
           }
@@ -2799,6 +2798,8 @@ document.addEventListener('DOMContentLoaded', () => {
       loadTeamsCoverageAudit();
     } else if (targetSubtabId === 'teams-subtab-nomenclature') {
       loadTeamsNomenclatureAudit();
+    } else if (targetSubtabId === 'teams-subtab-activity') {
+      loadTeamsActivityAudit();
     }
   }
 
@@ -3564,5 +3565,372 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   }
+
+  // =========================================================================
+  // SUB-TAB 4: AUDITORÍA DE INACTIVIDAD Y PRIMER ACCESO (TEAMS & M365)
+  // =========================================================================
+  let actAuditCache = null;
+  let actLoading = false;
+  let actSearchQuery = '';
+  let actFilterStatus = 'all';
+  let actFilterLevel = 'all';
+
+  const actKpiTotal = document.getElementById('act-kpi-total');
+  const actKpiActive = document.getElementById('act-kpi-active');
+  const actKpiInactive5d = document.getElementById('act-kpi-inactive5d');
+  const actKpiInactive15d = document.getElementById('act-kpi-inactive15d');
+  const actKpiNever = document.getElementById('act-kpi-never');
+  const badgeActivityInactive5d = document.getElementById('badge-activity-inactive5d');
+
+  const actSearchInput = document.getElementById('act-search-input');
+  const actFilteredCount = document.getElementById('act-filtered-count');
+  const actTableTbody = document.getElementById('activity-table-tbody');
+  const btnExportActivityExcel = document.getElementById('btn-export-activity-excel');
+  const btnRefreshActivity = document.getElementById('btn-refresh-activity');
+
+  // Modal de Contacto Familiar / Tutor
+  const modalTutorContact = document.getElementById('modal-tutor-contact');
+  const tutorModalStudentName = document.getElementById('tutor-modal-student-name');
+  const tutorModalMatriculaGrade = document.getElementById('tutor-modal-matricula-grade');
+  const tutorModalUpn = document.getElementById('tutor-modal-upn');
+  const tutorModalName = document.getElementById('tutor-modal-name');
+  const tutorModalPhoneText = document.getElementById('tutor-modal-phone-text');
+  const tutorModalPhoneLink = document.getElementById('tutor-modal-phone-link');
+  const tutorModalEmailText = document.getElementById('tutor-modal-email-text');
+  const tutorModalEmailLink = document.getElementById('tutor-modal-email-link');
+  const btnCloseModalTutor = document.getElementById('btn-close-modal-tutor');
+  const btnTutorModalClose = document.getElementById('btn-tutor-modal-close');
+  const btnTutorModalReset = document.getElementById('btn-tutor-modal-reset');
+  let currentTutorModalMatricula = null;
+
+  async function loadTeamsActivityAudit(forceRefresh = false) {
+    if (actLoading) return;
+    if (actAuditCache && !forceRefresh) {
+      filterAndRenderActivityTable();
+      return;
+    }
+
+    actLoading = true;
+    if (btnRefreshActivity) btnRefreshActivity.disabled = true;
+    if (actTableTbody) {
+      actTableTbody.innerHTML = '<tr><td colspan="10" class="table-empty-row"><span class="btn-spinner" style="display:inline-block; margin-right:8px; width:16px; height:16px; vertical-align:middle;"></span> Consultando telemetría de sesiones en Microsoft Entra ID...</td></tr>';
+    }
+
+    try {
+      const url = forceRefresh ? '/api/teams/activity/audit?force=1' : '/api/teams/activity/audit';
+      const resp = await fetch(url);
+      const res = await resp.json();
+
+      if (res.success && res.data) {
+        actAuditCache = res.data;
+        const s = res.data.summary || {};
+
+        if (actKpiTotal) actKpiTotal.textContent = s.total_students || 0;
+        if (actKpiActive) actKpiActive.textContent = s.active_recent || 0;
+        if (actKpiInactive5d) actKpiInactive5d.textContent = s.inactive_5d_or_more || 0;
+        if (actKpiInactive15d) actKpiInactive15d.textContent = s.inactive_15d_or_more || 0;
+        if (actKpiNever) actKpiNever.textContent = s.never_logged_in || 0;
+
+        if (badgeActivityInactive5d) {
+          const totalAtRisk = (s.inactive_5d_or_more || 0);
+          badgeActivityInactive5d.textContent = `${totalAtRisk} en riesgo`;
+          badgeActivityInactive5d.style.display = totalAtRisk > 0 ? 'inline-block' : 'none';
+        }
+
+        filterAndRenderActivityTable();
+        if (forceRefresh) {
+          showToast('Auditoría de actividad actualizada con éxito.', 'success');
+        }
+      } else {
+        if (actTableTbody) {
+          actTableTbody.innerHTML = `<tr><td colspan="10" class="table-empty-row" style="color: var(--color-danger);">Error al consultar actividad: ${res.error || 'Desconocido'}</td></tr>`;
+        }
+        showToast(`Error al consultar auditoría: ${res.error || 'Desconocido'}`, 'error');
+      }
+    } catch (err) {
+      if (actTableTbody) {
+        actTableTbody.innerHTML = `<tr><td colspan="10" class="table-empty-row" style="color: var(--color-danger);">Error de conexión: ${err.message}</td></tr>`;
+      }
+      showToast(`Error de conexión: ${err.message}`, 'error');
+    } finally {
+      actLoading = false;
+      if (btnRefreshActivity) btnRefreshActivity.disabled = false;
+    }
+  }
+
+  function filterAndRenderActivityTable() {
+    if (!actAuditCache || !actAuditCache.students || !actTableTbody) return;
+
+    const all = actAuditCache.students;
+    const q = actSearchQuery.trim().toLowerCase();
+
+    const filtered = all.filter(stu => {
+      // 1. Filtro por buscador (matrícula, nombre, upn)
+      if (q) {
+        const m = (stu.matricula || '').toLowerCase();
+        const n = (stu.displayName || '').toLowerCase();
+        const u = (stu.userPrincipalName || '').toLowerCase();
+        if (!m.includes(q) && !n.includes(q) && !u.includes(q)) {
+          return false;
+        }
+      }
+
+      // 2. Filtro por rango de actividad
+      if (actFilterStatus === 'inactive5d') {
+        if (!stu.never_logged_in && (stu.days_inactive < 5)) return false;
+      } else if (actFilterStatus === 'inactive15d') {
+        if (!stu.never_logged_in && (stu.days_inactive < 15)) return false;
+      } else if (actFilterStatus === 'never') {
+        if (!stu.never_logged_in) return false;
+      } else if (actFilterStatus === 'recent') {
+        if (stu.never_logged_in || stu.days_inactive >= 5) return false;
+      }
+
+      // 3. Filtro por nivel escolar
+      if (actFilterLevel !== 'all') {
+        if ((stu.nivel || '').toLowerCase() !== actFilterLevel.toLowerCase()) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (actFilteredCount) {
+      actFilteredCount.textContent = `Mostrando ${filtered.length} de ${all.length} alumnos`;
+    }
+
+    if (filtered.length === 0) {
+      actTableTbody.innerHTML = '<tr><td colspan="10" class="table-empty-row">No se encontraron alumnos que coincidan con los filtros seleccionados.</td></tr>';
+      return;
+    }
+
+    actTableTbody.innerHTML = '';
+    filtered.forEach(stu => {
+      const tr = document.createElement('tr');
+
+      // Estado / Badge
+      let statusBadge = '';
+      if (stu.risk_level === 'CRITICAL') {
+        statusBadge = `<span class="badge-risk badge-risk-critical"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${escapeHtml(stu.risk_label)}</span>`;
+      } else if (stu.risk_level === 'WARNING') {
+        statusBadge = `<span class="badge-risk badge-risk-warning"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${escapeHtml(stu.risk_label)}</span>`;
+      } else {
+        statusBadge = `<span class="badge-risk badge-risk-active"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>${escapeHtml(stu.risk_label)}</span>`;
+      }
+
+      // Días inactivo
+      let daysDisplay = '';
+      if (stu.never_logged_in) {
+        daysDisplay = '<span class="badge badge-purple" style="font-size:0.75rem;">Nunca</span>';
+      } else {
+        const colorCls = stu.days_inactive >= 15 ? 'text-red' : (stu.days_inactive >= 5 ? 'text-amber' : 'text-green');
+        daysDisplay = `<span class="${colorCls}" style="font-weight:700;">${stu.days_inactive} días</span>`;
+      }
+
+      // Última sesión
+      const lastSessionDisplay = stu.never_logged_in
+        ? '<span style="color:var(--text-muted); font-size:0.8rem;">Sin registro inicial</span>'
+        : `<span style="font-size:0.82rem; font-family:var(--font-mono, monospace);">${escapeHtml(stu.last_sign_in_formatted || '-')}</span>`;
+
+      // Tutor
+      let tutorDisplay = '';
+      if (stu.tutor && (stu.tutor.nombre || stu.tutor.telefono)) {
+        tutorDisplay = `<button type="button" class="btn-table-action btn-tutor-call" data-matricula="${stu.matricula}" title="Ver contacto del tutor">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <span>Tutor</span>
+        </button>`;
+      } else {
+        tutorDisplay = '<span style="color:var(--text-muted); font-size:0.75rem;">Sin registro</span>';
+      }
+
+      // Dispositivos
+      const devCount = stu.devices_count || 0;
+      const devDisplay = `<span class="device-chip" title="${devCount} credencial(es) o dispositivo(s) registrados">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        <span>${devCount}</span>
+      </span>`;
+
+      tr.innerHTML = `
+        <td><strong class="highlight font-mono" style="font-size:0.85rem;">${stu.matricula}</strong></td>
+        <td>
+          <div style="font-weight:600; color:var(--text-primary);">${escapeHtml(stu.displayName || '-')}</div>
+        </td>
+        <td>
+          <span style="font-weight:600; color:var(--text-secondary);">${escapeHtml(stu.nivel || '-')}</span>
+          <div style="font-size:0.76rem; color:var(--text-muted);">${escapeHtml(stu.grado || '')}</div>
+        </td>
+        <td class="font-mono" style="font-size:0.8rem; color:var(--text-secondary);">${escapeHtml(stu.userPrincipalName || '-')}</td>
+        <td>${lastSessionDisplay}</td>
+        <td class="text-center">${daysDisplay}</td>
+        <td class="text-center">${statusBadge}</td>
+        <td class="text-center">${devDisplay}</td>
+        <td>${tutorDisplay}</td>
+        <td class="text-right col-actions-sticky">
+          <div style="display:flex; justify-content:flex-end; gap:6px;">
+            <button type="button" class="btn-table-action btn-quick-reset" data-matricula="${stu.matricula}" title="Restablecer contraseña en Pestaña 1">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+              <span>Resetear</span>
+            </button>
+          </div>
+        </td>
+      `;
+
+      actTableTbody.appendChild(tr);
+    });
+
+    // Wire action buttons in table
+    actTableTbody.querySelectorAll('.btn-quick-reset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mat = btn.getAttribute('data-matricula');
+        if (mat) {
+          triggerStudentPasswordReset(mat);
+        }
+      });
+    });
+
+    actTableTbody.querySelectorAll('.btn-tutor-call').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mat = btn.getAttribute('data-matricula');
+        if (mat) {
+          openTutorContactModal(mat);
+        }
+      });
+    });
+  }
+
+  function triggerStudentPasswordReset(matricula) {
+    switchTab('tab-reset');
+    if (searchInput) {
+      searchInput.value = matricula;
+      btnClearSearch.style.display = 'block';
+    }
+    verifyStudent(matricula);
+  }
+
+  function openTutorContactModal(matricula) {
+    if (!actAuditCache || !actAuditCache.students || !modalTutorContact) return;
+    const stu = actAuditCache.students.find(s => s.matricula === matricula);
+    if (!stu) return;
+
+    currentTutorModalMatricula = matricula;
+    const tutor = stu.tutor || {};
+
+    if (tutorModalStudentName) {
+      tutorModalStudentName.textContent = stu.displayName || stu.nombre_oficial || 'Alumno';
+    }
+    if (tutorModalMatriculaGrade) {
+      tutorModalMatriculaGrade.textContent = `${stu.matricula} • ${stu.nivel || ''} ${stu.grado || ''}`.trim();
+    }
+    if (tutorModalUpn) {
+      tutorModalUpn.textContent = stu.userPrincipalName || '-';
+    }
+    if (tutorModalName) {
+      tutorModalName.textContent = tutor.nombre || 'No registrado en base escolar';
+      tutorModalName.style.color = tutor.nombre ? 'var(--text-primary)' : 'var(--text-muted)';
+    }
+
+    if (tutorModalPhoneText) {
+      tutorModalPhoneText.textContent = tutor.telefono || 'Sin teléfono';
+      tutorModalPhoneText.style.color = tutor.telefono ? 'var(--brand-blue)' : 'var(--text-muted)';
+    }
+    if (tutorModalPhoneLink) {
+      if (tutor.telefono) {
+        const cleanPhone = tutor.telefono.replace(/[^0-9+]/g, '');
+        tutorModalPhoneLink.href = `tel:${cleanPhone}`;
+        tutorModalPhoneLink.style.display = 'inline-flex';
+      } else {
+        tutorModalPhoneLink.style.display = 'none';
+      }
+    }
+
+    if (tutorModalEmailText) {
+      tutorModalEmailText.textContent = tutor.correo || 'Sin correo registrado';
+      tutorModalEmailText.style.color = tutor.correo ? 'var(--text-primary)' : 'var(--text-muted)';
+    }
+    if (tutorModalEmailLink) {
+      if (tutor.correo) {
+        tutorModalEmailLink.href = `mailto:${tutor.correo}?subject=${encodeURIComponent('Contacto Institucional Colegio IJOVA - ' + stu.displayName)}`;
+        tutorModalEmailLink.style.display = 'inline-flex';
+      } else {
+        tutorModalEmailLink.style.display = 'none';
+      }
+    }
+
+    modalTutorContact.style.display = 'flex';
+  }
+
+  function closeTutorContactModal() {
+    if (modalTutorContact) modalTutorContact.style.display = 'none';
+    currentTutorModalMatricula = null;
+  }
+
+  if (btnCloseModalTutor) btnCloseModalTutor.addEventListener('click', closeTutorContactModal);
+  if (btnTutorModalClose) btnTutorModalClose.addEventListener('click', closeTutorContactModal);
+  if (modalTutorContact) {
+    modalTutorContact.addEventListener('click', (e) => {
+      if (e.target === modalTutorContact) closeTutorContactModal();
+    });
+  }
+
+  if (btnTutorModalReset) {
+    btnTutorModalReset.addEventListener('click', () => {
+      if (currentTutorModalMatricula) {
+        const mat = currentTutorModalMatricula;
+        closeTutorContactModal();
+        triggerStudentPasswordReset(mat);
+      }
+    });
+  }
+
+  // Eventos de Filtro y Búsqueda
+  if (actSearchInput) {
+    let actSearchTimeout = null;
+    actSearchInput.addEventListener('input', (e) => {
+      actSearchQuery = e.target.value;
+      clearTimeout(actSearchTimeout);
+      actSearchTimeout = setTimeout(() => {
+        filterAndRenderActivityTable();
+      }, 150);
+    });
+  }
+
+  // Filtros de estado de actividad
+  const actStatusPills = document.querySelectorAll('#filter-group-act-status .pill-btn');
+  actStatusPills.forEach(btn => {
+    btn.addEventListener('click', () => {
+      actStatusPills.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      actFilterStatus = btn.getAttribute('data-act') || 'all';
+      filterAndRenderActivityTable();
+    });
+  });
+
+  // Filtros de nivel escolar
+  const actLevelPills = document.querySelectorAll('#filter-group-act-level .pill-btn');
+  actLevelPills.forEach(btn => {
+    btn.addEventListener('click', () => {
+      actLevelPills.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      actFilterLevel = btn.getAttribute('data-level') || 'all';
+      filterAndRenderActivityTable();
+    });
+  });
+
+  // Botón refrescar
+  if (btnRefreshActivity) {
+    btnRefreshActivity.addEventListener('click', () => {
+      loadTeamsActivityAudit(true);
+    });
+  }
+
+  // Botón exportar excel
+  if (btnExportActivityExcel) {
+    btnExportActivityExcel.addEventListener('click', () => {
+      showToast('Descargando reporte de auditoría de inactividad...', 'info');
+      window.location.href = '/api/teams/activity/export-excel';
+    });
+  }
 });
+
 

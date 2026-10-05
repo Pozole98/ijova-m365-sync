@@ -186,7 +186,7 @@ class GraphClient:
                 if accounts:
                     self.admin_upn = accounts[0].get("username")
             self._save_cache()
-            print(f"✅ Autenticación exitosa. Administrador identificado: \033[1;32m{self.admin_upn or 'Desconocido'}\033[0m")
+            print(f"Autenticacion exitosa. Administrador identificado: \033[1;32m{self.admin_upn or 'Desconocido'}\033[0m")
             return self._access_token
         else:
             raise GraphClientError(f"Error de autenticación: {result.get('error_description', result.get('error'))}")
@@ -214,7 +214,7 @@ class GraphClient:
 
                 # HTTP 401 Unauthorized -> Renovar token de forma forzada y reintentar inmediatamente
                 if response.status_code == 401 and attempt < max_retries:
-                    print(f"⚠️ Token de Graph expirado (HTTP 401). Renovando token de acceso silenciosamente (Intento {attempt}/{max_retries})...")
+                    print(f"Token de Graph expirado (HTTP 401). Renovando token de acceso silenciosamente (Intento {attempt}/{max_retries})...")
                     try:
                         fresh_token = self.ensure_valid_token(force_refresh=True)
                         headers["Authorization"] = f"Bearer {fresh_token}"
@@ -227,14 +227,14 @@ class GraphClient:
                 # Rate limiting (HTTP 429)
                 if response.status_code == 429:
                     retry_after = int(response.headers.get("Retry-After", attempt * 3))
-                    print(f"⚠️ Microsoft Graph Rate Limit (429). Esperando {retry_after}s antes de reintentar (Intento {attempt}/{max_retries})...")
+                    print(f"Microsoft Graph Rate Limit (429). Esperando {retry_after}s antes de reintentar (Intento {attempt}/{max_retries})...")
                     time.sleep(retry_after)
                     continue
 
                 # Temporary server errors (5xx)
                 if 500 <= response.status_code < 600:
                     wait_time = attempt * 2
-                    print(f"⚠️ Error temporal de Graph ({response.status_code}). Esperando {wait_time}s (Intento {attempt}/{max_retries})...")
+                    print(f"Error temporal de Graph ({response.status_code}). Esperando {wait_time}s (Intento {attempt}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
 
@@ -300,7 +300,7 @@ class GraphClient:
 
         while url:
             page_count += 1
-            print(f"   📄 Consultando página {page_count} de usuarios de Entra ID...")
+            print(f"   Consultando página {page_count} de usuarios de Entra ID...")
             data = self._request_with_retry(url)
 
             users_data = data.get("value", [])
@@ -317,14 +317,27 @@ class GraphClient:
                     user_type=u.get("userType")
                 ))
 
-            print(f"   ✅ Página {page_count}: {len(users_data)} usuarios procesados exitosamente.")
+            print(f"   Página {page_count}: {len(users_data)} usuarios procesados exitosamente.")
             # Follow next page link
             url = data.get("@odata.nextLink")
 
-        print(f"\n📊 RESUMEN DE DESCARGA DE GRAPH:")
+        print(f"\nRESUMEN DE DESCARGA DE GRAPH:")
         print(f"   - Total de páginas descargadas: {page_count}")
         print(f"   - Total de usuarios recuperados de Entra ID: {len(all_users)}")
         print(f"   - Estado de paginación: Completada al 100% (@odata.nextLink finalizado sin interrupciones)\n")
+        return all_users
+
+    def get_users_with_activity(self) -> List[Dict[str, Any]]:
+        """
+        Recupera todos los usuarios con metadatos de sesion, tokens y dispositivos desde Microsoft Graph.
+        Utiliza el endpoint beta para acceder a signInSessionsValidFromDateTime y deviceKeys.
+        """
+        url = "https://graph.microsoft.com/beta/users?$select=id,displayName,userPrincipalName,createdDateTime,signInSessionsValidFromDateTime,refreshTokensValidFromDateTime,deviceKeys,accountEnabled&$top=999"
+        all_users = []
+        while url:
+            data = self._request_with_retry(url)
+            all_users.extend(data.get("value", []))
+            url = data.get("@odata.nextLink")
         return all_users
 
     def get_subscribed_skus(self) -> List[Dict[str, Any]]:

@@ -2526,6 +2526,251 @@ def export_global_coverage_excel(coverage_data: Dict[str, Any], output_path: str
     return output_path
 
 
+def audit_students_login_activity(
+    graph: GraphClient,
+    school_db: Optional[Dict[str, Any]] = None,
+    days_threshold: int = 5
+) -> Dict[str, Any]:
+    """
+    Audita el estado de inicio de sesion y actividad reciente de los alumnos en Teams y Microsoft 365.
+    Identifica alumnos que no han iniciado sesion en N dias (por defecto 5 dias o mas) o que
+    nunca han accedido desde la creacion de su cuenta institucional.
+    """
+    if school_db is None:
+        from export_students_m365 import build_school_db
+        school_db = build_school_db()
+
+    raw_users = graph.get_users_with_activity()
+    entra_users = {u.get("userPrincipalName", "").strip().lower(): u for u in raw_users}
+
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+
+    records = []
+    active_recent_count = 0
+    inactive_5d_count = 0
+    inactive_15d_count = 0
+    never_logged_count = 0
+
+    for mat, s in sorted(school_db.items(), key=lambda x: x[0]):
+        if s.get("estatus") != "Activo":
+            continue
+
+        upn = f"{mat}@ijova.com".lower()
+        u = entra_users.get(upn)
+        if not u:
+            continue
+
+        c_dt_str = u.get("createdDateTime")
+        s_dt_str = u.get("signInSessionsValidFromDateTime") or u.get("refreshTokensValidFromDateTime")
+
+        c_dt = datetime.fromisoformat(c_dt_str.replace("Z", "+00:00")) if c_dt_str else None
+        s_dt = datetime.fromisoformat(s_dt_str.replace("Z", "+00:00")) if s_dt_str else None
+
+        dev_keys = u.get("deviceKeys") or []
+        device_count = len(dev_keys)
+
+        # Detectar si nunca inicio sesion
+        never_logged_in = False
+        if not s_dt:
+            never_logged_in = True
+        elif c_dt and abs((s_dt - c_dt).total_seconds()) < 60 and device_count == 0:
+            never_logged_in = True
+
+        last_active_dt = s_dt if (s_dt and not never_logged_in) else c_dt
+        days_inactive = (now - last_active_dt).days if last_active_dt else 999
+
+        if never_logged_in:
+            risk_level = "CRITICAL"
+            status_text = "Nunca ha iniciado sesión"
+            never_logged_count += 1
+            inactive_5d_count += 1
+            inactive_15d_count += 1
+        elif days_inactive >= 15:
+            risk_level = "CRITICAL"
+            status_text = f"Inactivo ({days_inactive} días)"
+            inactive_15d_count += 1
+            inactive_5d_count += 1
+        elif days_inactive >= days_threshold:
+            risk_level = "WARNING"
+            status_text = f"Inactivo ({days_inactive} días)"
+            inactive_5d_count += 1
+        else:
+            risk_level = "ACTIVE"
+            status_text = f"Activo ({days_inactive} días)" if days_inactive > 0 else "Activo (Hoy)"
+            active_recent_count += 1
+
+        tutor_nom = s.get("tutor_nombre") or s.get("padre_o_tutor") or ""
+        tutor_tel = s.get("tutor_telefono") or s.get("telefono_contacto") or ""
+        tutor_cor = s.get("tutor_correo") or s.get("correo_contacto") or ""
+
+        student_name = s.get("display_name") or s.get("nombre_oficial") or f"{s.get('paterno', '')} {s.get('nombres', '')}".strip() or mat
+
+        records.append({
+            "matricula": mat,
+            "nombre": student_name,
+            "displayName": student_name,
+            "nivel": s.get("nivel") or "Secundaria",
+            "grado": s.get("grado") or s.get("grado_semestre") or "1°",
+            "upn": upn,
+            "userPrincipalName": upn,
+            "user_id": u.get("id"),
+            "account_enabled": u.get("accountEnabled", True),
+            "accountEnabled": u.get("accountEnabled", True),
+            "created_date": c_dt.strftime("%Y-%m-%d") if c_dt else "-",
+            "createdDateTime": u.get("createdDateTime", ""),
+            "last_session_date": s_dt.strftime("%Y-%m-%d %H:%M") if (s_dt and not never_logged_in) else "Sin acceso",
+            "last_sign_in_formatted": s_dt.strftime("%Y-%m-%d %H:%M") if (s_dt and not never_logged_in) else "Sin acceso",
+            "days_inactive": days_inactive,
+            "never_logged_in": never_logged_in,
+            "risk_level": risk_level,
+            "risk_label": status_text,
+            "status_text": status_text,
+            "device_count": device_count,
+            "devices_count": device_count,
+            "tutor_nombre": tutor_nom,
+            "tutor_telefono": tutor_tel,
+            "tutor_correo": tutor_cor,
+            "tutor": {
+                "nombre": tutor_nom,
+                "telefono": tutor_tel,
+                "correo": tutor_cor
+            },
+            "has_tutor_contact": bool(tutor_nom or tutor_tel or tutor_cor)
+        })
+
+    risk_order = {"CRITICAL": 0, "WARNING": 1, "ACTIVE": 2}
+    records.sort(key=lambda x: (risk_order.get(x["risk_level"], 9), -x["days_inactive"], x["matricula"]))
+
+    total_eval = len(records)
+    adoption_rate = round((active_recent_count / total_eval * 100), 1) if total_eval > 0 else 0.0
+
+    summary = {
+        "total_evaluated": total_eval,
+        "total_students": total_eval,
+        "active_recent": active_recent_count,
+        "inactive_5d": inactive_5d_count,
+        "inactive_5d_or_more": inactive_5d_count,
+        "inactive_15d": inactive_15d_count,
+        "inactive_15d_or_more": inactive_15d_count,
+        "never_logged_in": never_logged_count,
+        "adoption_rate": adoption_rate,
+        "threshold_days": days_threshold,
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+
+    return {
+        "success": True,
+        "summary": summary,
+        "students": records,
+        "timestamp": summary["timestamp"]
+    }
+
+
+def export_activity_audit_excel(activity_data: Dict[str, Any], output_path: str) -> str:
+    """
+    Genera un libro oficial de Excel con el reporte de actividad e inactividad de alumnos.
+    """
+    wb = openpyxl.Workbook()
+    navy_primary = "1B365D"
+    header_fill = PatternFill(start_color=navy_primary, end_color=navy_primary, fill_type="solid")
+    header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+    data_font = Font(name="Segoe UI", size=10)
+    data_font_bold = Font(name="Segoe UI", size=10, bold=True)
+
+    thin_border = Border(
+        left=Side(style='thin', color='D2D6DC'),
+        right=Side(style='thin', color='D2D6DC'),
+        top=Side(style='thin', color='D2D6DC'),
+        bottom=Side(style='thin', color='D2D6DC')
+    )
+
+    green_fill = PatternFill(start_color="E6F4EA", end_color="E6F4EA", fill_type="solid")
+    green_font = Font(name="Segoe UI", size=10, bold=True, color="137333")
+
+    amber_fill = PatternFill(start_color="FEF7E0", end_color="FEF7E0", fill_type="solid")
+    amber_font = Font(name="Segoe UI", size=10, bold=True, color="B06000")
+
+    red_fill = PatternFill(start_color="FCE8E6", end_color="FCE8E6", fill_type="solid")
+    red_font = Font(name="Segoe UI", size=10, bold=True, color="C5221F")
+
+    ws = wb.active
+    ws.title = "Auditoría de Inactividad"
+
+    headers = [
+        "Matrícula",
+        "Nombre del Alumno",
+        "Nivel",
+        "Grado",
+        "Correo Institucional",
+        "Estado Actividad",
+        "Días Inactivo",
+        "Última Sesión",
+        "Fecha Creación",
+        "Dispositivos",
+        "Nombre Tutor",
+        "Teléfono Tutor",
+        "Correo Tutor"
+    ]
+    ws.append(headers)
+    for c_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=c_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+
+    students = activity_data.get("students", [])
+    for idx, s in enumerate(students, start=2):
+        tutor_obj = s.get("tutor") if isinstance(s.get("tutor"), dict) else {}
+        row_vals = [
+            s.get("matricula", ""),
+            s.get("nombre") or s.get("displayName", ""),
+            s.get("nivel", ""),
+            s.get("grado", ""),
+            s.get("upn") or s.get("userPrincipalName", ""),
+            s.get("status_text") or s.get("risk_label", ""),
+            s.get("days_inactive", 0),
+            s.get("last_session_date") or s.get("last_sign_in_formatted", ""),
+            s.get("created_date", ""),
+            s.get("device_count") if "device_count" in s else s.get("devices_count", 0),
+            s.get("tutor_nombre") or tutor_obj.get("nombre", ""),
+            s.get("tutor_telefono") or tutor_obj.get("telefono", ""),
+            s.get("tutor_correo") or tutor_obj.get("correo", "")
+        ]
+        ws.append(row_vals)
+        r_level = s.get("risk_level", "ACTIVE")
+        for c_idx in range(1, len(row_vals) + 1):
+            cell = ws.cell(row=idx, column=c_idx)
+            cell.font = data_font
+            cell.border = thin_border
+            if c_idx in [1, 3, 4, 7, 8, 9, 10]:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            if c_idx == 1:
+                cell.font = data_font_bold
+            if c_idx == 6:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                if r_level == "CRITICAL":
+                    cell.fill = red_fill
+                    cell.font = red_font
+                elif r_level == "WARNING":
+                    cell.fill = amber_fill
+                    cell.font = amber_font
+                else:
+                    cell.fill = green_fill
+                    cell.font = green_font
+
+    ws.freeze_panes = "A2"
+    for col in ws.columns:
+        max_len = max(len(str(cell.value or "")) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 45)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+    wb.save(output_path)
+    return output_path
+
+
+
 
 
 

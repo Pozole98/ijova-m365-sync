@@ -3410,4 +3410,101 @@ body.saas-body {
   height: 32px;
 }
 
+/* ==========================================================================
+   TEAMS SUBTAB 4: AUDITORÍA DE ACTIVIDAD & SESIONES (TEAMS & M365)
+   ========================================================================== */
+.badge-red { background: rgba(239, 68, 68, 0.15); color: #F87171; border: 1px solid rgba(239, 68, 68, 0.3); }
+.badge-purple { background: rgba(168, 85, 247, 0.15); color: #C084FC; border: 1px solid rgba(168, 85, 247, 0.3); }
+.badge-gray { background: rgba(148, 163, 184, 0.12); color: #94A3B8; border: 1px solid rgba(148, 163, 184, 0.25); }
+
+.text-green { color: #34D399 !important; }
+.text-amber { color: #FBBF24 !important; }
+.text-red { color: #F87171 !important; }
+.text-purple { color: #C084FC !important; }
+
+.badge-risk {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-risk-critical {
+  background: rgba(239, 68, 68, 0.15);
+  color: #F87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.badge-risk-warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: #FBBF24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-risk-active {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34D399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.device-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--bg-surface-elevated, #1E293B);
+  border: 1px solid var(--border-subtle, #334155);
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.btn-table-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 0.75rem;
+  font-weight: 600;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-table-action:hover {
+  background: var(--bg-surface-hover, #2D3748);
+  border-color: var(--brand-blue);
+  color: var(--brand-blue);
+}
+
+.btn-table-action.btn-tutor-call {
+  border-color: rgba(59, 130, 246, 0.3);
+  color: #60A5FA;
+}
+
+.btn-table-action.btn-tutor-call:hover {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: #60A5FA;
+}
+
+.btn-table-action.btn-quick-reset {
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #FBBF24;
+}
+
+.btn-table-action.btn-quick-reset:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: #FBBF24;
+}
+
+
 

@@ -156,7 +156,7 @@
             <span class="operator-role">Control Escolar</span>
           </div>
           <button class="theme-toggle-btn" id="btn-theme-toggle" title="Alternar tema oscuro / claro" aria-label="Cambiar tema">
-            <span id="theme-icon">🌙</span>
+            <span id="theme-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg></span>
           </button>
         </div>
       </div>
@@ -366,7 +366,7 @@
                 <label for="input-custom-password" class="field-label-sm">Nueva Contraseña:</label>
                 <div class="field-button-group">
                   <input type="password" id="input-custom-password" class="saas-input mono" placeholder="Mínimo 8 caracteres, mayúsculas, dígitos y símbolos">
-                  <button type="button" id="btn-toggle-custom-pw" class="btn btn-secondary-saas">👁️ Ver</button>
+                  <button type="button" id="btn-toggle-custom-pw" class="btn btn-secondary-saas"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>Ver</button>
                 </div>
                 <span class="field-hint">Complejidad requerida: 8+ caracteres con mayúsculas, minúsculas, números y caracteres especiales.</span>
               </div>
@@ -481,7 +481,7 @@
                 </div>
 
                 <div class="ticket-footer-strip">
-                  <span>ℹ️ El sistema te solicitará cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.</span>
+                  <span><svg class="icon-inline" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>El sistema te solicitará cambiar esta contraseña en tu primer inicio de sesión por una personal y confidencial.</span>
                 </div>
               </div>
             </div>
@@ -587,7 +587,7 @@
                   placeholder="Escribe aquí la matrícula exacta..." 
                   autocomplete="off"
                 >
-                <div id="delete-lock-status-badge" class="lock-status-pill locked">🔒 Bloqueado</div>
+                <div id="delete-lock-status-badge" class="lock-status-pill locked"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right:4px;"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>Bloqueado</div>
               </div>
             </div>
 
@@ -824,6 +824,11 @@
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
               <span>Normalizador de Nomenclatura</span>
               <span class="subnav-badge badge-blue" id="badge-nomenclature-pending" style="display: none;">0</span>
+            </button>
+            <button type="button" class="teams-subnav-btn" id="btn-subnav-teams-activity" data-subtab="teams-subtab-activity">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span>Auditor de Inactividad y Accesos</span>
+              <span class="subnav-badge badge-amber" id="badge-activity-inactive5d" style="display: none;">0</span>
             </button>
           </div>
 
@@ -1240,6 +1245,147 @@
             </div>
           </div>
         </div> <!-- Fin de #teams-subtab-nomenclature -->
+
+        <!-- SUB-TAB 4: AUDITORIA DE INACTIVIDAD Y ACCESOS DE ALUMNOS -->
+        <div class="teams-subtab-pane" id="teams-subtab-activity" style="display: none;">
+          <!-- Banner Superior y Controles -->
+          <div class="subtab-action-header">
+            <div>
+              <h3 class="subtab-title">Auditoría de Inactividad y Primer Acceso (Teams & M365)</h3>
+              <p class="subtab-desc">Monitorea alumnos activos del ciclo 2026-2027 sin inicio de sesión en 5 días o más, o que nunca han accedido a su cuenta institucional para intervención y soporte temprano.</p>
+            </div>
+            <div class="subtab-header-buttons">
+              <button type="button" id="btn-export-activity-excel" class="btn btn-secondary-saas" title="Descargar reporte completo en formato Excel">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+                <span>Exportar Excel</span>
+              </button>
+              <button type="button" id="btn-refresh-activity" class="btn btn-primary-saas" title="Consultar telemetría de sesiones en vivo en Microsoft Entra ID">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                <span>Actualizar Auditoría</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Métricas KPIs de Actividad -->
+          <div class="kpi-grid-saas">
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">TOTAL EVALUADOS</span>
+                <span class="kpi-badge badge-blue">Oficial 26-27</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number" id="act-kpi-total">0</span>
+                <span class="kpi-sub">Alumnos en plantilla</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">ACTIVOS RECIENTES</span>
+                <span class="kpi-badge badge-green">&lt; 5 Días</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-green" id="act-kpi-active">0</span>
+                <span class="kpi-sub">Sesión al día</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">INACTIVOS 5+ DÍAS</span>
+                <span class="kpi-badge badge-amber">Atención</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-amber" id="act-kpi-inactive5d">0</span>
+                <span class="kpi-sub">Riesgo preventivo</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">INACTIVOS 15+ DÍAS</span>
+                <span class="kpi-badge badge-red">Crítico</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-red" id="act-kpi-inactive15d">0</span>
+                <span class="kpi-sub">Ausentismo digital</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">SIN INICIO DE SESIÓN</span>
+                <span class="kpi-badge badge-purple">Nunca Entraron</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-purple" id="act-kpi-never">0</span>
+                <span class="kpi-sub">Clave no utilizada</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Barra de Búsqueda y Filtros Combinables -->
+          <div class="saas-card teams-filters-panel">
+            <div class="teams-search-row">
+              <div class="search-input-wrapper flex-grow">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="act-search-input" class="saas-input" placeholder="Buscar alumno por nombre, matrícula o correo institucional..." autocomplete="off">
+              </div>
+              <div class="teams-count-pill" id="act-filtered-count">Cargando alumnos...</div>
+            </div>
+
+            <div class="teams-filters-row">
+              <div class="filter-col">
+                <span class="filter-group-lbl">Rango de Actividad:</span>
+                <div class="filter-pill-group" id="filter-group-act-status">
+                  <button type="button" class="pill-btn" data-act="all">Todos</button>
+                  <button type="button" class="pill-btn active" data-act="inactive5d">Inactivos 5+ Días</button>
+                  <button type="button" class="pill-btn" data-act="inactive15d">Inactivos 15+ Días</button>
+                  <button type="button" class="pill-btn" data-act="never">Nunca Iniciaron</button>
+                  <button type="button" class="pill-btn" data-act="recent">Activos Recientes (&lt; 5d)</button>
+                </div>
+              </div>
+
+              <div class="filter-col">
+                <span class="filter-group-lbl">Nivel Escolar:</span>
+                <div class="filter-pill-group" id="filter-group-act-level">
+                  <button type="button" class="pill-btn active" data-level="all">Todos</button>
+                  <button type="button" class="pill-btn" data-level="Preescolar">Preescolar</button>
+                  <button type="button" class="pill-btn" data-level="Primaria">Primaria</button>
+                  <button type="button" class="pill-btn" data-level="Secundaria">Secundaria</button>
+                  <button type="button" class="pill-btn" data-level="Preparatoria">Preparatoria</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabla de Inactividad de Alumnos -->
+          <div class="saas-card table-card-premium">
+            <div class="table-responsive">
+              <table class="saas-table teams-table-compact" id="activity-table">
+                <thead>
+                  <tr>
+                    <th style="width: 90px;">Matrícula</th>
+                    <th>Alumno</th>
+                    <th style="width: 130px;">Nivel y Grado</th>
+                    <th>Correo M365 (UPN)</th>
+                    <th style="width: 140px;">Última Sesión</th>
+                    <th class="text-center" style="width: 110px;">Días Inactivo</th>
+                    <th class="text-center" style="width: 140px;">Estado</th>
+                    <th class="text-center" style="width: 95px;">Dispositivos</th>
+                    <th style="width: 140px;">Tutor Registrado</th>
+                    <th class="text-right col-actions-sticky" style="width: 160px;">Acciones</th>
+                  </tr>
+                </thead>
+                <tbody id="activity-table-tbody">
+                  <tr>
+                    <td colspan="10" class="table-empty-row">Consultando telemetría de sesiones en Microsoft Entra ID...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div> <!-- Fin de #teams-subtab-activity -->
       </section>
 
         <!-- ==================================================================
@@ -1330,7 +1476,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Cero impacto en cuentas existentes • Protección criptográfica</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Cero impacto en cuentas existentes • Protección criptográfica</div>
             </div>
 
             <!-- Comando 2 -->
@@ -1355,7 +1501,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ 100% de sólo lectura garantizada</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>100% de sólo lectura garantizada</div>
             </div>
 
             <!-- Comando 3 -->
@@ -1380,7 +1526,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Operación instantánea sin consumo de cuotas de red</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Operación instantánea sin consumo de cuotas de red</div>
             </div>
 
             <!-- Comando 4 -->
@@ -1405,7 +1551,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Emite ficha de bienvenida con código QR de entrega inmediata</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Emite ficha de bienvenida con código QR de entrega inmediata</div>
             </div>
 
             <!-- Comando 5 -->
@@ -1430,7 +1576,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Requiere confirmación textual 'RESETEAR' para ejecutarse</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Requiere confirmación textual 'RESETEAR' para ejecutarse</div>
             </div>
 
             <!-- Comando 6 -->
@@ -1455,7 +1601,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Envío a papelera por 30 días liberando licencias A1</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Envío a papelera por 30 días liberando licencias A1</div>
             </div>
 
             <!-- Comando 7 -->
@@ -1480,7 +1626,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Genera reporte en reports/auditoria_fotos_perfil.xlsx</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Genera reporte en reports/auditoria_fotos_perfil.xlsx</div>
             </div>
 
             <!-- Comando 8 -->
@@ -1505,7 +1651,7 @@
                   </button>
                 </div>
               </div>
-              <div class="cmd-guarantee-tag">🛡️ Respaldo protegido con permisos de archivo 0700</div>
+              <div class="cmd-guarantee-tag"><svg class="icon-inline" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>Respaldo protegido con permisos de archivo 0700</div>
             </div>
           </div>
         </section>
@@ -1543,6 +1689,68 @@
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"></path><path d="M1 3h22v5H1z"></path><path d="M10 12h4"></path></svg>
       <span id="dd-label-archive">Archivar (Solo lectura)</span>
     </button>
+  </div>
+
+  <!-- MODAL: DATOS DE CONTACTO DEL TUTOR -->
+  <div class="modal-overlay" id="modal-tutor-contact" style="display: none;">
+    <div class="modal-dialog-saas modal-md">
+      <div class="modal-header-saas">
+        <div class="modal-title-wrap">
+          <div class="modal-icon-badge bg-primary-soft">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+          </div>
+          <div>
+            <h3>Ficha de Contacto de Tutor</h3>
+            <p id="tutor-modal-student-name">Información de comunicación familiar</p>
+          </div>
+        </div>
+        <button type="button" class="btn-close-modal" id="btn-close-modal-tutor">&times;</button>
+      </div>
+
+      <div class="modal-body-saas">
+        <div class="saas-card" style="margin-bottom: 1rem; background: var(--bg-surface); padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Matrícula y Grado:</span>
+            <span style="font-weight: 700; color: var(--brand-blue, #60A5FA);" id="tutor-modal-matricula-grade">-</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Correo Institucional:</span>
+            <span style="font-size: 0.82rem; font-family: monospace;" id="tutor-modal-upn">-</span>
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+          <div class="form-group-saas">
+            <label style="color: var(--text-muted); font-size: 0.78rem;">Nombre del Padre, Madre o Tutor:</label>
+            <div id="tutor-modal-name" style="font-size: 1rem; font-weight: 600; color: var(--text-primary);">-</div>
+          </div>
+
+          <div class="form-group-saas">
+            <label style="color: var(--text-muted); font-size: 0.78rem;">Teléfono de Contacto:</label>
+            <div id="tutor-modal-phone" style="display: flex; align-items: center; gap: 8px;">
+              <span id="tutor-modal-phone-text" style="font-size: 1.05rem; font-weight: 700; color: var(--brand-blue);">-</span>
+              <a href="#" id="tutor-modal-phone-link" class="btn btn-xs btn-secondary-saas" style="display: none;" target="_blank">Llamar</a>
+            </div>
+          </div>
+
+          <div class="form-group-saas">
+            <label style="color: var(--text-muted); font-size: 0.78rem;">Correo Electrónico:</label>
+            <div id="tutor-modal-email" style="display: flex; align-items: center; gap: 8px;">
+              <span id="tutor-modal-email-text" style="font-size: 0.9rem; color: var(--text-primary);">-</span>
+              <a href="#" id="tutor-modal-email-link" class="btn btn-xs btn-secondary-saas" style="display: none;">Enviar Correo</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer-saas">
+        <button type="button" class="btn btn-secondary-saas" id="btn-tutor-modal-close">Cerrar</button>
+        <button type="button" class="btn btn-primary-saas" id="btn-tutor-modal-reset">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          <span>Restablecer Contraseña de Alumno</span>
+        </button>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL 1: CREAR NUEVA CLASE ESCOLAR -->
