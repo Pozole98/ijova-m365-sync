@@ -2547,10 +2547,10 @@ def audit_students_login_activity(
     now = datetime.now(timezone.utc)
 
     records = []
-    active_recent_count = 0
-    inactive_5d_count = 0
-    inactive_15d_count = 0
+    active_sessions_count = 0
     never_logged_count = 0
+    recent_reset_count = 0
+    disabled_count = 0
 
     for mat, s in sorted(school_db.items(), key=lambda x: x[0]):
         if s.get("estatus") != "Activo":
@@ -2570,35 +2570,48 @@ def audit_students_login_activity(
         dev_keys = u.get("deviceKeys") or []
         device_count = len(dev_keys)
 
-        # Detectar si nunca inicio sesion
-        never_logged_in = False
-        if not s_dt:
-            never_logged_in = True
-        elif c_dt and abs((s_dt - c_dt).total_seconds()) < 60 and device_count == 0:
-            never_logged_in = True
+        pw_prof = u.get("passwordProfile")
+        has_pending_initial_pw = bool(pw_prof and pw_prof.get("forceChangePasswordNextSignIn") is True)
+        account_enabled = bool(u.get("accountEnabled", True))
 
-        last_active_dt = s_dt if (s_dt and not never_logged_in) else c_dt
-        days_inactive = (now - last_active_dt).days if last_active_dt else 999
+        days_since_token_issue = (now - s_dt).days if s_dt else 999
+        days_since_created = (now - c_dt).days if c_dt else 999
 
-        if never_logged_in:
+        if not account_enabled:
+            session_status = "DISABLED"
             risk_level = "CRITICAL"
-            status_text = "Nunca ha iniciado sesión"
+            status_text = "Cuenta deshabilitada en M365"
+            has_active_session = False
+            never_logged_in = False
+            credential_type = "Cuenta Suspendida"
+            disabled_count += 1
+        elif has_pending_initial_pw:
+            never_logged_in = True
+            has_active_session = False
+            session_status = "NEVER_LOGGED_IN"
+            risk_level = "CRITICAL"
+            status_text = "Sin inicio de sesión (Clave provisional pendiente)"
+            credential_type = "Clave temporal no utilizada"
             never_logged_count += 1
-            inactive_5d_count += 1
-            inactive_15d_count += 1
-        elif days_inactive >= 15:
-            risk_level = "CRITICAL"
-            status_text = f"Inactivo ({days_inactive} días)"
-            inactive_15d_count += 1
-            inactive_5d_count += 1
-        elif days_inactive >= days_threshold:
-            risk_level = "WARNING"
-            status_text = f"Inactivo ({days_inactive} días)"
-            inactive_5d_count += 1
         else:
-            risk_level = "ACTIVE"
-            status_text = f"Activo ({days_inactive} días)" if days_inactive > 0 else "Activo (Hoy)"
-            active_recent_count += 1
+            never_logged_in = False
+            has_active_session = True
+            credential_type = "Contraseña personal configurada"
+
+            if days_since_token_issue <= days_threshold:
+                session_status = "RECENT_RESET"
+                risk_level = "ACTIVE"
+                status_text = f"Sesión abierta (Actualizada hace {days_since_token_issue}d)" if days_since_token_issue > 0 else "Sesión abierta (Actualizada hoy)"
+                recent_reset_count += 1
+                active_sessions_count += 1
+            else:
+                session_status = "ACTIVE_SESSION"
+                risk_level = "ACTIVE"
+                if device_count > 0:
+                    status_text = f"Sesión abierta ({device_count} disp. reg.)"
+                else:
+                    status_text = "Sesión abierta en móvil/dispositivo"
+                active_sessions_count += 1
 
         tutor_nom = s.get("tutor_nombre") or s.get("padre_o_tutor") or ""
         tutor_tel = s.get("tutor_telefono") or s.get("telefono_contacto") or ""
@@ -2615,14 +2628,18 @@ def audit_students_login_activity(
             "upn": upn,
             "userPrincipalName": upn,
             "user_id": u.get("id"),
-            "account_enabled": u.get("accountEnabled", True),
-            "accountEnabled": u.get("accountEnabled", True),
+            "account_enabled": account_enabled,
+            "accountEnabled": account_enabled,
             "created_date": c_dt.strftime("%Y-%m-%d") if c_dt else "-",
             "createdDateTime": u.get("createdDateTime", ""),
-            "last_session_date": s_dt.strftime("%Y-%m-%d %H:%M") if (s_dt and not never_logged_in) else "Sin acceso",
-            "last_sign_in_formatted": s_dt.strftime("%Y-%m-%d %H:%M") if (s_dt and not never_logged_in) else "Sin acceso",
-            "days_inactive": days_inactive,
+            "last_session_date": s_dt.strftime("%Y-%m-%d %H:%M") if s_dt else "Sin registro",
+            "last_sign_in_formatted": s_dt.strftime("%Y-%m-%d %H:%M") if s_dt else "Sin registro",
+            "days_inactive": days_since_token_issue if not has_active_session else 0,
+            "days_since_token_issue": days_since_token_issue,
             "never_logged_in": never_logged_in,
+            "has_active_session": has_active_session,
+            "session_status": session_status,
+            "credential_type": credential_type,
             "risk_level": risk_level,
             "risk_label": status_text,
             "status_text": status_text,
@@ -2643,17 +2660,20 @@ def audit_students_login_activity(
     records.sort(key=lambda x: (risk_order.get(x["risk_level"], 9), -x["days_inactive"], x["matricula"]))
 
     total_eval = len(records)
-    adoption_rate = round((active_recent_count / total_eval * 100), 1) if total_eval > 0 else 0.0
+    adoption_rate = round((active_sessions_count / total_eval * 100), 1) if total_eval > 0 else 0.0
 
     summary = {
         "total_evaluated": total_eval,
         "total_students": total_eval,
-        "active_recent": active_recent_count,
-        "inactive_5d": inactive_5d_count,
-        "inactive_5d_or_more": inactive_5d_count,
-        "inactive_15d": inactive_15d_count,
-        "inactive_15d_or_more": inactive_15d_count,
+        "active_sessions": active_sessions_count,
+        "active_recent": active_sessions_count,
         "never_logged_in": never_logged_count,
+        "inactive_5d": never_logged_count,
+        "inactive_5d_or_more": never_logged_count,
+        "inactive_15d": never_logged_count,
+        "inactive_15d_or_more": never_logged_count,
+        "recent_resets": recent_reset_count,
+        "disabled_accounts": disabled_count,
         "adoption_rate": adoption_rate,
         "threshold_days": days_threshold,
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -2704,10 +2724,10 @@ def export_activity_audit_excel(activity_data: Dict[str, Any], output_path: str)
         "Grado",
         "Correo Institucional",
         "Estado Actividad",
-        "Días Inactivo",
+        "Tipo de Credencial",
+        "Dispositivos",
         "Última Sesión",
         "Fecha Creación",
-        "Dispositivos",
         "Nombre Tutor",
         "Teléfono Tutor",
         "Correo Tutor"
@@ -2729,10 +2749,10 @@ def export_activity_audit_excel(activity_data: Dict[str, Any], output_path: str)
             s.get("grado", ""),
             s.get("upn") or s.get("userPrincipalName", ""),
             s.get("status_text") or s.get("risk_label", ""),
-            s.get("days_inactive", 0),
+            s.get("credential_type", "Sesión normal"),
+            s.get("device_count") if "device_count" in s else s.get("devices_count", 0),
             s.get("last_session_date") or s.get("last_sign_in_formatted", ""),
             s.get("created_date", ""),
-            s.get("device_count") if "device_count" in s else s.get("devices_count", 0),
             s.get("tutor_nombre") or tutor_obj.get("nombre", ""),
             s.get("tutor_telefono") or tutor_obj.get("telefono", ""),
             s.get("tutor_correo") or tutor_obj.get("correo", "")

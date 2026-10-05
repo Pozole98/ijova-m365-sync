@@ -329,10 +329,10 @@ class GraphClient:
 
     def get_users_with_activity(self) -> List[Dict[str, Any]]:
         """
-        Recupera todos los usuarios con metadatos de sesion, tokens y dispositivos desde Microsoft Graph.
-        Utiliza el endpoint beta para acceder a signInSessionsValidFromDateTime y deviceKeys.
+        Recupera todos los usuarios con metadatos de sesion, tokens, dispositivos y perfil de clave desde Microsoft Graph.
+        Utiliza el endpoint beta para acceder a signInSessionsValidFromDateTime, deviceKeys y passwordProfile.
         """
-        url = "https://graph.microsoft.com/beta/users?$select=id,displayName,userPrincipalName,createdDateTime,signInSessionsValidFromDateTime,refreshTokensValidFromDateTime,deviceKeys,accountEnabled&$top=999"
+        url = "https://graph.microsoft.com/beta/users?$select=id,displayName,userPrincipalName,createdDateTime,signInSessionsValidFromDateTime,refreshTokensValidFromDateTime,deviceKeys,accountEnabled,passwordProfile&$top=999"
         all_users = []
         while url:
             data = self._request_with_retry(url)

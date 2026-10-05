@@ -1266,7 +1266,7 @@
             </div>
           </div>
 
-          <!-- Métricas KPIs de Actividad -->
+          <!-- Métricas KPIs de Actividad y Sesiones -->
           <div class="kpi-grid-saas">
             <div class="kpi-card">
               <div class="kpi-header">
@@ -1281,45 +1281,45 @@
 
             <div class="kpi-card">
               <div class="kpi-header">
-                <span class="kpi-title">ACTIVOS RECIENTES</span>
-                <span class="kpi-badge badge-green">&lt; 5 Días</span>
+                <span class="kpi-title">SESIÓN ABIERTA</span>
+                <span class="kpi-badge badge-green">Móvil / PC</span>
               </div>
               <div class="kpi-value-row">
                 <span class="kpi-number text-green" id="act-kpi-active">0</span>
-                <span class="kpi-sub">Sesión al día</span>
-              </div>
-            </div>
-
-            <div class="kpi-card">
-              <div class="kpi-header">
-                <span class="kpi-title">INACTIVOS 5+ DÍAS</span>
-                <span class="kpi-badge badge-amber">Atención</span>
-              </div>
-              <div class="kpi-value-row">
-                <span class="kpi-number text-amber" id="act-kpi-inactive5d">0</span>
-                <span class="kpi-sub">Riesgo preventivo</span>
-              </div>
-            </div>
-
-            <div class="kpi-card">
-              <div class="kpi-header">
-                <span class="kpi-title">INACTIVOS 15+ DÍAS</span>
-                <span class="kpi-badge badge-red">Crítico</span>
-              </div>
-              <div class="kpi-value-row">
-                <span class="kpi-number text-red" id="act-kpi-inactive15d">0</span>
-                <span class="kpi-sub">Ausentismo digital</span>
+                <span class="kpi-sub">Teams configurado</span>
               </div>
             </div>
 
             <div class="kpi-card">
               <div class="kpi-header">
                 <span class="kpi-title">SIN INICIO DE SESIÓN</span>
-                <span class="kpi-badge badge-purple">Nunca Entraron</span>
+                <span class="kpi-badge badge-purple">Atención Urgente</span>
               </div>
               <div class="kpi-value-row">
                 <span class="kpi-number text-purple" id="act-kpi-never">0</span>
                 <span class="kpi-sub">Clave no utilizada</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">RESETEO RECIENTE</span>
+                <span class="kpi-badge badge-amber">&lt; 5 Días</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-amber" id="act-kpi-inactive5d">0</span>
+                <span class="kpi-sub">Validar reingreso</span>
+              </div>
+            </div>
+
+            <div class="kpi-card">
+              <div class="kpi-header">
+                <span class="kpi-title">TASA DE ADOPCIÓN</span>
+                <span class="kpi-badge badge-blue">Activos M365</span>
+              </div>
+              <div class="kpi-value-row">
+                <span class="kpi-number text-green" id="act-kpi-inactive15d">0%</span>
+                <span class="kpi-sub">Alumnos con acceso</span>
               </div>
             </div>
           </div>
@@ -1336,13 +1336,12 @@
 
             <div class="teams-filters-row">
               <div class="filter-col">
-                <span class="filter-group-lbl">Rango de Actividad:</span>
+                <span class="filter-group-lbl">Estado de Sesión:</span>
                 <div class="filter-pill-group" id="filter-group-act-status">
-                  <button type="button" class="pill-btn" data-act="all">Todos</button>
-                  <button type="button" class="pill-btn active" data-act="inactive5d">Inactivos 5+ Días</button>
-                  <button type="button" class="pill-btn" data-act="inactive15d">Inactivos 15+ Días</button>
-                  <button type="button" class="pill-btn" data-act="never">Nunca Iniciaron</button>
-                  <button type="button" class="pill-btn" data-act="recent">Activos Recientes (&lt; 5d)</button>
+                  <button type="button" class="pill-btn active" data-act="all">Todos</button>
+                  <button type="button" class="pill-btn" data-act="never">Sin Inicio de Sesión</button>
+                  <button type="button" class="pill-btn" data-act="active">Con Sesión Abierta (Móvil/PC)</button>
+                  <button type="button" class="pill-btn" data-act="recent">Reseteo Reciente</button>
                 </div>
               </div>
 
@@ -1369,9 +1368,8 @@
                     <th>Alumno</th>
                     <th style="width: 130px;">Nivel y Grado</th>
                     <th>Correo M365 (UPN)</th>
-                    <th style="width: 140px;">Última Sesión</th>
-                    <th class="text-center" style="width: 110px;">Días Inactivo</th>
-                    <th class="text-center" style="width: 140px;">Estado</th>
+                    <th style="width: 175px;">Estado de Sesión</th>
+                    <th style="width: 155px;">Tipo de Credencial</th>
                     <th class="text-center" style="width: 95px;">Dispositivos</th>
                     <th style="width: 140px;">Tutor Registrado</th>
                     <th class="text-right col-actions-sticky" style="width: 160px;">Acciones</th>
@@ -1379,7 +1377,7 @@
                 </thead>
                 <tbody id="activity-table-tbody">
                   <tr>
-                    <td colspan="10" class="table-empty-row">Consultando telemetría de sesiones en Microsoft Entra ID...</td>
+                    <td colspan="9" class="table-empty-row">Consultando telemetría de sesiones en Microsoft Entra ID...</td>
                   </tr>
                 </tbody>
               </table>

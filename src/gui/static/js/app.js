@@ -3626,30 +3626,30 @@ document.addEventListener('DOMContentLoaded', () => {
         const s = res.data.summary || {};
 
         if (actKpiTotal) actKpiTotal.textContent = s.total_students || 0;
-        if (actKpiActive) actKpiActive.textContent = s.active_recent || 0;
-        if (actKpiInactive5d) actKpiInactive5d.textContent = s.inactive_5d_or_more || 0;
-        if (actKpiInactive15d) actKpiInactive15d.textContent = s.inactive_15d_or_more || 0;
+        if (actKpiActive) actKpiActive.textContent = s.active_sessions || s.active_recent || 0;
         if (actKpiNever) actKpiNever.textContent = s.never_logged_in || 0;
+        if (actKpiInactive5d) actKpiInactive5d.textContent = s.recent_resets || 0;
+        if (actKpiInactive15d) actKpiInactive15d.textContent = (s.adoption_rate || 0) + '%';
 
         if (badgeActivityInactive5d) {
-          const totalAtRisk = (s.inactive_5d_or_more || 0);
-          badgeActivityInactive5d.textContent = `${totalAtRisk} en riesgo`;
+          const totalAtRisk = (s.never_logged_in || 0);
+          badgeActivityInactive5d.textContent = `${totalAtRisk} sin iniciar sesión`;
           badgeActivityInactive5d.style.display = totalAtRisk > 0 ? 'inline-block' : 'none';
         }
 
         filterAndRenderActivityTable();
         if (forceRefresh) {
-          showToast('Auditoría de actividad actualizada con éxito.', 'success');
+          showToast('Auditoría de sesiones actualizada con éxito.', 'success');
         }
       } else {
         if (actTableTbody) {
-          actTableTbody.innerHTML = `<tr><td colspan="10" class="table-empty-row" style="color: var(--color-danger);">Error al consultar actividad: ${res.error || 'Desconocido'}</td></tr>`;
+          actTableTbody.innerHTML = `<tr><td colspan="9" class="table-empty-row" style="color: var(--color-danger);">Error al consultar actividad: ${res.error || 'Desconocido'}</td></tr>`;
         }
         showToast(`Error al consultar auditoría: ${res.error || 'Desconocido'}`, 'error');
       }
     } catch (err) {
       if (actTableTbody) {
-        actTableTbody.innerHTML = `<tr><td colspan="10" class="table-empty-row" style="color: var(--color-danger);">Error de conexión: ${err.message}</td></tr>`;
+        actTableTbody.innerHTML = `<tr><td colspan="9" class="table-empty-row" style="color: var(--color-danger);">Error de conexión: ${err.message}</td></tr>`;
       }
       showToast(`Error de conexión: ${err.message}`, 'error');
     } finally {
@@ -3675,15 +3675,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
 
-      // 2. Filtro por rango de actividad
-      if (actFilterStatus === 'inactive5d') {
-        if (!stu.never_logged_in && (stu.days_inactive < 5)) return false;
-      } else if (actFilterStatus === 'inactive15d') {
-        if (!stu.never_logged_in && (stu.days_inactive < 15)) return false;
-      } else if (actFilterStatus === 'never') {
-        if (!stu.never_logged_in) return false;
+      // 2. Filtro por estado de sesión
+      if (actFilterStatus === 'never') {
+        if (!stu.never_logged_in && stu.session_status !== 'NEVER_LOGGED_IN') return false;
+      } else if (actFilterStatus === 'active') {
+        if (!stu.has_active_session) return false;
       } else if (actFilterStatus === 'recent') {
-        if (stu.never_logged_in || stu.days_inactive >= 5) return false;
+        if (stu.session_status !== 'RECENT_RESET') return false;
       }
 
       // 3. Filtro por nivel escolar
@@ -3701,7 +3699,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (filtered.length === 0) {
-      actTableTbody.innerHTML = '<tr><td colspan="10" class="table-empty-row">No se encontraron alumnos que coincidan con los filtros seleccionados.</td></tr>';
+      actTableTbody.innerHTML = '<tr><td colspan="9" class="table-empty-row">No se encontraron alumnos que coincidan con los filtros seleccionados.</td></tr>';
       return;
     }
 
@@ -3709,35 +3707,31 @@ document.addEventListener('DOMContentLoaded', () => {
     filtered.forEach(stu => {
       const tr = document.createElement('tr');
 
-      // Estado / Badge
+      // Estado de Sesión / Badge
       let statusBadge = '';
-      if (stu.risk_level === 'CRITICAL') {
-        statusBadge = `<span class="badge-risk badge-risk-critical"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${escapeHtml(stu.risk_label)}</span>`;
-      } else if (stu.risk_level === 'WARNING') {
-        statusBadge = `<span class="badge-risk badge-risk-warning"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${escapeHtml(stu.risk_label)}</span>`;
+      if (stu.never_logged_in || stu.session_status === 'NEVER_LOGGED_IN') {
+        statusBadge = `<span class="badge-risk badge-risk-critical" title="El alumno nunca ha completado su inicio de sesión inicial"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>${escapeHtml(stu.status_text)}</span>`;
+      } else if (stu.session_status === 'RECENT_RESET') {
+        statusBadge = `<span class="badge-risk badge-risk-warning" title="Contraseña restablecida recientemente"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${escapeHtml(stu.status_text)}</span>`;
+      } else if (stu.session_status === 'DISABLED') {
+        statusBadge = `<span class="badge-risk badge-risk-critical">${escapeHtml(stu.status_text)}</span>`;
       } else {
-        statusBadge = `<span class="badge-risk badge-risk-active"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>${escapeHtml(stu.risk_label)}</span>`;
+        statusBadge = `<span class="badge-risk badge-risk-active" title="Sesión activa y persistente en aplicación Teams móvil/PC"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>${escapeHtml(stu.status_text)}</span>`;
       }
 
-      // Días inactivo
-      let daysDisplay = '';
+      // Tipo de Credencial
+      let credDisplay = '';
       if (stu.never_logged_in) {
-        daysDisplay = '<span class="badge badge-purple" style="font-size:0.75rem;">Nunca</span>';
+        credDisplay = '<span class="badge badge-purple" style="font-size:0.72rem;">Clave provisional pendiente</span>';
       } else {
-        const colorCls = stu.days_inactive >= 15 ? 'text-red' : (stu.days_inactive >= 5 ? 'text-amber' : 'text-green');
-        daysDisplay = `<span class="${colorCls}" style="font-weight:700;">${stu.days_inactive} días</span>`;
+        credDisplay = `<span style="font-size:0.78rem; color:var(--text-secondary);">${escapeHtml(stu.credential_type || 'Contraseña configurada')}</span>`;
       }
-
-      // Última sesión
-      const lastSessionDisplay = stu.never_logged_in
-        ? '<span style="color:var(--text-muted); font-size:0.8rem;">Sin registro inicial</span>'
-        : `<span style="font-size:0.82rem; font-family:var(--font-mono, monospace);">${escapeHtml(stu.last_sign_in_formatted || '-')}</span>`;
 
       // Tutor
       let tutorDisplay = '';
       if (stu.tutor && (stu.tutor.nombre || stu.tutor.telefono)) {
         tutorDisplay = `<button type="button" class="btn-table-action btn-tutor-call" data-matricula="${stu.matricula}" title="Ver contacto del tutor">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
           <span>Tutor</span>
         </button>`;
       } else {
@@ -3746,7 +3740,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Dispositivos
       const devCount = stu.devices_count || 0;
-      const devDisplay = `<span class="device-chip" title="${devCount} credencial(es) o dispositivo(s) registrados">
+      const devDisplay = `<span class="device-chip" title="${devCount} credencial(es) de dispositivo vinculadas">
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
         <span>${devCount}</span>
       </span>`;
@@ -3761,9 +3755,8 @@ document.addEventListener('DOMContentLoaded', () => {
           <div style="font-size:0.76rem; color:var(--text-muted);">${escapeHtml(stu.grado || '')}</div>
         </td>
         <td class="font-mono" style="font-size:0.8rem; color:var(--text-secondary);">${escapeHtml(stu.userPrincipalName || '-')}</td>
-        <td>${lastSessionDisplay}</td>
-        <td class="text-center">${daysDisplay}</td>
-        <td class="text-center">${statusBadge}</td>
+        <td>${statusBadge}</td>
+        <td>${credDisplay}</td>
         <td class="text-center">${devDisplay}</td>
         <td>${tutorDisplay}</td>
         <td class="text-right col-actions-sticky">
