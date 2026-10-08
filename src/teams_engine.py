@@ -1931,22 +1931,35 @@ def parse_and_standardize_team_name(name: str, desc: str = "") -> Dict[str, Any]
     # 3. Grado escolar
     grado = "1°"
     if nivel == "Preparatoria":
-        sem_m = re.search(r'([1-6])\s*(?:er|do|to|o|°)?\s*sem', combined_text)
-        if sem_m:
-            num = sem_m.group(1)
+        # Priorizar el titulo antes de la descripcion para evitar falsos positivos
+        title_sem = re.search(r'([1-6])\s*(?:er|do|to|o|°)?\s*sem', text_no_cycle, re.IGNORECASE)
+        if title_sem:
+            num = title_sem.group(1)
             suffixes = {"1": "1er", "2": "2do", "3": "3er", "4": "4to", "5": "5to", "6": "6to"}
             grado = f"{suffixes.get(num, num)} Semestre"
-        elif "iii" in combined_text:
+        elif re.search(r'\biii\s*semestre\b|\biii\b', text_no_cycle, re.IGNORECASE):
             grado = "3er Semestre"
-        elif "v" in combined_text:
+        elif re.search(r'\bv\s*semestre\b|\bv\b', text_no_cycle, re.IGNORECASE):
             grado = "5to Semestre"
-        elif "i" in combined_text:
+        elif re.search(r'\bi\s*semestre\b|\bi\b', text_no_cycle, re.IGNORECASE):
             grado = "1er Semestre"
         else:
-            g_any = re.search(r'([1-6])', combined_text)
-            num = g_any.group(1) if g_any else "1"
-            suffixes = {"1": "1er", "2": "2do", "3": "3er", "4": "4to", "5": "5to", "6": "6to"}
-            grado = f"{suffixes.get(num, num)} Semestre"
+            sem_m = re.search(r'([1-6])\s*(?:er|do|to|o|°)?\s*sem', combined_text)
+            if sem_m:
+                num = sem_m.group(1)
+                suffixes = {"1": "1er", "2": "2do", "3": "3er", "4": "4to", "5": "5to", "6": "6to"}
+                grado = f"{suffixes.get(num, num)} Semestre"
+            elif re.search(r'\biii\b', combined_text):
+                grado = "3er Semestre"
+            elif re.search(r'\bv\b', combined_text):
+                grado = "5to Semestre"
+            elif re.search(r'\bi\b', combined_text):
+                grado = "1er Semestre"
+            else:
+                g_any = re.search(r'([1-6])', combined_text)
+                num = g_any.group(1) if g_any else "1"
+                suffixes = {"1": "1er", "2": "2do", "3": "3er", "4": "4to", "5": "5to", "6": "6to"}
+                grado = f"{suffixes.get(num, num)} Semestre"
     elif nivel == "Primaria":
         if "6" in combined_text or "sexto" in combined_text:
             grado = "6°"
