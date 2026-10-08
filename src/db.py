@@ -139,9 +139,24 @@ def init_db_schema() -> bool:
                 es_principal BOOLEAN DEFAULT TRUE,
                 fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (matricula_alumno) REFERENCES alumnos(matricula) ON DELETE CASCADE,
+                UNIQUE KEY uq_tutor_alumno (matricula_alumno),
                 INDEX idx_tutor_alumno (matricula_alumno)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
             """)
+
+            # Asegurar indice unico en tutores si la tabla ya existia previamente sin el
+            try:
+                cur.execute("""
+                    SELECT COUNT(*) as cnt 
+                    FROM information_schema.TABLE_CONSTRAINTS 
+                    WHERE TABLE_SCHEMA = DATABASE() 
+                      AND TABLE_NAME = 'tutores' 
+                      AND CONSTRAINT_NAME = 'uq_tutor_alumno'
+                """)
+                if cur.fetchone()["cnt"] == 0:
+                    cur.execute("ALTER TABLE tutores ADD UNIQUE KEY uq_tutor_alumno (matricula_alumno)")
+            except Exception:
+                pass
 
             cur.execute("""
             CREATE TABLE IF NOT EXISTS bitacora_auditoria (
@@ -170,7 +185,8 @@ def get_all_students(
     offset: int = 0
 ) -> Tuple[List[Dict[str, Any]], int]:
     """
-    Retorna la lista de alumnos con sus tutores y el total filtrado.
+    Retorna la lista de alumnos con sus tutores y el total filtrado, garantizando
+    unicidad estricta para evitar duplicaciones en la interfaz de usuario.
     """
     conn = get_connection()
     try:
@@ -197,17 +213,27 @@ def get_all_students(
 
             where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
-            # Conteo total
+            # Conteo total unico
             count_sql = f"""
                 SELECT COUNT(DISTINCT a.matricula) as total
                 FROM alumnos a
-                LEFT JOIN tutores t ON a.matricula = t.matricula_alumno AND t.es_principal = TRUE
+                LEFT JOIN (
+                    SELECT 
+                        matricula_alumno,
+                        MAX(nombre) AS nombre,
+                        MAX(telefono) AS telefono,
+                        MAX(correo) AS correo,
+                        MAX(parentesco) AS parentesco
+                    FROM tutores
+                    WHERE es_principal = TRUE
+                    GROUP BY matricula_alumno
+                ) t ON a.matricula = t.matricula_alumno
                 {where_sql}
             """
             cur.execute(count_sql, params)
             total = cur.fetchone()["total"]
 
-            # Datos paginados
+            # Datos paginados garantizando exactamente un registro por alumno
             data_sql = f"""
                 SELECT 
                     a.matricula,
@@ -232,7 +258,17 @@ def get_all_students(
                     t.correo AS tutor_correo,
                     t.parentesco AS tutor_parentesco
                 FROM alumnos a
-                LEFT JOIN tutores t ON a.matricula = t.matricula_alumno AND t.es_principal = TRUE
+                LEFT JOIN (
+                    SELECT 
+                        matricula_alumno,
+                        MAX(nombre) AS nombre,
+                        MAX(telefono) AS telefono,
+                        MAX(correo) AS correo,
+                        MAX(parentesco) AS parentesco
+                    FROM tutores
+                    WHERE es_principal = TRUE
+                    GROUP BY matricula_alumno
+                ) t ON a.matricula = t.matricula_alumno
                 {where_sql}
                 ORDER BY a.nivel ASC, a.grado ASC, a.nombre_oficial ASC
                 LIMIT %s OFFSET %s
@@ -496,7 +532,16 @@ def get_school_db_from_mariadb(only_active: bool = False) -> Dict[str, Dict[str,
                     t.telefono AS tutor_telefono,
                     t.correo AS tutor_correo
                 FROM alumnos a
-                LEFT JOIN tutores t ON a.matricula = t.matricula_alumno AND t.es_principal = TRUE
+                LEFT JOIN (
+                    SELECT 
+                        matricula_alumno,
+                        MAX(nombre) AS nombre,
+                        MAX(telefono) AS telefono,
+                        MAX(correo) AS correo
+                    FROM tutores
+                    WHERE es_principal = TRUE
+                    GROUP BY matricula_alumno
+                ) t ON a.matricula = t.matricula_alumno
             """
             if only_active:
                 sql += " WHERE a.estatus = 'Activo'"

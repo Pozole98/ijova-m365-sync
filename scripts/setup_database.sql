@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS tutores (
     es_principal BOOLEAN DEFAULT TRUE,
     fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (matricula_alumno) REFERENCES alumnos(matricula) ON DELETE CASCADE,
+    UNIQUE KEY uq_tutor_alumno (matricula_alumno),
     INDEX idx_tutor_alumno (matricula_alumno)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
