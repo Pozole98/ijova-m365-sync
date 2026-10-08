@@ -18,5 +18,12 @@
   "reports_dir": "reports",
   "backups_dir": "backups",
   "data_dir": "data",
-  "secrets_dir": "secrets"
+  "secrets_dir": "secrets",
+  "db": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "ijova_user",
+    "password": "tu_password_seguro_mariadb",
+    "database": "ijova_identity"
+  }
 }

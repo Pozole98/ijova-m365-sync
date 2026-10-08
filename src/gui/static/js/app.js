@@ -56,6 +56,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const tabTitles = {
     'tab-reset': 'Restablecer Contraseña',
+    'tab-directory': 'Directorio de Alumnos (MariaDB)',
     'tab-delete': 'Bajas de Alumnos',
     'tab-recycle': 'Papelera & Restauración',
     'tab-photos': 'Auditoría de Fotos de Perfil',
@@ -89,7 +90,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Carga de datos bajo demanda
-    if (targetTabId === 'tab-recycle') {
+    if (targetTabId === 'tab-directory') {
+      loadDatabaseDirectory();
+    } else if (targetTabId === 'tab-recycle') {
       loadRecycleBin();
     } else if (targetTabId === 'tab-photos') {
       loadPhotosStats();
@@ -3922,6 +3925,571 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExportActivityExcel.addEventListener('click', () => {
       showToast('Descargando reporte de auditoría de inactividad...', 'info');
       window.location.href = '/api/teams/activity/export-excel';
+    });
+  }
+
+  // =========================================================================
+  // GESTIÓN Y DIRECTORIO DE ALUMNOS (MARIADB)
+  // =========================================================================
+  let dbCurrentPage = 1;
+  const dbPageLimit = 50;
+  let dbSearchQuery = '';
+  let dbFilterNivel = '';
+  let dbFilterEstatus = 'Activo';
+  let dbTotalRecords = 0;
+  let dbTotalPages = 1;
+
+  const dbLiveStatusPill = document.getElementById('db-live-status-pill');
+  const dbSetupAlert = document.getElementById('db-setup-alert');
+  const dbSetupAlertText = document.getElementById('db-setup-alert-text');
+  const btnCheckDbConnection = document.getElementById('btn-check-db-connection');
+  const btnSeedMariadb = document.getElementById('btn-seed-mariadb');
+
+  const dbMetricTotal = document.getElementById('db-metric-total');
+  const dbMetricActivos = document.getElementById('db-metric-activos');
+  const dbMetricBajas = document.getElementById('db-metric-bajas');
+  const dbMetricEgresados = document.getElementById('db-metric-egresados');
+  const dbMetricEngine = document.getElementById('db-metric-engine');
+  const dbMetricEngineStatus = document.getElementById('db-metric-engine-status');
+
+  const dbSearchInput = document.getElementById('db-search-input');
+  const dbFilterNivelEl = document.getElementById('db-filter-nivel');
+  const dbFilterEstatusEl = document.getElementById('db-filter-estatus');
+  const btnDbRefresh = document.getElementById('btn-db-refresh');
+  const btnExportDbExcel = document.getElementById('btn-export-db-excel');
+
+  const tbodyDbStudents = document.getElementById('tbody-db-students');
+  const dbPaginationInfo = document.getElementById('db-pagination-info');
+  const btnDbPrevPage = document.getElementById('btn-db-prev-page');
+  const btnDbNextPage = document.getElementById('btn-db-next-page');
+
+  // Modales
+  const modalCreateStudent = document.getElementById('modal-create-student');
+  const btnOpenCreateStudent = document.getElementById('btn-open-create-student');
+  const btnCloseCreateStudentModal = document.getElementById('btn-close-create-student-modal');
+  const btnCancelCreateStudent = document.getElementById('btn-cancel-create-student');
+  const formCreateStudent = document.getElementById('form-create-student');
+  const btnSuggestMatricula = document.getElementById('btn-suggest-matricula');
+
+  const modalEditStudent = document.getElementById('modal-edit-student');
+  const btnCloseEditStudentModal = document.getElementById('btn-close-edit-student-modal');
+  const btnCancelEditStudent = document.getElementById('btn-cancel-edit-student');
+  const formEditStudent = document.getElementById('form-edit-student');
+
+  window.loadDatabaseDirectory = function() {
+    fetchDatabaseHealth();
+    loadDatabaseStudents(1);
+  };
+
+  async function fetchDatabaseHealth() {
+    try {
+      const res = await fetch('/api/db/status');
+      const data = await res.json();
+      const status = data.data || data;
+
+      if (status.connected && status.tables_ready) {
+        if (dbLiveStatusPill) {
+          dbLiveStatusPill.textContent = 'MariaDB Conectado';
+          dbLiveStatusPill.className = 'nav-pill pill-blue';
+        }
+        if (dbMetricEngine) dbMetricEngine.textContent = 'MariaDB 11.8';
+        if (dbMetricEngineStatus) {
+          dbMetricEngineStatus.textContent = 'Activo y Sincronizado';
+          dbMetricEngineStatus.style.color = '#137333';
+        }
+
+        if (dbMetricTotal) dbMetricTotal.textContent = status.total_alumnos || '0';
+        if (dbMetricActivos) dbMetricActivos.textContent = status.alumnos_activos || '0';
+        if (dbMetricBajas) dbMetricBajas.textContent = status.alumnos_bajas || '0';
+        if (dbMetricEgresados) dbMetricEgresados.textContent = status.alumnos_egresados || '0';
+
+        if (status.total_alumnos === 0) {
+          if (dbSetupAlert) {
+            dbSetupAlert.style.display = 'block';
+            dbSetupAlertText.innerHTML = 'La base de datos está conectada pero vacía. Haz clic en <strong>Sembrar Datos Iniciales</strong> para importar los 120 alumnos oficiales del ciclo 2026-2027.';
+          }
+        } else {
+          if (dbSetupAlert) dbSetupAlert.style.display = 'none';
+        }
+      } else {
+        if (dbLiveStatusPill) {
+          dbLiveStatusPill.textContent = 'Pendiente de Inicializar';
+          dbLiveStatusPill.className = 'nav-pill pill-danger';
+        }
+        if (dbMetricEngine) dbMetricEngine.textContent = 'Modo Respaldo (Excel)';
+        if (dbMetricEngineStatus) {
+          dbMetricEngineStatus.textContent = 'Ejecutar script SQL';
+          dbMetricEngineStatus.style.color = '#C5221F';
+        }
+        if (dbSetupAlert) {
+          dbSetupAlert.style.display = 'block';
+          dbSetupAlertText.innerHTML = `Para inicializar MariaDB en tu equipo, ejecuta en terminal:<br><code style="background: rgba(0,0,0,0.06); padding: 4px 8px; border-radius: 4px; display: inline-block; margin-top: 6px; font-weight: bold;">sudo mariadb &lt; scripts/setup_database.sql</code>`;
+        }
+      }
+    } catch (err) {
+      console.error('Error al consultar estado de MariaDB:', err);
+    }
+  }
+
+  async function loadDatabaseStudents(page = 1) {
+    dbCurrentPage = page;
+    if (tbodyDbStudents) {
+      tbodyDbStudents.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 40px; color: #5F6368;">
+            <div class="spinner-sm" style="display: inline-block; margin-right: 8px;"></div>
+            Cargando alumnos...
+          </td>
+        </tr>
+      `;
+    }
+
+    try {
+      const params = new URLSearchParams({
+        page: page,
+        limit: dbPageLimit
+      });
+      if (dbSearchQuery) params.append('search', dbSearchQuery);
+      if (dbFilterNivel) params.append('nivel', dbFilterNivel);
+      if (dbFilterEstatus) params.append('estatus', dbFilterEstatus);
+
+      const res = await fetch(`/api/db/students?${params.toString()}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'Error al obtener alumnos');
+
+      const data = json.data;
+      const students = data.students || [];
+      dbTotalRecords = data.total || 0;
+      dbTotalPages = data.pages || 1;
+
+      renderDatabaseStudentsTable(students, dbTotalRecords, page, dbPageLimit, dbTotalPages);
+    } catch (err) {
+      if (tbodyDbStudents) {
+        tbodyDbStudents.innerHTML = `
+          <tr>
+            <td colspan="7" style="text-align: center; padding: 30px; color: #C5221F;">
+              Error al cargar datos: ${escapeHtml(err.message)}
+            </td>
+          </tr>
+        `;
+      }
+    }
+  }
+
+  function renderDatabaseStudentsTable(students, total, page, limit, pages) {
+    if (!tbodyDbStudents) return;
+
+    if (!students || students.length === 0) {
+      tbodyDbStudents.innerHTML = `
+        <tr>
+          <td colspan="7" style="text-align: center; padding: 40px; color: #5F6368;">
+            No se encontraron alumnos con los criterios seleccionados.
+          </td>
+        </tr>
+      `;
+      if (dbPaginationInfo) dbPaginationInfo.textContent = '0 alumnos encontrados';
+      if (btnDbPrevPage) btnDbPrevPage.disabled = true;
+      if (btnDbNextPage) btnDbNextPage.disabled = true;
+      return;
+    }
+
+    const startIdx = (page - 1) * limit + 1;
+    const endIdx = Math.min(startIdx + students.length - 1, total);
+    if (dbPaginationInfo) {
+      dbPaginationInfo.textContent = `Mostrando ${startIdx} a ${endIdx} de ${total} alumnos`;
+    }
+    if (btnDbPrevPage) btnDbPrevPage.disabled = (page <= 1);
+    if (btnDbNextPage) btnDbNextPage.disabled = (page >= pages);
+
+    const rowsHtml = students.map(s => {
+      const mat = escapeHtml(s.matricula || '');
+      const nom = escapeHtml(s.nombre_oficial || s.display_name || '');
+      const nivel = escapeHtml(s.nivel || '');
+      const grado = escapeHtml(s.grado || s.grado_semestre || '');
+      const upn = escapeHtml(s.upn || `${mat}@ijova.com`);
+      const tutorNom = escapeHtml(s.tutor_nombre || s.padre_o_tutor || 'No registrado');
+      const tutorTel = escapeHtml(s.tutor_telefono || s.telefono_contacto || '');
+      const estatus = s.estatus || 'Activo';
+
+      let statusBadge = '';
+      if (estatus === 'Activo') {
+        statusBadge = '<span class="status-pill status-pill-active">Activo</span>';
+      } else if (estatus === 'Baja') {
+        statusBadge = '<span class="status-pill status-pill-danger">Baja</span>';
+      } else {
+        statusBadge = '<span class="status-pill status-pill-gray">Egresado</span>';
+      }
+
+      return `
+        <tr>
+          <td style="font-family: var(--font-mono); font-weight: 700; text-align: center; color: var(--primary-color);">
+            ${mat}
+          </td>
+          <td>
+            <div style="font-weight: 600; color: var(--text-primary);">${nom}</div>
+            ${s.curp ? `<div style="font-size: 11px; font-family: var(--font-mono); color: #64748B;">CURP: ${escapeHtml(s.curp)}</div>` : ''}
+          </td>
+          <td>
+            <div style="font-weight: 500;">${nivel}</div>
+            <div style="font-size: 12px; color: #64748B;">${grado} ${s.seccion ? `• Sec. ${escapeHtml(s.seccion)}` : ''}</div>
+          </td>
+          <td>
+            <span style="font-family: var(--font-mono); font-size: 12px; color: var(--primary-color);">${upn}</span>
+          </td>
+          <td>
+            <div style="font-size: 13px; font-weight: 500;">${tutorNom}</div>
+            ${tutorTel ? `<div style="font-size: 11px; color: #16A34A; font-family: var(--font-mono);">${tutorTel}</div>` : ''}
+          </td>
+          <td style="text-align: center;">
+            ${statusBadge}
+          </td>
+          <td style="text-align: center;">
+            <div style="display: flex; gap: 6px; justify-content: center;">
+              <button class="btn btn-secondary btn-xs btn-edit-student" data-mat="${mat}" title="Editar datos del alumno">
+                Editar
+              </button>
+              <button class="btn btn-secondary btn-xs btn-shortcut-reset" data-mat="${mat}" title="Restablecer contraseña en Microsoft 365">
+                Clave
+              </button>
+              ${estatus === 'Activo' ? `
+                <button class="btn btn-danger btn-xs btn-toggle-status" data-mat="${mat}" data-action="baja" title="Dar de baja">
+                  Baja
+                </button>
+              ` : `
+                <button class="btn btn-secondary btn-xs btn-toggle-status" data-mat="${mat}" data-action="activar" title="Reactivar alumno">
+                  Activar
+                </button>
+              `}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    tbodyDbStudents.innerHTML = rowsHtml;
+
+    // Conectar eventos de filas
+    tbodyDbStudents.querySelectorAll('.btn-edit-student').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mat = btn.getAttribute('data-mat');
+        openEditStudentModal(mat);
+      });
+    });
+
+    tbodyDbStudents.querySelectorAll('.btn-shortcut-reset').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const mat = btn.getAttribute('data-mat');
+        switchTab('tab-reset');
+        const searchInput = document.getElementById('search-matricula-input');
+        if (searchInput) {
+          searchInput.value = mat;
+          const searchBtn = document.getElementById('btn-verify-student');
+          if (searchBtn) searchBtn.click();
+        }
+      });
+    });
+
+    tbodyDbStudents.querySelectorAll('.btn-toggle-status').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const mat = btn.getAttribute('data-mat');
+        const action = btn.getAttribute('data-action');
+        const newStatus = (action === 'baja') ? 'Baja' : 'Activo';
+        const confirmMsg = (action === 'baja')
+          ? `¿Confirmas dar de baja al alumno con matrícula ${mat}?`
+          : `¿Deseas reactivar al alumno con matrícula ${mat}?`;
+
+        if (confirm(confirmMsg)) {
+          try {
+            const resp = await fetch(`/api/db/students/${mat}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ estatus: newStatus })
+            });
+            const resJson = await resp.json();
+            if (!resJson.success) throw new Error(resJson.error || 'Error al actualizar estatus');
+            showToast(`Estatus de ${mat} actualizado a ${newStatus}.`, 'success');
+            loadDatabaseStudents(dbCurrentPage);
+            fetchDatabaseHealth();
+          } catch (err) {
+            showToast(`Error: ${err.message}`, 'error');
+          }
+        }
+      });
+    });
+  }
+
+  // Modales y Formularios
+  if (btnOpenCreateStudent) {
+    btnOpenCreateStudent.addEventListener('click', () => {
+      if (formCreateStudent) formCreateStudent.reset();
+      if (modalCreateStudent) modalCreateStudent.style.display = 'flex';
+      const matInput = document.getElementById('create-mat');
+      if (matInput) matInput.focus();
+    });
+  }
+
+  if (btnCloseCreateStudentModal) {
+    btnCloseCreateStudentModal.addEventListener('click', () => {
+      if (modalCreateStudent) modalCreateStudent.style.display = 'none';
+    });
+  }
+
+  if (btnCancelCreateStudent) {
+    btnCancelCreateStudent.addEventListener('click', () => {
+      if (modalCreateStudent) modalCreateStudent.style.display = 'none';
+    });
+  }
+
+  if (btnSuggestMatricula) {
+    btnSuggestMatricula.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/db/students?limit=200');
+        const json = await res.json();
+        const students = json.data?.students || [];
+        const matNumbers = students
+          .map(s => parseInt(s.matricula, 10))
+          .filter(n => !isNaN(n) && n >= 260000 && n < 270000);
+
+        const nextNum = matNumbers.length > 0 ? (Math.max(...matNumbers) + 1) : 260035;
+        const matInput = document.getElementById('create-mat');
+        if (matInput) {
+          matInput.value = nextNum.toString();
+          showToast(`Matrícula sugerida: ${nextNum}`, 'info');
+        }
+      } catch (e) {
+        document.getElementById('create-mat').value = '260035';
+      }
+    });
+  }
+
+  if (formCreateStudent) {
+    formCreateStudent.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mat = document.getElementById('create-mat').value.trim();
+      const paterno = document.getElementById('create-paterno').value.trim();
+      const materno = document.getElementById('create-materno').value.trim();
+      const nombres = document.getElementById('create-nombres').value.trim();
+      const curp = document.getElementById('create-curp').value.trim();
+      const sexo = document.getElementById('create-sexo').value;
+      const nivel = document.getElementById('create-nivel').value;
+      const grado = document.getElementById('create-grado').value;
+      const seccion = document.getElementById('create-seccion').value.trim() || 'A';
+      const tutorNombre = document.getElementById('create-tutor-nombre').value.trim();
+      const tutorParentesco = document.getElementById('create-tutor-parentesco').value;
+      const tutorTel = document.getElementById('create-tutor-tel').value.trim();
+      const tutorMail = document.getElementById('create-tutor-mail').value.trim();
+      const provisionM365 = document.getElementById('create-provision-m365').checked;
+
+      const submitBtn = document.getElementById('btn-submit-create-student');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span>Registrando...</span>';
+      }
+
+      try {
+        const payload = {
+          matricula: mat,
+          paterno: paterno,
+          materno: materno,
+          nombres: nombres,
+          curp: curp,
+          sexo: sexo,
+          nivel: nivel,
+          grado: grado,
+          seccion: seccion,
+          tutor_nombre: tutorNombre,
+          tutor_parentesco: tutorParentesco,
+          tutor_telefono: tutorTel,
+          tutor_correo: tutorMail,
+          provision_m365: provisionM365
+        };
+
+        const res = await fetch('/api/db/students', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const resJson = await res.json();
+        if (!resJson.success) throw new Error(resJson.error || 'Error al registrar alumno');
+
+        const data = resJson.data || resJson;
+        if (data.m365_provisioned && data.temp_password) {
+          showToast(`Alumno ${mat} registrado en MariaDB y M365. Clave temporal: ${data.temp_password}`, 'success');
+        } else {
+          showToast(`Alumno ${mat} registrado exitosamente en MariaDB.`, 'success');
+        }
+
+        if (modalCreateStudent) modalCreateStudent.style.display = 'none';
+        loadDatabaseStudents(1);
+        fetchDatabaseHealth();
+      } catch (err) {
+        showToast(`Error al registrar: ${err.message}`, 'error');
+      } finally {
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = '<span>Registrar Alumno</span>';
+        }
+      }
+    });
+  }
+
+  async function openEditStudentModal(matricula) {
+    try {
+      const res = await fetch(`/api/db/students/${matricula}`);
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error || 'No se pudo cargar el alumno');
+
+      const s = json.data;
+      document.getElementById('edit-mat-hidden').value = s.matricula || '';
+      document.getElementById('edit-mat-display').value = s.matricula || '';
+      document.getElementById('edit-paterno').value = s.paterno || '';
+      document.getElementById('edit-materno').value = s.materno || '';
+      document.getElementById('edit-nombres').value = s.nombres || '';
+      document.getElementById('edit-curp').value = s.curp || '';
+      document.getElementById('edit-estatus').value = s.estatus || 'Activo';
+      document.getElementById('edit-nivel').value = s.nivel || 'Secundaria';
+      document.getElementById('edit-grado').value = s.grado || s.grado_semestre || '1°';
+      document.getElementById('edit-seccion').value = s.seccion || 'A';
+      document.getElementById('edit-tutor-nombre').value = s.tutor_nombre || s.padre_o_tutor || '';
+      document.getElementById('edit-tutor-parentesco').value = s.tutor_parentesco || 'Tutor';
+      document.getElementById('edit-tutor-tel').value = s.tutor_telefono || s.telefono_contacto || '';
+      document.getElementById('edit-tutor-mail').value = s.tutor_correo || s.correo_contacto || '';
+
+      if (modalEditStudent) modalEditStudent.style.display = 'flex';
+    } catch (err) {
+      showToast(`Error: ${err.message}`, 'error');
+    }
+  }
+
+  if (btnCloseEditStudentModal) {
+    btnCloseEditStudentModal.addEventListener('click', () => {
+      if (modalEditStudent) modalEditStudent.style.display = 'none';
+    });
+  }
+
+  if (btnCancelEditStudent) {
+    btnCancelEditStudent.addEventListener('click', () => {
+      if (modalEditStudent) modalEditStudent.style.display = 'none';
+    });
+  }
+
+  if (formEditStudent) {
+    formEditStudent.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const mat = document.getElementById('edit-mat-hidden').value;
+      const payload = {
+        paterno: document.getElementById('edit-paterno').value.trim(),
+        materno: document.getElementById('edit-materno').value.trim(),
+        nombres: document.getElementById('edit-nombres').value.trim(),
+        curp: document.getElementById('edit-curp').value.trim(),
+        estatus: document.getElementById('edit-estatus').value,
+        nivel: document.getElementById('edit-nivel').value,
+        grado: document.getElementById('edit-grado').value,
+        seccion: document.getElementById('edit-seccion').value.trim(),
+        tutor_nombre: document.getElementById('edit-tutor-nombre').value.trim(),
+        tutor_parentesco: document.getElementById('edit-tutor-parentesco').value,
+        tutor_telefono: document.getElementById('edit-tutor-tel').value.trim(),
+        tutor_correo: document.getElementById('edit-tutor-mail').value.trim()
+      };
+
+      try {
+        const res = await fetch(`/api/db/students/${mat}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const resJson = await res.json();
+        if (!resJson.success) throw new Error(resJson.error || 'Error al actualizar');
+
+        showToast(`Datos del alumno ${mat} actualizados correctamente.`, 'success');
+        if (modalEditStudent) modalEditStudent.style.display = 'none';
+        loadDatabaseStudents(dbCurrentPage);
+        fetchDatabaseHealth();
+      } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+      }
+    });
+  }
+
+  // Buscador y Filtros
+  if (dbSearchInput) {
+    let dbSearchTimeout = null;
+    dbSearchInput.addEventListener('input', (e) => {
+      dbSearchQuery = e.target.value.trim();
+      clearTimeout(dbSearchTimeout);
+      dbSearchTimeout = setTimeout(() => {
+        loadDatabaseStudents(1);
+      }, 250);
+    });
+  }
+
+  if (dbFilterNivelEl) {
+    dbFilterNivelEl.addEventListener('change', (e) => {
+      dbFilterNivel = e.target.value;
+      loadDatabaseStudents(1);
+    });
+  }
+
+  if (dbFilterEstatusEl) {
+    dbFilterEstatusEl.addEventListener('change', (e) => {
+      dbFilterEstatus = e.target.value;
+      loadDatabaseStudents(1);
+    });
+  }
+
+  if (btnDbRefresh) {
+    btnDbRefresh.addEventListener('click', () => {
+      fetchDatabaseHealth();
+      loadDatabaseStudents(dbCurrentPage);
+      showToast('Directorio actualizado.', 'info');
+    });
+  }
+
+  if (btnCheckDbConnection) {
+    btnCheckDbConnection.addEventListener('click', () => {
+      fetchDatabaseHealth();
+      loadDatabaseStudents(1);
+      showToast('Comprobando conexión a MariaDB...', 'info');
+    });
+  }
+
+  if (btnSeedMariadb) {
+    btnSeedMariadb.addEventListener('click', async () => {
+      if (!confirm('¿Deseas importar y sembrar los datos de los 120 alumnos y tutores en MariaDB?')) return;
+      btnSeedMariadb.disabled = true;
+      btnSeedMariadb.textContent = 'Sembrando...';
+      try {
+        const res = await fetch('/api/db/seed', { method: 'POST' });
+        const json = await res.json();
+        if (!json.success) throw new Error(json.error || 'Error al sembrar MariaDB');
+        showToast(json.data?.message || 'Migración exitosa a MariaDB.', 'success');
+        fetchDatabaseHealth();
+        loadDatabaseStudents(1);
+      } catch (err) {
+        showToast(`Error: ${err.message}`, 'error');
+      } finally {
+        btnSeedMariadb.disabled = false;
+        btnSeedMariadb.textContent = 'Sembrar Datos Iniciales';
+      }
+    });
+  }
+
+  if (btnExportDbExcel) {
+    btnExportDbExcel.addEventListener('click', () => {
+      showToast('Generando archivo Excel del padrón de alumnos...', 'info');
+      window.location.href = '/api/db/students/export-excel';
+    });
+  }
+
+  if (btnDbPrevPage) {
+    btnDbPrevPage.addEventListener('click', () => {
+      if (dbCurrentPage > 1) loadDatabaseStudents(dbCurrentPage - 1);
+    });
+  }
+
+  if (btnDbNextPage) {
+    btnDbNextPage.addEventListener('click', () => {
+      if (dbCurrentPage < dbTotalPages) loadDatabaseStudents(dbCurrentPage + 1);
     });
   }
 });

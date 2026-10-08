@@ -8,6 +8,14 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
+class DatabaseConfig(BaseModel):
+    host: str = Field(default="localhost", description="Host de MariaDB")
+    port: int = Field(default=3306, description="Puerto de MariaDB")
+    user: str = Field(default="ijova_user", description="Usuario de MariaDB")
+    password: str = Field(default="Ijova_Secure_2026!", description="Contraseña de MariaDB")
+    database: str = Field(default="ijova_identity", description="Nombre de la base de datos")
+
+
 class AppConfig(BaseModel):
     tenant_id: str = Field(default="", description="ID del Tenant de Microsoft Entra")
     client_id: str = Field(default="", description="ID de Aplicación (Client ID) de App Registration")
@@ -29,6 +37,7 @@ class AppConfig(BaseModel):
     retention_days: int = Field(default=30, description="Días de retención para snapshots de auditoría antes de purga automática")
     data_dir: str = Field(default="data", description="Directorio para datos intermedios normalizados")
     secrets_dir: str = Field(default="secrets", description="Directorio protegido para secretos locales")
+    db: DatabaseConfig = Field(default_factory=DatabaseConfig, description="Configuración de base de datos MariaDB")
 
 
 def load_config(config_path: Optional[str] = None) -> AppConfig:

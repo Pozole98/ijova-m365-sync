@@ -299,3 +299,157 @@ def execute_interactive_enrollment(
         "password": temp_password,
         "user_id": user_id
     }
+
+
+def enroll_student_programmatic(
+    graph: Optional[GraphClient],
+    student_data: Dict[str, Any],
+    tutor_data: Optional[Dict[str, Any]] = None,
+    provision_m365: bool = True,
+    domain: str = "ijova.com",
+    reports_dir: str = "reports"
+) -> Dict[str, Any]:
+    """
+    Registra un alumno en la base de datos MariaDB y opcionalmente lo aprovisiona
+    en Microsoft Entra ID asignandole licencia Office 365 A1 y generando su ficha PDF.
+    """
+    from src.validator import is_valid_matricula_format
+    from src.historical_registry import check_matricula_transfer_conflict
+    from src.audit_logger import log_audit_event
+    from src.db import create_student, update_student
+
+    mat = str(student_data.get("matricula", "")).strip()
+    if not is_valid_matricula_format(mat):
+        raise ValueError(f"Formato de matricula invalido ({mat}). Debe constar exactamente de 6 digitos.")
+
+    paterno = (student_data.get("paterno") or "").strip().upper()
+    materno = (student_data.get("materno") or "").strip().upper()
+    nombres = (student_data.get("nombres") or "").strip().upper()
+    display_name = f"{paterno} {materno} {nombres}".strip() if (paterno or nombres) else (student_data.get("nombre_oficial") or mat)
+    nivel = (student_data.get("nivel") or "Secundaria").strip()
+    grado = (student_data.get("grado") or "1°").strip()
+    upn = f"{mat}@{domain.lower()}"
+
+    # Verificacion de conflicto historico
+    is_conflict, conflict_msg = check_matricula_transfer_conflict(mat, display_name)
+    if is_conflict:
+        log_audit_event(
+            action="ENROLL_DB",
+            target=mat,
+            admin="admin@ijova.com",
+            status="BLOCKED",
+            details=f"Conflicto historico con {display_name}: {conflict_msg}"
+        )
+        raise ValueError(f"Bloqueo de seguridad: {conflict_msg}")
+
+    # 1. Guardar en MariaDB
+    db_student = create_student(
+        student_data={
+            "matricula": mat,
+            "nombre_oficial": display_name,
+            "paterno": paterno,
+            "materno": materno,
+            "nombres": nombres,
+            "nivel": nivel,
+            "grado": grado,
+            "seccion": student_data.get("seccion") or "A",
+            "curp": student_data.get("curp") or "",
+            "sexo": student_data.get("sexo") or "",
+            "estatus": "Activo",
+            "upn": upn,
+            "ciclo": student_data.get("ciclo") or "2026-2027"
+        },
+        tutor_data=tutor_data
+    )
+
+    result = {
+        "success": True,
+        "matricula": mat,
+        "upn": upn,
+        "display_name": display_name,
+        "nivel": nivel,
+        "grado": grado,
+        "database_saved": True,
+        "m365_provisioned": False,
+        "temp_password": None,
+        "pdf_filename": None,
+        "license_assigned": False
+    }
+
+    # 2. Aprovisionar en Microsoft 365 si se solicito y graph esta disponible
+    if provision_m365 and graph:
+        try:
+            temp_password = generate_secure_password(length=12)
+            existing_user = graph.get_user_by_upn(upn)
+            user_id = None
+
+            if existing_user:
+                user_id = existing_user.get("id")
+                # Si existe, habilitar y actualizar credencial
+                graph.reset_user_password(user_id, temp_password, force_change_next_sign_in=True)
+            else:
+                payload = {
+                    "accountEnabled": True,
+                    "displayName": display_name,
+                    "givenName": nombres or display_name,
+                    "surname": paterno,
+                    "mailNickname": mat,
+                    "userPrincipalName": upn,
+                    "usageLocation": "MX",
+                    "passwordProfile": {
+                        "forceChangePasswordNextSignIn": True,
+                        "password": temp_password
+                    }
+                }
+                created = graph.create_user(payload)
+                user_id = created.get("id")
+
+            result["m365_provisioned"] = True
+            result["user_id"] = user_id
+            result["temp_password"] = temp_password
+
+            # Asignar licencia
+            student_sku = graph.find_student_sku()
+            if student_sku and user_id:
+                time.sleep(0.5)
+                lic_ok = graph.assign_license(user_id, student_sku["skuId"])
+                result["license_assigned"] = lic_ok
+
+            # Actualizar m365_user_id en MariaDB
+            update_student(mat, {"m365_user_id": user_id})
+
+            # Generar ficha PDF individual
+            from src.pdf_generator import generate_pdf_cards_from_list
+            os.makedirs(reports_dir, exist_ok=True)
+            timestamp_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%SZ")
+            pdf_filename = f"ficha_acceso_{mat}_{timestamp_str}.pdf"
+            pdf_path = os.path.join(reports_dir, pdf_filename)
+            student_dict = {
+                "matricula": mat,
+                "upn": upn,
+                "nombre_completo": display_name,
+                "password_temporal": temp_password,
+                "nivel": nivel,
+                "grado_semestre": grado
+            }
+            generate_pdf_cards_from_list([student_dict], pdf_path, layout_mode="cards")
+            result["pdf_filename"] = pdf_filename
+
+            log_audit_event(
+                action="ENROLL_WEBUI",
+                target=mat,
+                admin="admin@ijova.com",
+                status="SUCCESS",
+                details=f"Alta completa: {display_name} en MariaDB y M365 (Licencia: {result['license_assigned']})"
+            )
+        except Exception as e:
+            result["m365_error"] = str(e)
+            log_audit_event(
+                action="ENROLL_WEBUI",
+                target=mat,
+                admin="admin@ijova.com",
+                status="WARNING",
+                details=f"Guardado en MariaDB pero error en M365: {e}"
+            )
+
+    return result

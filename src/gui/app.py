@@ -1122,6 +1122,290 @@ def create_app(config_path: str = "config.json") -> Flask:
         except Exception as e:
             return jsonify({"success": False, "error": str(e)}), 500
 
+    # =========================================================================
+    # ENDPOINTS DE BASE DE DATOS MARIADB Y GESTION DEL PADRON DE ALUMNOS (CRUD)
+    # =========================================================================
+
+    @app.route("/api/db/status", methods=["GET"])
+    def api_db_status():
+        """Retorna el estado de conexion a MariaDB y metricas del padron."""
+        try:
+            from src.db import check_db_health
+            status = check_db_health()
+            return jsonify({"success": True, "data": status, **status})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e), "connected": False}), 500
+
+    @app.route("/api/db/seed", methods=["POST"])
+    def api_db_seed():
+        """Siembra e importa los datos iniciales de alumnos a MariaDB."""
+        try:
+            from src.db import seed_mariadb_from_current_excel
+            result = seed_mariadb_from_current_excel(force=True)
+            return jsonify({"success": True, "data": result, **result})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/db/students", methods=["GET"])
+    def api_db_get_students():
+        """Obtiene la lista de alumnos con filtros y paginacion desde MariaDB (o fallback)."""
+        search = request.args.get("search", "").strip() or None
+        nivel = request.args.get("nivel", "").strip() or None
+        grado = request.args.get("grado", "").strip() or None
+        estatus = request.args.get("estatus", "").strip() or None
+        page = max(1, request.args.get("page", 1, type=int))
+        limit = min(200, max(10, request.args.get("limit", 50, type=int)))
+        offset = (page - 1) * limit
+
+        try:
+            from src.db import check_db_health, get_all_students
+            health = check_db_health()
+            if health.get("connected") and health.get("tables_ready") and health.get("total_alumnos", 0) > 0:
+                students, total = get_all_students(
+                    search=search,
+                    nivel=nivel,
+                    grado=grado,
+                    estatus=estatus,
+                    limit=limit,
+                    offset=offset
+                )
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "students": students,
+                        "total": total,
+                        "page": page,
+                        "limit": limit,
+                        "pages": (total + limit - 1) // limit,
+                        "source": "MariaDB"
+                    }
+                })
+            else:
+                # Fallback ordenado desde build_school_db()
+                from export_students_m365 import build_school_db
+                school_db = build_school_db()
+                records = list(school_db.values())
+
+                if estatus:
+                    records = [r for r in records if r.get("estatus") == estatus]
+                if nivel:
+                    records = [r for r in records if r.get("nivel") == nivel]
+                if grado:
+                    records = [r for r in records if grado in (r.get("grado") or "")]
+                if search:
+                    s_lower = search.lower()
+                    records = [
+                        r for r in records
+                        if s_lower in r.get("matricula", "").lower()
+                        or s_lower in r.get("display_name", "").lower()
+                        or s_lower in r.get("curp", "").lower()
+                        or s_lower in r.get("tutor_nombre", "").lower()
+                    ]
+
+                total = len(records)
+                paged_records = records[offset:offset + limit]
+                return jsonify({
+                    "success": True,
+                    "data": {
+                        "students": paged_records,
+                        "total": total,
+                        "page": page,
+                        "limit": limit,
+                        "pages": (total + limit - 1) // limit,
+                        "source": "Excel (MariaDB pendiente de inicializacion)"
+                    }
+                })
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/db/students", methods=["POST"])
+    def api_db_create_student():
+        """Registra un nuevo alumno en MariaDB y opcionalmente en Microsoft 365."""
+        body = request.get_json() or {}
+        matricula = (body.get("matricula") or "").strip()
+        if not matricula:
+            return jsonify({"success": False, "error": "La matricula es obligatoria."}), 400
+
+        try:
+            from src.enroll_engine import enroll_student_programmatic
+            graph = get_graph()
+            provision_m365 = bool(body.get("provision_m365", True))
+
+            student_data = {
+                "matricula": matricula,
+                "nombre_oficial": body.get("nombre_oficial"),
+                "paterno": body.get("paterno"),
+                "materno": body.get("materno"),
+                "nombres": body.get("nombres"),
+                "nivel": body.get("nivel") or "Secundaria",
+                "grado": body.get("grado") or "1°",
+                "seccion": body.get("seccion") or "A",
+                "curp": body.get("curp") or "",
+                "sexo": body.get("sexo") or "",
+                "estatus": "Activo",
+                "ciclo": body.get("ciclo") or "2026-2027"
+            }
+
+            tutor_data = {
+                "nombre": body.get("tutor_nombre") or "",
+                "telefono": body.get("tutor_telefono") or "",
+                "correo": body.get("tutor_correo") or "",
+                "parentesco": body.get("tutor_parentesco") or "Tutor"
+            }
+
+            res = enroll_student_programmatic(
+                graph=graph,
+                student_data=student_data,
+                tutor_data=tutor_data,
+                provision_m365=provision_m365,
+                domain=config.domain,
+                reports_dir=config.reports_dir
+            )
+            return jsonify({"success": True, "data": res, **res})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    @app.route("/api/db/students/<matricula>", methods=["GET"])
+    def api_db_get_student_detail(matricula):
+        """Retorna el detalle completo de un alumno por matricula."""
+        try:
+            from src.db import get_student_by_matricula, check_db_health
+            health = check_db_health()
+            if health.get("connected") and health.get("tables_ready"):
+                st = get_student_by_matricula(matricula)
+                if st:
+                    return jsonify({"success": True, "data": st})
+
+            # Fallback
+            from export_students_m365 import build_school_db
+            sdb = build_school_db()
+            if matricula in sdb:
+                return jsonify({"success": True, "data": sdb[matricula]})
+
+            return jsonify({"success": False, "error": f"Alumno con matricula {matricula} no encontrado."}), 404
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
+    @app.route("/api/db/students/<matricula>", methods=["PUT"])
+    def api_db_update_student(matricula):
+        """Actualiza los datos de un alumno y su tutor en MariaDB."""
+        body = request.get_json() or {}
+        try:
+            from src.db import update_student
+            student_data = {}
+            for k in ["paterno", "materno", "nombres", "nombre_oficial", "curp", "nivel", "grado", "seccion", "sexo", "estatus", "ciclo"]:
+                if k in body:
+                    student_data[k] = body[k]
+
+            tutor_data = None
+            if any(k in body for k in ["tutor_nombre", "tutor_telefono", "tutor_correo", "tutor_parentesco"]):
+                tutor_data = {
+                    "nombre": body.get("tutor_nombre", ""),
+                    "telefono": body.get("tutor_telefono", ""),
+                    "correo": body.get("tutor_correo", ""),
+                    "parentesco": body.get("tutor_parentesco", "Tutor")
+                }
+
+            updated = update_student(matricula, student_data, tutor_data)
+            return jsonify({"success": True, "data": updated})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    @app.route("/api/db/students/<matricula>/status", methods=["PATCH"])
+    def api_db_change_student_status(matricula):
+        """Cambia el estatus de un alumno (Activo, Baja, Egresado)."""
+        body = request.get_json() or {}
+        new_status = body.get("estatus", "Baja")
+        try:
+            from src.db import set_student_status
+            set_student_status(matricula, new_status)
+            return jsonify({"success": True, "message": f"Estatus actualizado a {new_status}."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    @app.route("/api/db/students/<matricula>", methods=["DELETE"])
+    def api_db_delete_student(matricula):
+        """Elimina permanentemente un alumno de la base de datos MariaDB."""
+        try:
+            from src.db import delete_student_permanently
+            delete_student_permanently(matricula)
+            return jsonify({"success": True, "message": f"Registro del alumno {matricula} eliminado de MariaDB."})
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 400
+
+    @app.route("/api/db/students/export-excel", methods=["GET"])
+    def api_db_export_excel():
+        """Exporta el padron completo de alumnos desde MariaDB a Excel."""
+        try:
+            from src.db import get_all_students
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+            from openpyxl.utils import get_column_letter
+
+            students, _ = get_all_students(limit=2000)
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Padron de Alumnos"
+
+            headers = [
+                "Matricula", "Nombre Oficial", "Nivel", "Grado", "Seccion",
+                "Correo Institucional (UPN)", "CURP", "Estatus", "Ciclo",
+                "Nombre Tutor", "Telefono Tutor", "Correo Tutor"
+            ]
+            header_fill = PatternFill(start_color="1B365D", end_color="1B365D", fill_type="solid")
+            header_font = Font(name="Segoe UI", size=11, bold=True, color="FFFFFF")
+            data_font = Font(name="Segoe UI", size=10)
+            thin_border = Border(
+                left=Side(style='thin', color='D2D6DC'),
+                right=Side(style='thin', color='D2D6DC'),
+                top=Side(style='thin', color='D2D6DC'),
+                bottom=Side(style='thin', color='D2D6DC')
+            )
+
+            ws.append(headers)
+            for c_idx in range(1, len(headers) + 1):
+                cell = ws.cell(row=1, column=c_idx)
+                cell.fill = header_fill
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            for idx, s in enumerate(students, start=2):
+                row_vals = [
+                    s.get("matricula", ""),
+                    s.get("nombre_oficial", ""),
+                    s.get("nivel", ""),
+                    s.get("grado", ""),
+                    s.get("seccion", ""),
+                    s.get("upn", ""),
+                    s.get("curp", ""),
+                    s.get("estatus", ""),
+                    s.get("ciclo", ""),
+                    s.get("tutor_nombre", ""),
+                    s.get("tutor_telefono", ""),
+                    s.get("tutor_correo", "")
+                ]
+                ws.append(row_vals)
+                for c_idx in range(1, len(row_vals) + 1):
+                    cell = ws.cell(row=idx, column=c_idx)
+                    cell.font = data_font
+                    cell.border = thin_border
+
+            ws.freeze_panes = "A2"
+            for col in ws.columns:
+                max_len = max(len(str(cell.value or "")) for cell in col)
+                col_letter = get_column_letter(col[0].column)
+                ws.column_dimensions[col_letter].width = min(max(max_len + 3, 12), 40)
+
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"Padron_Alumnos_MariaDB_{ts}.xlsx"
+            rep_dir = os.path.abspath(config.reports_dir)
+            os.makedirs(rep_dir, exist_ok=True)
+            out_path = os.path.join(rep_dir, filename)
+            wb.save(out_path)
+            return send_file(out_path, as_attachment=True, download_name=filename)
+        except Exception as e:
+            return jsonify({"success": False, "error": str(e)}), 500
+
     return app
 
 
