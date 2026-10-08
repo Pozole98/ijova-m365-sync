@@ -105,7 +105,7 @@ def init_db_schema() -> bool:
         with conn.cursor() as cur:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS alumnos (
-                matricula VARCHAR(20) PRIMARY KEY,
+                matricula VARCHAR(64) PRIMARY KEY,
                 nombre_oficial VARCHAR(150) NOT NULL,
                 paterno VARCHAR(80),
                 materno VARCHAR(80),
@@ -131,7 +131,7 @@ def init_db_schema() -> bool:
             cur.execute("""
             CREATE TABLE IF NOT EXISTS tutores (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                matricula_alumno VARCHAR(20) NOT NULL,
+                matricula_alumno VARCHAR(64) NOT NULL,
                 nombre VARCHAR(150),
                 telefono VARCHAR(30),
                 correo VARCHAR(100),

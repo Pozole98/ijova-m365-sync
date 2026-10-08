@@ -13,7 +13,7 @@ USE ijova_identity;
 
 -- 1. Tabla de Alumnos (Padrón Oficial)
 CREATE TABLE IF NOT EXISTS alumnos (
-    matricula VARCHAR(20) PRIMARY KEY,
+    matricula VARCHAR(64) PRIMARY KEY,
     nombre_oficial VARCHAR(150) NOT NULL,
     paterno VARCHAR(80),
     materno VARCHAR(80),
@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS alumnos (
 -- 2. Tabla de Tutores y Contacto
 CREATE TABLE IF NOT EXISTS tutores (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    matricula_alumno VARCHAR(20) NOT NULL,
+    matricula_alumno VARCHAR(64) NOT NULL,
     nombre VARCHAR(150),
     telefono VARCHAR(30),
     correo VARCHAR(100),
